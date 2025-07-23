@@ -53,8 +53,8 @@ export default function Navbar() {
               </div>
               <div>
                 <h1 className="text-xl md:text-2xl font-bold text-gray-800">
-                  <span className="hidden sm:inline">MN Crackers</span>
-                  <span className="inline sm:hidden">MN</span>
+                  <span className="hidden sm:inline">Madhu Nisha Crackers</span>
+                  <span className="inline sm:hidden">MN Crackers</span>
                 </h1>
                 <p className="text-xs text-orange-600 font-medium hidden md:block">Premium Fireworks</p>
               </div>

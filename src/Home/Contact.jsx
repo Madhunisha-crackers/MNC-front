@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import Navbar from "../Component/Navbar"
 import { MapPin, Phone, Mail, Globe, Sparkles, Clock, ArrowRight } from "lucide-react"
+import { API_BASE_URL } from '../../Config'
 
 const ModernFireworkAnimation = ({ delay = 0, startPosition, endPosition, burstPosition, colors }) => {
   const [dimensions, setDimensions] = useState({ width: 1920, height: 1080 })
@@ -208,6 +209,7 @@ const ContactCard = ({ icon: Icon, title, content, delay = 0, gradient }) => {
 
 export default function Contact() {
   const [screenDimensions, setScreenDimensions] = useState({ width: 1920, height: 1080 })
+const [showSuccess, setShowSuccess] = useState(false)
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -221,29 +223,31 @@ export default function Contact() {
     return () => window.removeEventListener("resize", updateDimensions)
   }, [])
 
-  const contactCards = [
-    {
-      icon: MapPin,
-      title: "Our Shop Location",
-      content: ["MN Crackers", "Anil Kumar Eye Hospital Opp.", "Sattur Road", "Sivakasi, Tamil Nadu"],
-      gradient: "bg-gradient-to-br from-orange-400 to-orange-600",
-    },
-    {
-      icon: Phone,
-      title: "Call Us Anytime",
-      content: [
-        { text: "+91 63836 59214", href: "tel:+916383659214" },
-        { text: "+91 96554 56167", href: "tel:+919655456167" },
-      ],
-      gradient: "bg-gradient-to-br from-green-400 to-green-600",
-    },
-    {
-      icon: Mail,
-      title: "Email Address",
-      content: [{ text: "nivasramasamy27@gmail.com", href: "mailto:nivasramasamy27@gmail.com" }],
-      gradient: "bg-gradient-to-br from-blue-400 to-blue-600",
-    },
-  ]
+const contactCards = [
+  {
+    icon: MapPin,
+    title: "Our Shop Location",
+    content: ["MN Crackers", "Anil Kumar Eye Hospital Opp.", "Sattur Road", "Sivakasi, Tamil Nadu"],
+    gradient: "bg-gradient-to-br from-orange-400 to-orange-600",
+  },
+  {
+    icon: Phone,
+    title: "Call Information",
+    content: [
+      { text: "Online Enquiry: 9487524689", href: "tel:9487524689" },
+      { text: "Whole Sale Enquiry: 9487524689", href: "tel:9487524689" },
+      { text: "Order & Payment Confirm: 9487594689", href: "tel:9487594689" },
+      { text: "Dispatch: 9487594689", href: "tel:9487594689" },
+    ],
+    gradient: "bg-gradient-to-br from-green-400 to-green-600",
+  },
+  {
+    icon: Mail,
+    title: "Email Address",
+    content: [{ text: "madhunishapyrotechsivakasi@gmail.com", href: "mailto:madhunishapyrotechsivakasi@gmail.com" }],
+    gradient: "bg-gradient-to-br from-blue-400 to-blue-600",
+  },
+]
 
   const fireworkConfigs = [
     {
@@ -392,6 +396,141 @@ export default function Contact() {
                 <Clock className="w-8 h-8 text-white" />
               </motion.div>
             </div>
+{/* Wholesale Enquiry Form */}
+<motion.div
+  initial={{ opacity: 0, y: 30 }}
+  whileInView={{ opacity: 1, y: 0 }}
+  transition={{ duration: 0.6, delay: 0.6 }}
+  viewport={{ once: true }}
+  className="bg-white rounded-3xl shadow-lg p-10 max-w-3xl mx-auto border border-orange-100 mb-20"
+>
+  <h2 className="text-3xl font-bold text-center text-orange-600 mb-6">Wholesale Enquiry Form</h2>
+  <form
+    onSubmit={(e) => {
+      e.preventDefault();
+      const form = e.target;
+      const data = {
+        name: form.name.value,
+        email: form.email.value,
+        mobile: form.mobile.value,
+        message: form.message.value,
+      };
+fetch(`${API_BASE_URL}/api/send-wholesale-enquiry`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(data),
+})
+  .then((res) => {
+    if (res.ok) {
+      form.reset()
+      setShowSuccess(true)
+      setTimeout(() => setShowSuccess(false), 4000) // Hide after 4 seconds
+    } else {
+      alert("Failed to send. Try again.")
+    }
+  })
+  .catch(() => alert("Error sending enquiry."))
+
+    }}
+    className="space-y-6"
+  >
+    <div className="grid md:grid-cols-2 gap-6">
+      <input
+        type="text"
+        name="name"
+        placeholder="Your Name"
+        required
+        className="w-full border border-gray-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-orange-400"
+      />
+      <input
+        type="email"
+        name="email"
+        placeholder="Your Email"
+        required
+        className="w-full border border-gray-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-orange-400"
+      />
+    </div>
+    <input
+      type="tel"
+      name="mobile"
+      placeholder="Mobile Number"
+      required
+      className="w-full border border-gray-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-orange-400"
+    />
+    <textarea
+      name="message"
+      rows="5"
+      placeholder="Your Message"
+      required
+      className="w-full border border-gray-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-orange-400"
+    />
+    <div className="text-center">
+      <button
+        type="submit"
+        className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition duration-300"
+      >
+        Submit Enquiry
+      </button>
+    </div>
+  </form>
+{showSuccess && (
+  <motion.div
+    onClick={() => setShowSuccess(false)}
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 flex items-center justify-center z-50 cursor-pointer"
+  >
+    <div className="relative">
+      {/* Confetti-style burst */}
+      {Array.from({ length: 20 }).map((_, i) => {
+        const angle = (i / 20) * 2 * Math.PI
+        const radius = 120 + Math.random() * 40
+        const x = Math.cos(angle) * radius
+        const y = Math.sin(angle) * radius
+        const colors = ["#FF6B35", "#FFD93D", "#6BCB77", "#4D96FF", "#FF6EC7"]
+
+        return (
+          <motion.div
+            key={i}
+            initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+            animate={{
+              x,
+              y,
+              opacity: 0,
+              scale: 0.5,
+              rotate: Math.random() * 360,
+            }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
+            className="absolute w-4 h-4 rounded-full"
+            style={{
+              backgroundColor: colors[i % colors.length],
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+            }}
+          />
+        )
+      })}
+
+      {/* Success Message Box */}
+      <motion.div
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+        className="bg-white px-10 py-6 rounded-2xl shadow-2xl border-2 border-orange-500 text-center z-10"
+      >
+        <h2 className="text-3xl font-bold text-orange-600 mb-2">🎉 Enquiry Sent!</h2>
+        <p className="text-gray-700">We'll get in touch with you shortly.</p>
+        
+      </motion.div>
+    </div>
+  </motion.div>
+)}
+
+
+
+</motion.div>
 
             <div className="relative pt-10 p-8 bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-500 border border-orange-100 overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-br from-purple-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
