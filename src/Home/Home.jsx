@@ -1,5 +1,4 @@
 "use client"
-
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import {
@@ -16,6 +15,7 @@ import {
   Gift,
   Copy,
   ShoppingCart,
+  X,
 } from "lucide-react"
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion"
 import { useInView } from "react-intersection-observer"
@@ -42,15 +42,15 @@ const statsData = [
 
 const navLinks = ["Home", "About Us", "Price List", "Safety Tips", "Contact Us"]
 
-// Flower Pot Fountain Animation Component - Shows n-1 promocodes, keeps last one in pot
+// Flower Pot Fountain Animation Component - Shows all promocodes at once with close button
 const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPromo, copiedPromos }) => {
-  const [currentPromoIndex, setCurrentPromoIndex] = useState(0)
   const [showingPromo, setShowingPromo] = useState(false)
   const [animationComplete, setAnimationComplete] = useState(false)
+  const [showCloseButton, setShowCloseButton] = useState(false)
   const sparkles = Array.from({ length: 80 }, (_, i) => i)
   const fireParticles = Array.from({ length: 60 }, (_, i) => i)
 
-  // Show n-1 promocodes (keep last one in pot)
+  // Show all promocodes at once
   const promosToShow = promocodes.length > 1 ? promocodes.slice(0, -1) : []
   const lastPromo = promocodes.length > 0 ? promocodes[promocodes.length - 1] : null
 
@@ -58,26 +58,17 @@ const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPr
     if (isActive && promosToShow.length > 0) {
       const promoTimer = setTimeout(() => {
         setShowingPromo(true)
+        setShowCloseButton(true)
       }, 800)
 
-      const nextPromoTimer = setInterval(() => {
-        setCurrentPromoIndex((prev) => {
-          const next = prev + 1
-          if (next >= promosToShow.length) {
-            clearInterval(nextPromoTimer)
-            setTimeout(() => {
-              setAnimationComplete(true)
-              onComplete()
-            }, 2000)
-            return prev
-          }
-          return next
-        })
-      }, 2000)
+      const completeTimer = setTimeout(() => {
+        setAnimationComplete(true)
+        onComplete()
+      }, 3000)
 
       return () => {
         clearTimeout(promoTimer)
-        clearInterval(nextPromoTimer)
+        clearTimeout(completeTimer)
       }
     } else if (isActive && promosToShow.length === 0) {
       // If no promos to show in air, just complete animation
@@ -93,6 +84,20 @@ const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPr
     onCopyPromo(code)
   }
 
+  const handleCloseAll = () => {
+    setShowingPromo(false)
+    setShowCloseButton(false)
+    // Hide all promocodes by marking them as copied
+    promosToShow.forEach((promo) => {
+      if (!copiedPromos.includes(promo.code)) {
+        onCopyPromo(promo.code)
+      }
+    })
+    if (lastPromo && !copiedPromos.includes(lastPromo.code)) {
+      onCopyPromo(lastPromo.code)
+    }
+  }
+
   return (
     <AnimatePresence>
       {isActive && (
@@ -102,6 +107,24 @@ const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPr
           exit={{ opacity: 0 }}
           className="fixed inset-0 pointer-events-none z-40 hundred:-translate-y-40 mobile:-translate-y-44"
         >
+          {/* Close Button */}
+          {showCloseButton && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0 }}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={handleCloseAll}
+              className="fixed top-8 right-8 z-50 pointer-events-auto w-12 h-12 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl transition-all duration-300"
+              style={{
+                boxShadow: "0 0 20px rgba(239, 68, 68, 0.5)",
+              }}
+            >
+              <X className="w-6 h-6" />
+            </motion.button>
+          )}
+
           {/* Fire particles shooting upward from bottom */}
           {fireParticles.map((i) => (
             <motion.div
@@ -161,9 +184,9 @@ const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPr
             />
           ))}
 
-          {/* Promocodes popping up directly on screen (n-1 promos) */}
+          {/* All Promocodes popping up at once (n-1 promos) */}
           {showingPromo &&
-            promosToShow.slice(0, currentPromoIndex + 1).map((promo, index) => {
+            promosToShow.map((promo, index) => {
               if (copiedPromos.includes(promo.code)) return null // Hide copied promos
 
               return (
@@ -179,12 +202,7 @@ const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPr
                   animate={{
                     x: `${window.innerWidth < 768 ? 10 + index * 25 : 30 + index * 15 + Math.random() * 20}vw`,
                     y: `${window.innerWidth < 768 ? 25 + index * 18 : 20 + index * 12 + Math.random() * 15}vh`,
-                    scale:
-                      index === currentPromoIndex
-                        ? [0, window.innerWidth < 768 ? 1.2 : 1.5, window.innerWidth < 768 ? 1 : 1.2]
-                        : window.innerWidth < 768
-                          ? 1
-                          : 1.2,
+                    scale: window.innerWidth < 768 ? 1 : 1.2,
                     rotate: Math.random() * 20 - 10,
                     opacity: 1,
                   }}
@@ -195,15 +213,15 @@ const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPr
                   }}
                   transition={{
                     duration: 1.2,
-                    delay: index * 2,
+                    delay: index * 0.1, // Small stagger for visual effect
                     ease: "backOut",
                   }}
-                  className="absolute bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white mobile:px-3 mobile:py-2 px-6 py-4 rounded-3xl shadow-2xl font-bold mobile:text-sm text-lg border-4 border-white transform-gpu pointer-events-auto"
+                  className="absolute hundred:translate-y-20 mobile:translate-y-20 bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white mobile:px-3 mobile:py-2 px-6 py-4 rounded-3xl shadow-2xl font-bold mobile:text-sm text-lg border-4 border-white transform-gpu pointer-events-auto"
                   style={{
                     boxShadow: "0 0 30px rgba(251, 191, 36, 0.8), 0 0 60px rgba(251, 191, 36, 0.4)",
                   }}
                 >
-                  <div className="flex items-center mobile:gap-2 gap-3 hundred:translate-y-10">
+                  <div className="flex items-center mobile:gap-2 gap-3">
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
@@ -225,7 +243,6 @@ const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPr
                       <Copy className="mobile:w-3 mobile:h-3 w-4 h-4" />
                     </motion.button>
                   </div>
-
                   {/* Sparkle effects around promocode */}
                   {Array.from({ length: 8 }, (_, sparkleIndex) => (
                     <motion.div
@@ -256,7 +273,8 @@ const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPr
             <motion.div
               initial={{ opacity: 0, scale: 0 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="fixed mobile:bottom-28 bottom-32 left-1/2 -translate-x-1/2 z-50 pointer-events-auto"
+              exit={{ opacity: 0, scale: 0 }}
+              className="fixed hundred:translate-y-20 mobile:translate-y-20 mobile:bottom-28 bottom-32 left-1/2 -translate-x-1/2 z-50 pointer-events-auto"
             >
               <motion.div
                 animate={{
@@ -295,7 +313,6 @@ const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPr
                     <Copy className="w-4 h-4" />
                   </motion.button>
                 </div>
-
                 {/* Special sparkles for last promo */}
                 {Array.from({ length: 12 }, (_, sparkleIndex) => (
                   <motion.div
@@ -676,13 +693,11 @@ export default function Home() {
               className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-b from-orange-800 to-orange-950 border-t-2 border-orange-600"
               style={{ clipPath: "polygon(20% 0%, 0% 100%, 100% 100%, 80% 0%)" }}
             />
-
             {/* Fountain Opening */}
             <div className="absolute ml-5 mobile:ml-3 mobile:w-4 mobile:h-4 mobile:-translate-y-5 hundred:-translate-y-10 hundred:ml-7 w-8 h-8 bg-gradient-to-t from-yellow-600 via-yellow-400 to-yellow-200 rounded-full border-2 border-yellow-700 overflow-hidden">
               {/* Inner glow */}
               <div className="absolute inset-1 bg-gradient-to-t from-orange-500 to-yellow-300 rounded-full animate-pulse" />
             </div>
-
             {/* Continuous Fire Sparkles */}
             {Array.from({ length: 12 }, (_, i) => (
               <motion.div
@@ -708,11 +723,9 @@ export default function Home() {
                 }}
               />
             ))}
-
             {/* Pot Decorations */}
             <div className="absolute top-1/3 left-1/4 right-1/4 h-1 bg-gradient-to-r from-transparent via-orange-400 to-transparent rounded-full opacity-60" />
             <div className="absolute top-2/3 left-1/6 right-1/6 h-0.5 bg-gradient-to-r from-transparent via-orange-300 to-transparent rounded-full opacity-40" />
-
             {/* Glow Effect */}
             <motion.div
               animate={{
@@ -726,7 +739,6 @@ export default function Home() {
               }}
               className="absolute inset-0 -translate-y-50 bg-gradient-to-t from-transparent via-yellow-400/30 to-yellow-200/50 rounded-full"
             />
-
             {/* Label */}
             <div className="absolute mobile:-bottom-10 -bottom-12 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white mobile:px-2 mobile:py-1 px-4 py-2 rounded-full mobile:text-xs text-sm font-bold whitespace-nowrap shadow-xl border-2 border-white">
               <motion.div
