@@ -227,7 +227,7 @@ const contactCards = [
   {
     icon: MapPin,
     title: "Our Shop Location",
-    content: ["Madhu Nisha Crackers", "Anil Kumar Eye Hospital Opp.", "Sattur Road", "Sivakasi, Tamil Nadu"],
+    content: ["Madhu Nisha Crackers", "Pernayakkanpatti, Pachayapuram,", "Kil Thayilapatti", "Sivakasi, Tamil Nadu"],
     gradient: "bg-gradient-to-br from-orange-400 to-orange-600",
   },
   {
@@ -396,141 +396,138 @@ const contactCards = [
                 <Clock className="w-8 h-8 text-white" />
               </motion.div>
             </div>
-{/* Wholesale Enquiry Form */}
-<motion.div
-  initial={{ opacity: 0, y: 30 }}
-  whileInView={{ opacity: 1, y: 0 }}
-  transition={{ duration: 0.6, delay: 0.6 }}
-  viewport={{ once: true }}
-  className="bg-white rounded-3xl shadow-lg p-10 max-w-3xl mx-auto border border-orange-100 mb-20"
->
-  <h2 className="text-3xl font-bold text-center text-orange-600 mb-6">Wholesale Enquiry Form</h2>
-  <form
-    onSubmit={(e) => {
-      e.preventDefault();
-      const form = e.target;
-      const data = {
-        name: form.name.value,
-        email: form.email.value,
-        mobile: form.mobile.value,
-        message: form.message.value,
-      };
-fetch(`${API_BASE_URL}/api/send-wholesale-enquiry`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(data),
-})
-  .then((res) => {
-    if (res.ok) {
-      form.reset()
-      setShowSuccess(true)
-      setTimeout(() => setShowSuccess(false), 4000) // Hide after 4 seconds
-    } else {
-      alert("Failed to send. Try again.")
-    }
-  })
-  .catch(() => alert("Error sending enquiry."))
+            {/* Wholesale Enquiry Form */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.6 }}
+              viewport={{ once: true }}
+              className="bg-white rounded-3xl shadow-lg p-10 max-w-3xl mx-auto border border-orange-100 mb-20"
+            >
+              <h2 className="text-3xl font-bold text-center text-orange-600 mb-6">Wholesale Enquiry Form</h2>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const form = e.target;
+                  const data = {
+                    name: form.name.value,
+                    email: form.email.value,
+                    mobile: form.mobile.value,
+                    message: form.message.value,
+                  };
+            fetch(`${API_BASE_URL}/api/send-wholesale-enquiry`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data),
+            })
+              .then((res) => {
+                if (res.ok) {
+                  form.reset()
+                  setShowSuccess(true)
+                  setTimeout(() => setShowSuccess(false), 4000) // Hide after 4 seconds
+                } else {
+                  alert("Failed to send. Try again.")
+                }
+              })
+              .catch(() => alert("Error sending enquiry."))
 
-    }}
-    className="space-y-6"
-  >
-    <div className="grid md:grid-cols-2 gap-6">
-      <input
-        type="text"
-        name="name"
-        placeholder="Your Name"
-        required
-        className="w-full border border-gray-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-orange-400"
-      />
-      <input
-        type="email"
-        name="email"
-        placeholder="Your Email"
-        required
-        className="w-full border border-gray-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-orange-400"
-      />
-    </div>
-    <input
-      type="tel"
-      name="mobile"
-      placeholder="Mobile Number"
-      required
-      className="w-full border border-gray-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-orange-400"
-    />
-    <textarea
-      name="message"
-      rows="5"
-      placeholder="Your Message"
-      required
-      className="w-full border border-gray-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-orange-400"
-    />
-    <div className="text-center">
-      <button
-        type="submit"
-        className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition duration-300"
-      >
-        Submit Enquiry
-      </button>
-    </div>
-  </form>
-{showSuccess && (
-  <motion.div
-    onClick={() => setShowSuccess(false)}
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    className="fixed inset-0 flex items-center justify-center z-50 cursor-pointer"
-  >
-    <div className="relative">
-      {/* Confetti-style burst */}
-      {Array.from({ length: 20 }).map((_, i) => {
-        const angle = (i / 20) * 2 * Math.PI
-        const radius = 120 + Math.random() * 40
-        const x = Math.cos(angle) * radius
-        const y = Math.sin(angle) * radius
-        const colors = ["#FF6B35", "#FFD93D", "#6BCB77", "#4D96FF", "#FF6EC7"]
+                }}
+                className="space-y-6"
+              >
+                <div className="grid md:grid-cols-2 gap-6">
+                  <input
+                    type="text"
+                    name="name"
+                    placeholder="Your Name"
+                    required
+                    className="w-full border border-gray-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="Your Email"
+                    required
+                    className="w-full border border-gray-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                </div>
+                <input
+                  type="tel"
+                  name="mobile"
+                  placeholder="Mobile Number"
+                  required
+                  className="w-full border border-gray-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+                <textarea
+                  name="message"
+                  rows="5"
+                  placeholder="Your Message"
+                  required
+                  className="w-full border border-gray-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+                <div className="text-center">
+                  <button
+                    type="submit"
+                    className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition duration-300"
+                  >
+                    Submit Enquiry
+                  </button>
+                </div>
+              </form>
+            {showSuccess && (
+              <motion.div
+                onClick={() => setShowSuccess(false)}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 flex items-center justify-center z-50 cursor-pointer"
+              >
+                <div className="relative">
+                  {/* Confetti-style burst */}
+                  {Array.from({ length: 20 }).map((_, i) => {
+                    const angle = (i / 20) * 2 * Math.PI
+                    const radius = 120 + Math.random() * 40
+                    const x = Math.cos(angle) * radius
+                    const y = Math.sin(angle) * radius
+                    const colors = ["#FF6B35", "#FFD93D", "#6BCB77", "#4D96FF", "#FF6EC7"]
 
-        return (
-          <motion.div
-            key={i}
-            initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
-            animate={{
-              x,
-              y,
-              opacity: 0,
-              scale: 0.5,
-              rotate: Math.random() * 360,
-            }}
-            transition={{ duration: 1.5, ease: "easeOut" }}
-            className="absolute w-4 h-4 rounded-full"
-            style={{
-              backgroundColor: colors[i % colors.length],
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-            }}
-          />
-        )
-      })}
+                    return (
+                      <motion.div
+                        key={i}
+                        initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                        animate={{
+                          x,
+                          y,
+                          opacity: 0,
+                          scale: 0.5,
+                          rotate: Math.random() * 360,
+                        }}
+                        transition={{ duration: 1.5, ease: "easeOut" }}
+                        className="absolute w-4 h-4 rounded-full"
+                        style={{
+                          backgroundColor: colors[i % colors.length],
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%, -50%)",
+                        }}
+                      />
+                    )
+                  })}
 
-      {/* Success Message Box */}
-      <motion.div
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ type: "spring", stiffness: 300, damping: 20 }}
-        className="bg-white px-10 py-6 rounded-2xl shadow-2xl border-2 border-orange-500 text-center z-10"
-      >
-        <h2 className="text-3xl font-bold text-orange-600 mb-2">🎉 Enquiry Sent!</h2>
-        <p className="text-gray-700">We'll get in touch with you shortly.</p>
-        
-      </motion.div>
-    </div>
-  </motion.div>
-)}
-
-
-
-</motion.div>
+                  {/* Success Message Box */}
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                    className="bg-white px-10 py-6 rounded-2xl shadow-2xl border-2 border-orange-500 text-center z-10"
+                  >
+                    <h2 className="text-3xl font-bold text-orange-600 mb-2">🎉 Enquiry Sent!</h2>
+                    <p className="text-gray-700">We'll get in touch with you shortly.</p>
+                    
+                  </motion.div>
+                </div>
+              </motion.div>
+            )}
+            </motion.div>
 
             <div className="relative pt-10 p-8 bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-500 border border-orange-100 overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-br from-purple-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -593,7 +590,7 @@ fetch(`${API_BASE_URL}/api/send-wholesale-enquiry`, {
                 </h2>
                 <div className="rounded-2xl overflow-hidden shadow-lg">
                   <iframe
-                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3936.0487539047143!2d77.79800291478508!3d9.453334793222115!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3b06cf8c8c8c8c8c%3A0x8c8c8c8c8c8c8c8c!2sMN%20Crackers%2C%20Anil%20Kumar%20Eye%20Hospital%20Opp.%2C%20Sattur%20Road%2C%20Sivakasi%2C%20Tamil%20Nadu!5e0!3m2!1sen!2sin!4v1703123456789!5m2!1sen!2sin"
+                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d500.0!2d77.7896921!3d9.3995273!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x16131213162085675321!2sMadhu%20Nisha%20Pyrotech!5e0!3m2!1sen!2sin!4v1695299019912!5m2!1sen!2sin"
                     width="100%"
                     height="400"
                     style={{ border: 0 }}
@@ -604,7 +601,7 @@ fetch(`${API_BASE_URL}/api/send-wholesale-enquiry`, {
                 </div>
                 <div className="mt-6 text-center">
                   <motion.a
-                    href="https://maps.google.com/?q=MN+Crackers+Sivakasi"
+                    href="https://www.google.com/maps/place/Madhu+Nisha+Pyrotech/@9.3995273,77.7896921,18z/data=!4m5!3m4!1s0x0:0x16131213162085675321!8m2!3d9.3995273!4d77.7896921"
                     target="_blank"
                     rel="noopener noreferrer"
                     whileHover={{ scale: 1.05 }}

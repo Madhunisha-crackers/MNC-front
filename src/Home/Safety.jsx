@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Shield, AlertTriangle, CheckCircle, XCircle, Flame, Droplets, Eye, Users, Heart } from "lucide-react"
+import { Shield, AlertTriangle, CheckCircle, XCircle, Flame, Droplets, Eye, Users, Heart, Sparkles, MapPin, Phone, Mail, ArrowRight } from "lucide-react"
 import Navbar from "../Component/Navbar"
 import "../App.css"
 

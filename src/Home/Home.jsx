@@ -23,6 +23,7 @@ import { FaInfoCircle, FaArrowLeft, FaArrowRight } from "react-icons/fa"
 import Navbar from "../Component/Navbar"
 import "../App.css"
 import { API_BASE_URL } from "../../Config"
+import about from  '../../public/cont.png'
 
 const categories = [
   { name: "Sparklers", icon: Sparkles, description: "Beautiful sparkling lights for celebrations" },
@@ -850,7 +851,7 @@ export default function Home() {
         className="relative pt-24 pb-12 px-4 sm:px-6 lg:px-8 mt-10"
       >
         <div className="max-w-7xl mx-auto">
-          <div className="relative h-[500px] rounded-3xl overflow-hidden shadow-2xl">
+          <div className="relative mobile:h-[180px] hundred:mt-10 onefifty:mt-5 onefifty:h-[400px] tab:h-[250px] mobile:-mt-25 hundred:h-[500px] rounded-3xl overflow-hidden shadow-2xl">
             <AnimatePresence mode="wait">
               {banners.map(
                 (banner, idx) =>
@@ -894,7 +895,7 @@ export default function Home() {
       </motion.section>
 
       {/* Fast Running Products */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 mobile:-mt-20">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -979,8 +980,8 @@ export default function Home() {
             >
               <div className="relative rounded-3xl overflow-hidden shadow-2xl">
                 <img
-                  src="/placeholder.svg?height=400&width=600"
-                  alt="MN Crackers"
+                  src={about}
+                  alt="Madhu Nisha Crackers"
                   className="w-full h-96 object-cover hover:scale-105 transition-transform duration-700"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-orange-900/20 to-transparent" />
@@ -998,14 +999,14 @@ export default function Home() {
                 <h2 className="text-4xl md:text-5xl font-bold text-gray-800 mb-6">
                   Welcome to{" "}
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-orange-700">
-                    MN Crackers
+                    Madhu Nisha Crackers
                   </span>
                 </h2>
                 <div className="w-20 h-1 bg-gradient-to-r from-orange-400 to-orange-600 rounded-full mb-8" />
               </div>
               <div className="space-y-6 text-lg text-gray-600 leading-relaxed">
                 <p>
-                  MN Crackers has been a well-known Fireworks Store in Sivakasi. What started out as a hobby has become
+                  Madhu Nisha Crackers has been a well-known Fireworks Store in Sivakasi. What started out as a hobby has become
                   our passion for creating magical moments.
                 </p>
                 <p>
@@ -1181,22 +1182,36 @@ export default function Home() {
                   <p>
                     Madhu Nisha Crackers
                     <br />
-                    Anil Kumar Eye Hospital Opp.
+                    Pernayakkanpatti, Pachayapuram.,
                     <br />
-                    Sattur Road, Sivakasi
+                    Kil Thayilapatti, Sivakasi
                   </p>
+                  <div className="mt-5">
+                    <p className="text-white font-medium">Office Address</p>
+                    <p className="text-gray-300">
+                      Sivagamipuram Colony, Viseanatham panchayat.,
+                      <br />
+                      Sivakasi
+                    </p>
+                  </div>
                 </div>
                 <div>
                   <h4 className="font-semibold text-white mb-2">Phone</h4>
-                  <p>
-                    +91 63836 59214
-                    <br />
-                    +91 96554 56167
-                  </p>
+                  <a
+                    href="tel:+919487524689"
+                    className="text-gray-300 hover:text-orange-400 transition-colors block"
+                  >
+                    +91 94875 24689
+                  </a>
                 </div>
                 <div>
                   <h4 className="font-semibold text-white mb-2">Email</h4>
-                  <p>nivasramasamy27@gmail.com</p>
+                  <a
+                    href="mailto:madhunishacrackers@gmail.com"
+                    className="text-gray-300 hover:text-orange-400 transition-colors"
+                  >
+                    madhunishacrackers@gmail.com
+                  </a>
                 </div>
               </div>
             </motion.div>

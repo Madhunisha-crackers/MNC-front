@@ -1,4 +1,3 @@
-"use client"
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { FaPlus, FaMinus, FaArrowLeft, FaArrowRight, FaInfoCircle } from "react-icons/fa"
@@ -625,6 +624,7 @@ const Pricelist = () => {
     const minOrder = states.find(s => s.name === selectedState)?.min_rate;
     if (minOrder && parseFloat(originalTotal) < minOrder) return showError(`Minimum order for ${selectedState} is ₹${minOrder}. Your total is ₹${originalTotal}.`);
     try {
+      setShowLoader(true); // Show loader before API call
       const response = await fetch(`${API_BASE_URL}/api/direct/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -633,6 +633,7 @@ const Pricelist = () => {
           products: selectedProducts,
           net_rate: parseFloat(totals.net),
           you_save: parseFloat(totals.save),
+          processing_fee: parseFloat(totals.processing_fee), // Include processing fee
           total: parseFloat(totals.total),
           promo_discount: parseFloat(totals.promo_discount || '0.00'),
           customer_type: customerDetails.customer_type,
@@ -647,17 +648,6 @@ const Pricelist = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 4000);
-        setCart({});
-        setIsCartOpen(false);
-        setShowModal(false);
-        setCustomerDetails({ customer_name: "", address: "", district: "", state: "", mobile_number: "", email: "", customer_type: "User" });
-        setAppliedPromo(null);
-        setPromocode("");
-        setOriginalTotal(0);
-        setTotalDiscount(0);
-
         // Download PDF
         const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: 'blob' });
         const blob = await pdfResponse.blob();
@@ -670,28 +660,18 @@ const Pricelist = () => {
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
-
-        // Show toast notification
-        toast.success("Downloaded estimate bill, check downloads", {
-          position: "top-center",
-          autoClose: 5000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-        });
       } else {
         const data = await response.json();
+        setShowLoader(false); // Hide loader on error
         showError(data.message || "Booking failed.");
       }
     } catch (err) {
       console.error("Checkout error:", err);
+      setShowLoader(false); // Hide loader on error
       showError("Something went wrong during checkout.");
     }
   };
 
-  // Add new function to handle rocket animation completion
   const handleRocketComplete = () => {
     setShowLoader(false)
 
@@ -820,11 +800,14 @@ const Pricelist = () => {
       total -= promoDiscount
       save += promoDiscount
     }
+    const processingFee = (total) * 0.03 // 3% processing fee
+    total += processingFee // Add processing fee to total
     return {
       net: formatPrice(net),
       save: formatPrice(save),
       total: formatPrice(total),
       promo_discount: formatPrice(promoDiscount),
+      processing_fee: formatPrice(processingFee),
     }
   }, [cart, products, appliedPromo])
 
@@ -978,7 +961,7 @@ const Pricelist = () => {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.8, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl mobile:max-w-md mobile:w-[90%] onefifty:max-w-[90%] mx-4 max-h-[90vh] flex flex-col"
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl mobile:max-w-md mobile:w-[90%] onefifty:max-w-[40%] mx-4 max-h-[90vh] flex flex-col"
             >
               <div className="flex justify-between items-center p-6 border-b border-orange-100 ">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -1118,7 +1101,7 @@ const Pricelist = () => {
                     <span>₹{totals.net}</span>
                   </div>
                   <div className="flex justify-between text-green-600">
-                    <span>You Save:</span>
+                    <span>Discount:</span>
                     <span>₹{totals.save}</span>
                   </div>
                   {appliedPromo && (
@@ -1127,6 +1110,10 @@ const Pricelist = () => {
                       <span>-₹{totals.promo_discount}</span>
                     </div>
                   )}
+                  <div className="flex justify-between text-gray-600">
+                    <span>Processing Fee:</span>
+                    <span>₹{totals.processing_fee}</span>
+                  </div>
                   <div className="flex justify-between font-bold text-lg text-orange-600 pt-2 border-t border-orange-200">
                     <span>Total:</span>
                     <span>₹{totals.total}</span>
@@ -1143,7 +1130,7 @@ const Pricelist = () => {
                   </motion.button>
                   <motion.button
                     whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileTap={{scale: 0.98 }}
                     onClick={handleCheckoutClick}
                     className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg"
                   >
@@ -1197,7 +1184,6 @@ const Pricelist = () => {
                   </motion.div>
                 </AnimatePresence>
 
-                {/* Close Button */}
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
@@ -1207,7 +1193,6 @@ const Pricelist = () => {
                   <X className="w-6 h-6" />
                 </motion.button>
 
-                {/* Navigation Buttons */}
                 {selectedImages.length > 1 && (
                   <>
                     <motion.button
@@ -1233,14 +1218,12 @@ const Pricelist = () => {
                   </>
                 )}
 
-                {/* Image Counter */}
                 {selectedImages.length > 1 && (
                   <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm rounded-full px-4 py-2 text-white text-sm">
                     {currentImageIndex + 1} / {selectedImages.length}
                   </div>
                 )}
 
-                {/* Thumbnail Navigation */}
                 {selectedImages.length > 1 && (
                   <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 max-w-md overflow-x-auto p-2">
                     {selectedImages.map((image, index) => (
@@ -1275,7 +1258,7 @@ const Pricelist = () => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col sm:flex-row gap-4 mb-8"
+          className="flex flex-col sm:flex-row gap-4 mb-8 mobile:-mt-20"
         >
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -1522,6 +1505,10 @@ const Pricelist = () => {
                     <div className="flex justify-between text-green-600">
                       <span>Discount (promocode included):</span>
                       <span>-₹{totals.save}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                      <span>Processing Fee:</span>
+                      <span>₹{totals.processing_fee}</span>
                     </div>
                     <div className="flex justify-between font-bold text-lg text-orange-600 pt-2 border-t border-orange-200">
                       <span>Total:</span>

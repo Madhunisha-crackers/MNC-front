@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { FiLogOut } from 'react-icons/fi';
 import Sidebar from '../Sidebar/Sidebar';
 import { API_BASE_URL } from '../../../Config';
 import { FaPlus } from 'react-icons/fa';
@@ -98,7 +97,7 @@ export default function Inventory() {
     setProductType(event.target.value);
     setValues({});
     setFocused({});
-    setImages(null);
+    setImages([]);
     setError('');
     setSuccess('');
   };
@@ -145,17 +144,17 @@ export default function Inventory() {
     }
 
     let imageBase64Array = [];
-    if (images.length > 0) {
-      for (const file of images) {
-        const base64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        imageBase64Array.push(base64);
-      }
+    if (Array.isArray(images) && images.length > 0) { // Added Array.isArray check
+    for (const file of images) {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      imageBase64Array.push(base64);
     }
+  }
   
     const payload = {
       serial_number: values.serialNum,

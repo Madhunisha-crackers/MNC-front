@@ -117,7 +117,7 @@ export default function About() {
 
       <div className="relative z-10 mt-20">
         {/* Main About Section */}
-        <section className="max-w-7xl mx-auto px-4 md:px-8 py-20">
+        <section className="max-w-7xl mx-auto px-4 md:px-8 py-20 hundred:mt-0 mobile:-mt-25">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             {/* Image Section */}
             <motion.div

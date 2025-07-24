@@ -31,10 +31,10 @@ class QuotationTableErrorBoundary extends React.Component {
   }
 }
 
-// Reusable QuotationTable component
+// Reusable QuotationTable component (unchanged)
 const QuotationTable = ({
   cart = [], products, selectedProduct, setSelectedProduct, addToCart, updateQuantity, updateDiscount, removeFromCart,
-  calculateNetRate, calculateYouSave, calculateTotal, styles, isModal = false
+  calculateNetRate, calculateYouSave, calculateProcessingFee, calculateTotal, styles, isModal = false
 }) => (
   <div className="space-y-4">
     <div className="flex flex-col items-center mobile:w-full">
@@ -146,6 +146,7 @@ const QuotationTable = ({
         <>
           <div className="text-xl text-center mt-4 font-bold text-gray-900 dark:text-gray-100 mobile:text-base mobile:mt-2">Net Rate: ₹{calculateNetRate(cart)}</div>
           <div className="text-xl text-center mt-2 font-bold text-gray-900 dark:text-gray-100 mobile:text-base mobile:mt-1">You Save: ₹{calculateYouSave(cart)}</div>
+          <div className="text-xl text-center mt-2 font-bold text-gray-900 dark:text-gray-100 mobile:text-base mobile:mt-1">Processing Fee (3%): ₹{calculateProcessingFee(cart)}</div>
           <div className="text-xl text-center mt-2 font-bold text-gray-900 dark:text-gray-100 mobile:text-base mobile:mt-1">Total: ₹{calculateTotal(cart)}</div>
         </>
       )}
@@ -153,11 +154,11 @@ const QuotationTable = ({
   </div>
 );
 
-// FormFields component for modal
+// FormFields component for modal (unchanged)
 const FormFields = ({
   isEdit, customers, modalSelectedCustomer, setModalSelectedCustomer, modalCart, products, modalSelectedProduct,
   setModalSelectedProduct, addToCart, updateQuantity, updateDiscount, removeFromCart, calculateNetRate, calculateYouSave,
-  calculateTotal, handleSubmit, closeModal, styles
+  calculateProcessingFee, calculateTotal, handleSubmit, closeModal, styles
 }) => (
   <div className="space-y-6">
     <QuotationTableErrorBoundary>
@@ -172,6 +173,7 @@ const FormFields = ({
         removeFromCart={removeFromCart}
         calculateNetRate={calculateNetRate}
         calculateYouSave={calculateYouSave}
+        calculateProcessingFee={calculateProcessingFee}
         calculateTotal={calculateTotal}
         styles={styles}
         isModal={true}
@@ -334,7 +336,15 @@ export default function Direct() {
 
   const calculateNetRate = (targetCart = []) => targetCart.reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2);
   const calculateYouSave = (targetCart = []) => targetCart.reduce((total, item) => total + (item.price * (item.discount / 100) * item.quantity), 0).toFixed(2);
-  const calculateTotal = (targetCart = []) => targetCart.reduce((total, item) => total + (item.price * (1 - item.discount / 100)) * item.quantity, 0).toFixed(2);
+  const calculateProcessingFee = (targetCart = []) => {
+    const subtotal = targetCart.reduce((total, item) => total + (item.price * (1 - item.discount / 100)) * item.quantity, 0);
+    return (subtotal * 0.03).toFixed(2); // 3% processing fee
+  };
+  const calculateTotal = (targetCart = []) => {
+    const subtotal = targetCart.reduce((total, item) => total + (item.price * (1 - item.discount / 100)) * item.quantity, 0);
+    const processingFee = subtotal * 0.03; // 3% processing fee
+    return (subtotal + processingFee).toFixed(2);
+  };
 
   const createQuotation = async () => {
     if (!selectedCustomer || !cart.length) return setError('Customer and products are required');
@@ -344,6 +354,8 @@ export default function Direct() {
     const quotation_id = `QUO-${Date.now()}`;
 
     try {
+      const subtotal = parseFloat(calculateNetRate(cart)) - parseFloat(calculateYouSave(cart));
+      const processingFee = subtotal * 0.03;
       const payload = {
         customer_id: Number(selectedCustomer),
         quotation_id,
@@ -357,6 +369,7 @@ export default function Direct() {
         })),
         net_rate: parseFloat(calculateNetRate(cart)),
         you_save: parseFloat(calculateYouSave(cart)),
+        processing_fee: processingFee,
         total: parseFloat(calculateTotal(cart)),
         promo_discount: 0,
         customer_type: customer.customer_type || 'User',
@@ -376,7 +389,6 @@ export default function Direct() {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
 
-      // Immediately update quotations state with the new quotation
       setQuotations(prev => [
         {
           ...payload,
@@ -387,7 +399,6 @@ export default function Direct() {
         ...prev
       ]);
 
-      // Download PDF
       const pdfResponse = await axios.get(`${API_BASE_URL}/api/direct/quotation/${response.data.quotation_id}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([pdfResponse.data]));
       const link = document.createElement('a');
@@ -399,7 +410,6 @@ export default function Direct() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      // Clear form
       setCart([]);
       setSelectedCustomer('');
       setSelectedProduct(null);
@@ -432,6 +442,8 @@ export default function Direct() {
     if (!modalSelectedCustomer || !modalCart.length) return setError('Customer and products are required');
     if (modalCart.some(item => item.quantity === 0)) return setError('Please remove products with zero quantity');
     try {
+      const subtotal = parseFloat(calculateNetRate(modalCart)) - parseFloat(calculateYouSave(modalCart));
+      const processingFee = subtotal * 0.03;
       const payload = {
         customer_id: Number(modalSelectedCustomer),
         products: modalCart.map(item => ({
@@ -444,6 +456,7 @@ export default function Direct() {
         })),
         net_rate: parseFloat(calculateNetRate(modalCart)),
         you_save: parseFloat(calculateYouSave(modalCart)),
+        processing_fee: processingFee,
         total: parseFloat(calculateTotal(modalCart)),
         promo_discount: 0,
         status: 'pending'
@@ -454,7 +467,6 @@ export default function Direct() {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
 
-      // Update quotations state immediately
       setQuotations(prev =>
         prev.map(q =>
           q.quotation_id === quotationId
@@ -468,7 +480,6 @@ export default function Direct() {
         )
       );
 
-      // Download PDF
       const pdfResponse = await axios.get(`${API_BASE_URL}/api/direct/quotation/${response.data.quotation_id}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([pdfResponse.data]));
       const link = document.createElement('a');
@@ -546,6 +557,8 @@ export default function Direct() {
     const customer = customers.find(c => c.id.toString() === modalSelectedCustomer);
     if (!customer) return setError('Invalid customer');
     try {
+      const subtotal = parseFloat(calculateNetRate(modalCart)) - parseFloat(calculateYouSave(modalCart));
+      const processingFee = subtotal * 0.03;
       const payload = {
         customer_id: Number(modalSelectedCustomer),
         order_id: orderId,
@@ -560,6 +573,7 @@ export default function Direct() {
         })),
         net_rate: parseFloat(calculateNetRate(modalCart)),
         you_save: parseFloat(calculateYouSave(modalCart)),
+        processing_fee: processingFee,
         total: parseFloat(calculateTotal(modalCart)),
         promo_discount: 0,
         customer_type: customer.customer_type || 'User',
@@ -574,16 +588,14 @@ export default function Direct() {
       const response = await axios.post(`${API_BASE_URL}/api/direct/bookings`, payload);
       setSuccessMessage('Booking created successfully! Check downloads for PDF.');
       setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
+      setTimeout(() => setShowSuccess(false), 30000);
 
-      // Update quotations state immediately
       setQuotations(prev =>
         prev.map(q =>
           q.quotation_id === quotationId ? { ...q, status: 'booked' } : q
         )
       );
 
-      // Download PDF
       const pdfResponse = await axios.get(`${API_BASE_URL}/api/direct/invoice/${response.data.order_id}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([pdfResponse.data]));
       const link = document.createElement('a');
@@ -609,6 +621,8 @@ export default function Direct() {
     const order_id = `ORD-${Date.now()}`;
 
     try {
+      const subtotal = parseFloat(calculateNetRate(cart)) - parseFloat(calculateYouSave(cart));
+      const processingFee = subtotal * 0.03;
       const payload = {
         customer_id: Number(selectedCustomer),
         order_id,
@@ -623,6 +637,7 @@ export default function Direct() {
         })),
         net_rate: parseFloat(calculateNetRate(cart)),
         you_save: parseFloat(calculateYouSave(cart)),
+        processing_fee: processingFee,
         total: parseFloat(calculateTotal(cart)),
         promo_discount: 0,
         customer_type: customer.customer_type || 'User',
@@ -639,14 +654,12 @@ export default function Direct() {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
 
-      // Update quotations state immediately
       setQuotations(prev =>
         prev.map(q =>
           q.quotation_id === quotationId ? { ...q, status: 'booked' } : q
         )
       );
 
-      // Download PDF
       const pdfResponse = await axios.get(`${API_BASE_URL}/api/direct/invoice/${response.data.order_id}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([pdfResponse.data]));
       const link = document.createElement('a');
@@ -658,7 +671,6 @@ export default function Direct() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      // Clear form
       setCart([]);
       setSelectedCustomer('');
       setSelectedProduct(null);
@@ -734,6 +746,7 @@ export default function Direct() {
                 removeFromCart={removeFromCart}
                 calculateNetRate={calculateNetRate}
                 calculateYouSave={calculateYouSave}
+                calculateProcessingFee={calculateProcessingFee} // Added missing prop
                 calculateTotal={calculateTotal}
                 styles={styles}
               />
@@ -853,6 +866,7 @@ export default function Direct() {
                 removeFromCart={removeFromCart}
                 calculateNetRate={calculateNetRate}
                 calculateYouSave={calculateYouSave}
+                calculateProcessingFee={calculateProcessingFee}
                 calculateTotal={calculateTotal}
                 handleSubmit={modalMode === 'edit' ? () => editQuotation() : () => convertToBooking()}
                 closeModal={closeModal}
