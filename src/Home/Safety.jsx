@@ -14,7 +14,7 @@ const dosData = [
   {
     icon: Shield,
     title: "Buy from Authorized Dealers",
-    description: "Purchase fireworks only from licensed and reputable manufacturers like MN Crackers.",
+    description: "Purchase fireworks only from licensed and reputable manufacturers like Madhu Nisha Crackers.",
   },
   {
     icon: Eye,
@@ -322,7 +322,7 @@ export default function Safety() {
               />
 
               <p className="text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-orange-800 mb-6">
-                MN Crackers
+                Madhu Nisha Crackers
               </p>
 
               <p className="text-xl md:text-2xl text-gray-600 leading-relaxed max-w-4xl mx-auto">
@@ -512,11 +512,11 @@ export default function Safety() {
         </section>
 
         {/* Modern Footer */}
-        <footer className="bg-gradient-to-br from-gray-900 to-gray-800 text-white py-16 mt-20 shadow-2xl overflow-hidden relative">
+        <footer className="bg-gradient-to-br from-gray-900 to-gray-800 text-white py-16 shadow-2xl overflow-hidden relative">
           <div className="absolute inset-0 bg-[url('/footer-pattern.png')] bg-cover bg-center opacity-5" />
 
           <div className="relative z-10 max-w-7xl mx-auto px-6 mobile:mb-5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-12 items-center justify-center">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
               {/* Company Info */}
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
@@ -526,9 +526,9 @@ export default function Safety() {
               >
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center">
-                    <Shield className="w-6 h-6 text-white" />
+                    <Sparkles className="w-6 h-6 text-white" />
                   </div>
-                  <h2 className="text-2xl font-bold">MN Crackers</h2>
+                  <h2 className="text-2xl font-bold">Madhu Nisha Crackers</h2>
                 </div>
                 <p className="text-orange-200 font-semibold mb-2">Premium Fireworks</p>
                 <p className="text-gray-300 leading-relaxed">
@@ -547,42 +547,49 @@ export default function Safety() {
                 <h2 className="text-2xl font-bold mb-6 text-orange-400">Contact Us</h2>
                 <div className="space-y-4">
                   <div className="flex items-start gap-3">
-                    <Shield className="w-5 h-5 text-orange-400 mt-1 flex-shrink-0" />
+                    <MapPin className="w-5 h-5 text-orange-400 mt-1 flex-shrink-0" />
                     <div>
-                      <p className="text-white font-medium">MN Crackers</p>
+                      <p className="text-white font-medium">Madhu Nisha Crackers</p>
                       <p className="text-gray-300">
-                        Anil Kumar Eye Hospital Opp.,
+                        Pernayakkanpatti, Pachayapuram.,
                         <br />
-                        Sattur Road, Sivakasi
+                        Kil Thayilapatti, Sivakasi
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <MapPin className="w-5 h-5 text-orange-400 mt-1 flex-shrink-0" />
+                    <div>
+                      <p className="text-white font-medium">Office Address</p>
+                      <p className="text-gray-300">
+                        Sivagamipuram Colony, Viseanatham panchayat.,
+                        <br />
+                        Sivakasi
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <AlertTriangle className="w-5 h-5 text-orange-400" />
+                    <Phone className="w-5 h-5 text-orange-400" />
                     <div className="space-y-1">
                       <a
-                        href="tel:+916383659214"
+                        href="tel:+919487524689"
                         className="text-gray-300 hover:text-orange-400 transition-colors block"
                       >
-                        +91 63836 59214
+                        +91 94875 24689
                       </a>
-                      <a
-                        href="tel:+919655456167"
-                        className="text-gray-300 hover:text-orange-400 transition-colors block"
-                      >
-                        +91 96554 56167
-                      </a>
+           
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <Heart className="w-5 h-5 text-orange-400" />
+                    <Mail className="w-5 h-5 text-orange-400" />
                     <a
-                      href="mailto:nivasramasamy27@gmail.com"
+                      href="mailto:madhunishacrackers@gmail.com"
                       className="text-gray-300 hover:text-orange-400 transition-colors"
                     >
-                      nivasramasamy27@gmail.com
+                      madhunishacrackers@gmail.com
                     </a>
                   </div>
                 </div>
@@ -603,7 +610,7 @@ export default function Safety() {
                         href={link === "Home" ? "/" : `/${link.toLowerCase().replace(/ /g, "-")}`}
                         className="text-gray-300 hover:text-orange-400 transition-colors duration-300 font-medium flex items-center gap-2 group"
                       >
-                        <CheckCircle className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
                         {link}
                       </a>
                     </li>
@@ -620,7 +627,7 @@ export default function Safety() {
                 within 24 hrs.
               </p>
               <p className="text-gray-400">
-                Copyright © 2025 <span className="text-orange-400 font-semibold">MN Crackers</span>. All rights
+                Copyright © 2025 <span className="text-orange-400 font-semibold">Madhu Nisha Crackers</span>. All rights
                 reserved. Developed by <span className="text-orange-400 font-semibold">SPD Solutions</span>
               </p>
             </div>

@@ -227,7 +227,7 @@ const contactCards = [
   {
     icon: MapPin,
     title: "Our Shop Location",
-    content: ["MN Crackers", "Anil Kumar Eye Hospital Opp.", "Sattur Road", "Sivakasi, Tamil Nadu"],
+    content: ["Madhu Nisha Crackers", "Anil Kumar Eye Hospital Opp.", "Sattur Road", "Sivakasi, Tamil Nadu"],
     gradient: "bg-gradient-to-br from-orange-400 to-orange-600",
   },
   {
@@ -360,7 +360,7 @@ const contactCards = [
 
             <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
               Ready to light up your celebrations? Get in touch with{" "}
-              <span className="font-semibold text-orange-600">MN Crackers</span> for all your premium fireworks needs.
+              <span className="font-semibold text-orange-600">Madhu Nisha Crackers</span> for all your premium fireworks needs.
               We're here to make your special moments truly unforgettable.
             </p>
           </motion.div>
@@ -624,7 +624,7 @@ fetch(`${API_BASE_URL}/api/send-wholesale-enquiry`, {
         </section>
 
         {/* Modern Footer */}
-        <footer className="bg-gradient-to-br from-gray-900 to-gray-800 text-white py-16 mt-20 shadow-2xl overflow-hidden relative">
+        <footer className="bg-gradient-to-br from-gray-900 to-gray-800 text-white py-16 shadow-2xl overflow-hidden relative">
           <div className="absolute inset-0 bg-[url('/footer-pattern.png')] bg-cover bg-center opacity-5" />
 
           <div className="relative z-10 max-w-7xl mx-auto px-6 mobile:mb-5">
@@ -640,7 +640,7 @@ fetch(`${API_BASE_URL}/api/send-wholesale-enquiry`, {
                   <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center">
                     <Sparkles className="w-6 h-6 text-white" />
                   </div>
-                  <h2 className="text-2xl font-bold">MN Crackers</h2>
+                  <h2 className="text-2xl font-bold">Madhu Nisha Crackers</h2>
                 </div>
                 <p className="text-orange-200 font-semibold mb-2">Premium Fireworks</p>
                 <p className="text-gray-300 leading-relaxed">
@@ -661,11 +661,23 @@ fetch(`${API_BASE_URL}/api/send-wholesale-enquiry`, {
                   <div className="flex items-start gap-3">
                     <MapPin className="w-5 h-5 text-orange-400 mt-1 flex-shrink-0" />
                     <div>
-                      <p className="text-white font-medium">MN Crackers</p>
+                      <p className="text-white font-medium">Madhu Nisha Crackers</p>
                       <p className="text-gray-300">
-                        Anil Kumar Eye Hospital Opp.,
+                        Pernayakkanpatti, Pachayapuram.,
                         <br />
-                        Sattur Road, Sivakasi
+                        Kil Thayilapatti, Sivakasi
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <MapPin className="w-5 h-5 text-orange-400 mt-1 flex-shrink-0" />
+                    <div>
+                      <p className="text-white font-medium">Office Address</p>
+                      <p className="text-gray-300">
+                        Sivagamipuram Colony, Viseanatham panchayat.,
+                        <br />
+                        Sivakasi
                       </p>
                     </div>
                   </div>
@@ -674,27 +686,22 @@ fetch(`${API_BASE_URL}/api/send-wholesale-enquiry`, {
                     <Phone className="w-5 h-5 text-orange-400" />
                     <div className="space-y-1">
                       <a
-                        href="tel:+916383659214"
+                        href="tel:+919487524689"
                         className="text-gray-300 hover:text-orange-400 transition-colors block"
                       >
-                        +91 63836 59214
+                        +91 94875 24689
                       </a>
-                      <a
-                        href="tel:+919655456167"
-                        className="text-gray-300 hover:text-orange-400 transition-colors block"
-                      >
-                        +91 96554 56167
-                      </a>
+           
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
                     <Mail className="w-5 h-5 text-orange-400" />
                     <a
-                      href="mailto:nivasramasamy27@gmail.com"
+                      href="mailto:madhunishacrackers@gmail.com"
                       className="text-gray-300 hover:text-orange-400 transition-colors"
                     >
-                      nivasramasamy27@gmail.com
+                      madhunishacrackers@gmail.com
                     </a>
                   </div>
                 </div>
@@ -732,7 +739,7 @@ fetch(`${API_BASE_URL}/api/send-wholesale-enquiry`, {
                 within 24 hrs.
               </p>
               <p className="text-gray-400">
-                Copyright © 2025 <span className="text-orange-400 font-semibold">MN Crackers</span>. All rights
+                Copyright © 2025 <span className="text-orange-400 font-semibold">Madhu Nisha Crackers</span>. All rights
                 reserved. Developed by <span className="text-orange-400 font-semibold">SPD Solutions</span>
               </p>
             </div>

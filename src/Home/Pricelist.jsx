@@ -597,13 +597,9 @@ const Pricelist = () => {
   }, [])
 
   const handleFinalCheckout = async () => {
-    // Close any error modals first
-    setShowMinOrderModal(false)
-
-    setShowLoader(true)
-    const order_id = `ORD-${Date.now()}`
+    const order_id = `ORD-${Date.now()}`;
     const selectedProducts = Object.entries(cart).map(([serial, qty]) => {
-      const product = products.find((p) => p.serial_number === serial)
+      const product = products.find(p => p.serial_number === serial);
       return {
         id: product.id,
         product_type: product.product_type,
@@ -614,27 +610,20 @@ const Pricelist = () => {
         discount: product.discount,
         serial_number: product.serial_number,
         productname: product.productname,
-        status: product.status,
-      }
-    })
-
-    if (!selectedProducts.length) return setShowLoader(false), showError("Your cart is empty.")
-    if (!customerDetails.customer_name) return setShowLoader(false), showError("Customer name is required.")
-    if (!customerDetails.address) return setShowLoader(false), showError("Address is required.")
-    if (!customerDetails.district) return setShowLoader(false), showError("District is required.")
-    if (!customerDetails.state) return setShowLoader(false), showError("Please select a state.")
-
-    const mobile = customerDetails.mobile_number.replace(/\D/g, "").slice(-10)
-    if (mobile.length !== 10) return setShowLoader(false), showError("Mobile number must be 10 digits.")
-
-    const selectedState = customerDetails.state?.trim()
-    const minOrder = states.find((s) => s.name === selectedState)?.min_rate
-    if (minOrder && Number.parseFloat(originalTotal) < minOrder)
-      return (
-        setShowLoader(false),
-        showError(`Minimum order for ${selectedState} is ₹${minOrder}. Your total is ₹${originalTotal}.`)
-      )
-
+        status: product.status
+      };
+    });
+    if (!selectedProducts.length) return showError("Your cart is empty.");
+    if (!customerDetails.customer_name) return showError("Customer name is required.");
+    if (!customerDetails.address) return showError("Address is required.");
+    if (!customerDetails.district) return showError("District is required.");
+    if (!customerDetails.state) return showError("Please select a state.");
+    if (!customerDetails.mobile_number) return showError("Mobile number is required.");
+    const mobile = customerDetails.mobile_number.replace(/\D/g, '').slice(-10);
+    if (mobile.length !== 10) return showError("Mobile number must be 10 digits.");
+    const selectedState = customerDetails.state?.trim();
+    const minOrder = states.find(s => s.name === selectedState)?.min_rate;
+    if (minOrder && parseFloat(originalTotal) < minOrder) return showError(`Minimum order for ${selectedState} is ₹${minOrder}. Your total is ₹${originalTotal}.`);
     try {
       const response = await fetch(`${API_BASE_URL}/api/direct/bookings`, {
         method: "POST",
@@ -642,10 +631,10 @@ const Pricelist = () => {
         body: JSON.stringify({
           order_id,
           products: selectedProducts,
-          net_rate: Number.parseFloat(totals.net),
-          you_save: Number.parseFloat(totals.save),
-          total: Number.parseFloat(totals.total),
-          promo_discount: Number.parseFloat(totals.promo_discount || "0.00"),
+          net_rate: parseFloat(totals.net),
+          you_save: parseFloat(totals.save),
+          total: parseFloat(totals.total),
+          promo_discount: parseFloat(totals.promo_discount || '0.00'),
           customer_type: customerDetails.customer_type,
           customer_name: customerDetails.customer_name,
           address: customerDetails.address,
@@ -653,41 +642,54 @@ const Pricelist = () => {
           email: customerDetails.email,
           district: customerDetails.district,
           state: customerDetails.state,
-          promocode: appliedPromo?.code || null,
-        }),
-      })
-
+          promocode: appliedPromo?.code || null
+        })
+      });
       if (response.ok) {
-        const data = await response.json()
+        const data = await response.json();
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 4000);
+        setCart({});
+        setIsCartOpen(false);
+        setShowModal(false);
+        setCustomerDetails({ customer_name: "", address: "", district: "", state: "", mobile_number: "", email: "", customer_type: "User" });
+        setAppliedPromo(null);
+        setPromocode("");
+        setOriginalTotal(0);
+        setTotalDiscount(0);
 
-        // Download PDF immediately
-        const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: "blob" })
-        const blob = await pdfResponse.blob()
-        const url = window.URL.createObjectURL(blob)
-        const link = document.createElement("a")
-        link.href = url
-        const safeCustomerName = (customerDetails.customer_name || "unknown")
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "_")
-          .replace(/^_+|_+$/g, "")
-        link.setAttribute("download", `${safeCustomerName}-${data.order_id}.pdf`)
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(url)
+        // Download PDF
+        const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: 'blob' });
+        const blob = await pdfResponse.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const safeCustomerName = (customerDetails.customer_name || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        link.setAttribute('download', `${safeCustomerName}-${data.order_id}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
 
-        // The rocket animation will auto-close and trigger handleRocketComplete
+        // Show toast notification
+        toast.success("Downloaded estimate bill, check downloads", {
+          position: "top-center",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+        });
       } else {
-        setShowLoader(false)
-        const data = await response.json()
-        showError(data.message || "Booking failed.")
+        const data = await response.json();
+        showError(data.message || "Booking failed.");
       }
     } catch (err) {
-      setShowLoader(false)
-      console.error("Checkout error:", err)
-      showError("Something went wrong during checkout.")
+      console.error("Checkout error:", err);
+      showError("Something went wrong during checkout.");
     }
-  }
+  };
 
   // Add new function to handle rocket animation completion
   const handleRocketComplete = () => {

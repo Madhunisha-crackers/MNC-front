@@ -236,6 +236,18 @@ export default function Direct() {
     }
   };
 
+  // Function to fetch quotations
+  const fetchQuotations = async () => {
+    try {
+      const quotationsResponse = await axios.get(`${API_BASE_URL}/api/direct/quotations`);
+      setQuotations(Array.isArray(quotationsResponse.data) ? quotationsResponse.data : []);
+    } catch (err) {
+      console.error('Failed to fetch quotations:', err.message);
+      setError(`Failed to fetch quotations: ${err.message}`);
+    }
+  };
+
+  // Initial data fetch and setup polling
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -255,6 +267,12 @@ export default function Direct() {
       }
     };
     fetchData();
+
+    // Set up polling for quotations every 30 seconds
+    const intervalId = setInterval(fetchQuotations, 30000);
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(intervalId);
   }, []);
 
   const addToCart = (isModal = false) => {
@@ -358,6 +376,17 @@ export default function Direct() {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
 
+      // Immediately update quotations state with the new quotation
+      setQuotations(prev => [
+        {
+          ...payload,
+          created_at: new Date().toISOString(),
+          customer_name: customer.name || 'N/A',
+          total: payload.total
+        },
+        ...prev
+      ]);
+
       // Download PDF
       const pdfResponse = await axios.get(`${API_BASE_URL}/api/direct/quotation/${response.data.quotation_id}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([pdfResponse.data]));
@@ -370,9 +399,7 @@ export default function Direct() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      // Refresh quotations
-      const quotationsResponse = await axios.get(`${API_BASE_URL}/api/direct/quotations`);
-      setQuotations(Array.isArray(quotationsResponse.data) ? quotationsResponse.data : []);
+      // Clear form
       setCart([]);
       setSelectedCustomer('');
       setSelectedProduct(null);
@@ -427,6 +454,20 @@ export default function Direct() {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
 
+      // Update quotations state immediately
+      setQuotations(prev =>
+        prev.map(q =>
+          q.quotation_id === quotationId
+            ? {
+                ...q,
+                ...payload,
+                customer_name: customers.find(c => c.id.toString() === modalSelectedCustomer)?.name || 'N/A',
+                total: payload.total
+              }
+            : q
+        )
+      );
+
       // Download PDF
       const pdfResponse = await axios.get(`${API_BASE_URL}/api/direct/quotation/${response.data.quotation_id}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([pdfResponse.data]));
@@ -440,9 +481,6 @@ export default function Direct() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      // Refresh quotations
-      const quotationsResponse = await axios.get(`${API_BASE_URL}/api/direct/quotations`);
-      setQuotations(Array.isArray(quotationsResponse.data) ? quotationsResponse.data : []);
       closeModal();
     } catch (err) {
       setError(`Failed to update quotation: ${err.response?.data?.message || err.message}`);
@@ -469,9 +507,12 @@ export default function Direct() {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
 
-      const quotationsResponse = await axios.get(`${API_BASE_URL}/api/direct/quotations`);
-      setQuotations(Array.isArray(quotationsResponse.data) ? quotationsResponse.data : []);
-      setError('');
+      // Update quotations state immediately
+      setQuotations(prev =>
+        prev.map(q =>
+          q.quotation_id === targetQuotationId ? { ...q, status: 'cancelled' } : q
+        )
+      );
     } catch (err) {
       console.error('Failed to cancel quotation:', err.response?.data || err.message);
       setError(`Failed to cancel quotation: ${err.response?.data?.message || err.message}`);
@@ -531,10 +572,16 @@ export default function Direct() {
       };
 
       const response = await axios.post(`${API_BASE_URL}/api/direct/bookings`, payload);
-      await axios.put(`${API_BASE_URL}/api/direct/quotations/${quotationId}`, { status: 'booked' });
       setSuccessMessage('Booking created successfully! Check downloads for PDF.');
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
+
+      // Update quotations state immediately
+      setQuotations(prev =>
+        prev.map(q =>
+          q.quotation_id === quotationId ? { ...q, status: 'booked' } : q
+        )
+      );
 
       // Download PDF
       const pdfResponse = await axios.get(`${API_BASE_URL}/api/direct/invoice/${response.data.order_id}`, { responseType: 'blob' });
@@ -548,9 +595,6 @@ export default function Direct() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      // Refresh quotations
-      const quotationsResponse = await axios.get(`${API_BASE_URL}/api/direct/quotations`);
-      setQuotations(Array.isArray(quotationsResponse.data) ? quotationsResponse.data : []);
       closeModal();
     } catch (err) {
       setError(`Failed to create booking: ${err.response?.data?.message || err.message}`);
@@ -558,68 +602,72 @@ export default function Direct() {
   };
 
   const handleBooking = async () => {
-  if (!quotationId || !selectedCustomer || !cart.length) return setError('Quotation, customer, and products are required');
-  if (cart.some(item => item.quantity === 0)) return setError('Please remove products with zero quantity');
-  const customer = customers.find(c => c.id.toString() === selectedCustomer);
-  if (!customer) return setError('Invalid customer');
-  const order_id = `ORD-${Date.now()}`;
+    if (!quotationId || !selectedCustomer || !cart.length) return setError('Quotation, customer, and products are required');
+    if (cart.some(item => item.quantity === 0)) return setError('Please remove products with zero quantity');
+    const customer = customers.find(c => c.id.toString() === selectedCustomer);
+    if (!customer) return setError('Invalid customer');
+    const order_id = `ORD-${Date.now()}`;
 
-  try {
-    const payload = {
-      customer_id: Number(selectedCustomer),
-      order_id,
-      quotation_id: quotationId,
-      products: cart.map(item => ({
-        id: item.id,
-        product_type: item.product_type,
-        productname: item.productname,
-        price: parseFloat(item.price) || 0,
-        discount: parseFloat(item.discount) || 0,
-        quantity: parseInt(item.quantity) || 0
-      })),
-      net_rate: parseFloat(calculateNetRate(cart)),
-      you_save: parseFloat(calculateYouSave(cart)),
-      total: parseFloat(calculateTotal(cart)),
-      promo_discount: 0,
-      customer_type: customer.customer_type || 'User',
-      customer_name: customer.name,
-      address: customer.address,
-      mobile_number: customer.mobile_number,
-      email: customer.email,
-      district: customer.district,
-      state: customer.state
-    };
+    try {
+      const payload = {
+        customer_id: Number(selectedCustomer),
+        order_id,
+        quotation_id: quotationId,
+        products: cart.map(item => ({
+          id: item.id,
+          product_type: item.product_type,
+          productname: item.productname,
+          price: parseFloat(item.price) || 0,
+          discount: parseFloat(item.discount) || 0,
+          quantity: parseInt(item.quantity) || 0
+        })),
+        net_rate: parseFloat(calculateNetRate(cart)),
+        you_save: parseFloat(calculateYouSave(cart)),
+        total: parseFloat(calculateTotal(cart)),
+        promo_discount: 0,
+        customer_type: customer.customer_type || 'User',
+        customer_name: customer.name,
+        address: customer.address,
+        mobile_number: customer.mobile_number,
+        email: customer.email,
+        district: customer.district,
+        state: customer.state
+      };
 
-    const response = await axios.post(`${API_BASE_URL}/api/direct/bookings`, payload);
-    await axios.put(`${API_BASE_URL}/api/direct/quotations/${quotationId}`, { status: 'booked' });
-    setCart([]);
-    setSelectedCustomer('');
-    setSelectedProduct(null);
-    setQuotationId(null);
-    setIsQuotationCreated(false);
-    setSuccessMessage('Booking created successfully! Check downloads for PDF.');
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+      const response = await axios.post(`${API_BASE_URL}/api/direct/bookings`, payload);
+      setSuccessMessage('Booking created successfully! Check downloads for PDF.');
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
 
-    // Download PDF
-    const pdfResponse = await axios.get(`${API_BASE_URL}/api/direct/invoice/${response.data.order_id}`, { responseType: 'blob' });
-    const url = window.URL.createObjectURL(new Blob([pdfResponse.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    const safeCustomerName = (customer.name || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-    link.setAttribute('download', `${safeCustomerName}-${response.data.order_id}-invoice.pdf`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+      // Update quotations state immediately
+      setQuotations(prev =>
+        prev.map(q =>
+          q.quotation_id === quotationId ? { ...q, status: 'booked' } : q
+        )
+      );
 
-    // Refresh quotations
-    const quotationsResponse = await axios.get(`${API_BASE_URL}/api/direct/quotations`);
-    setQuotations(Array.isArray(quotationsResponse.data) ? quotationsResponse.data : []);
-  } catch (err) {
-    setError(`Failed to create booking: ${err.response?.data?.message || err.message}`);
-  }
-};
+      // Download PDF
+      const pdfResponse = await axios.get(`${API_BASE_URL}/api/direct/invoice/${response.data.order_id}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([pdfResponse.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      const safeCustomerName = (customer.name || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      link.setAttribute('download', `${safeCustomerName}-${response.data.order_id}-invoice.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      // Clear form
+      setCart([]);
+      setSelectedCustomer('');
+      setSelectedProduct(null);
+      setQuotationId(null);
+      setIsQuotationCreated(false);
+    } catch (err) {
+      setError(`Failed to create booking: ${err.response?.data?.message || err.message}`);
+    }
+  };
 
   const renderSelect = (value, onChange, options, label, placeholder, id) => (
     <div className="flex flex-col items-center mobile:w-full">
@@ -692,14 +740,14 @@ export default function Direct() {
             </QuotationTableErrorBoundary>
           </div>
           <div className="flex justify-center gap-4 mt-8 mobile:mt-4 mobile:flex-col">
-              <button
-                onClick={createQuotation}
-                disabled={!selectedCustomer || !cart.length}
-                className={`onefifty:w-50 hundred:w-50 h-10 text-white px-8 rounded-lg font-bold shadow ${!selectedCustomer || !cart.length ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
-                style={styles.button}
-              >
-                Create Quotation
-              </button>
+            <button
+              onClick={createQuotation}
+              disabled={!selectedCustomer || !cart.length}
+              className={`onefifty:w-50 hundred:w-50 h-10 text-white px-8 rounded-lg font-bold shadow ${!selectedCustomer || !cart.length ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+              style={styles.button}
+            >
+              Create Quotation
+            </button>
           </div>
           <div className="mt-12">
             <h2 className="text-2xl font-semibold mb-4 text-center text-gray-800 mobile:text-xl">All Quotations</h2>
