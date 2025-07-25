@@ -97,9 +97,6 @@ export default function Report() {
       'Date': new Date(b.created_at).toLocaleDateString('en-GB'),
       'Address': b.address || '',
       'Total Amount': b.total || '',
-      'Products': (b.products || []).map(p =>
-        `${p.productname} (x${p.quantity}) - Rs.${p.price} [${p.product_type}]`
-      ).join('\n')
     }));
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();

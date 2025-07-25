@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Chart } from 'chart.js/auto';
 import { API_BASE_URL } from '../../Config';
 import Sidebar from './Sidebar/Sidebar';
 import Logout from './Logout';
@@ -30,9 +29,6 @@ export default function SalesAnalysis() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Refs to store chart instances
-  const chartsRef = useRef({});
-
   useEffect(() => {
     const fetchSalesData = async () => {
       setLoading(true);
@@ -48,155 +44,188 @@ export default function SalesAnalysis() {
     fetchSalesData();
   }, []);
 
-  useEffect(() => {
-    if (salesData) {
-      // Destroy existing charts before creating new ones
-      Object.values(chartsRef.current).forEach(chart => chart?.destroy());
-
-      // Top 10 Highest Sold Products (Pie Chart)
-      const ctx1 = document.getElementById('highestSoldProductsChart')?.getContext('2d');
-      if (ctx1) {
-        chartsRef.current.highestSoldProductsChart = new Chart(ctx1, {
-          type: 'pie',
-          data: {
-            labels: salesData.top_10_highest_products?.map(p => p.productname) || ['N/A'],
-            datasets: [{
-              data: salesData.top_10_highest_products?.map(p => p.count) || [100],
-              backgroundColor: [
-                'rgba(255, 99, 132, 0.6)', 'rgba(54, 162, 235, 0.6)', 'rgba(255, 206, 86, 0.6)',
-                'rgba(75, 192, 192, 0.6)', 'rgba(153, 102, 255, 0.6)', 'rgba(255, 159, 64, 0.6)',
-                'rgba(199, 199, 199, 0.6)', 'rgba(83, 102, 255, 0.6)', 'rgba(100, 192, 100, 0.6)',
-                'rgba(255, 102, 102, 0.6)'
-              ].slice(0, salesData.top_10_highest_products?.length || 1)
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom' } }
-          }
-        });
-      }
-
-      // Top 10 Lowest Sold Products (Pie Chart)
-      const ctx2 = document.getElementById('lowestSoldProductsChart')?.getContext('2d');
-      if (ctx2) {
-        chartsRef.current.lowestSoldProductsChart = new Chart(ctx2, {
-          type: 'pie',
-          data: {
-            labels: salesData.top_10_lowest_products?.map(p => p.productname) || ['N/A'],
-            datasets: [{
-              data: salesData.top_10_lowest_products?.map(p => p.count) || [100],
-              backgroundColor: [
-                'rgba(255, 99, 132, 0.6)', 'rgba(54, 162, 235, 0.6)', 'rgba(255, 206, 86, 0.6)',
-                'rgba(75, 192, 192, 0.6)', 'rgba(153, 102, 255, 0.6)', 'rgba(255, 159, 64, 0.6)',
-                'rgba(199, 199, 199, 0.6)', 'rgba(83, 102, 255, 0.6)', 'rgba(100, 192, 100, 0.6)',
-                'rgba(255, 102, 102, 0.6)'
-              ].slice(0, salesData.top_10_lowest_products?.length || 1)
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom' } }
-          }
-        });
-      }
-
-      // Top 10 Highest Booked Cities (Pie Chart)
-      const ctx3 = document.getElementById('highestBookedCitiesChart')?.getContext('2d');
-      if (ctx3) {
-        chartsRef.current.highestBookedCitiesChart = new Chart(ctx3, {
-          type: 'pie',
-          data: {
-            labels: salesData.top_10_highest_cities?.map(c => c.district) || ['N/A'],
-            datasets: [{
-              data: salesData.top_10_highest_cities?.map(c => c.count) || [100],
-              backgroundColor: [
-                'rgba(255, 99, 132, 0.6)', 'rgba(54, 162, 235, 0.6)', 'rgba(255, 206, 86, 0.6)',
-                'rgba(75, 192, 192, 0.6)', 'rgba(153, 102, 255, 0.6)', 'rgba(255, 159, 64, 0.6)',
-                'rgba(199, 199, 199, 0.6)', 'rgba(83, 102, 255, 0.6)', 'rgba(100, 192, 100, 0.6)',
-                'rgba(255, 102, 102, 0.6)'
-              ].slice(0, salesData.top_10_highest_cities?.length || 1)
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom' } }
-          }
-        });
-      }
-
-      // Top 10 Lowest Booked Cities (Pie Chart)
-      const ctx4 = document.getElementById('lowestBookedCitiesChart')?.getContext('2d');
-      if (ctx4) {
-        chartsRef.current.lowestBookedCitiesChart = new Chart(ctx4, {
-          type: 'pie',
-          data: {
-            labels: salesData.top_10_lowest_cities?.map(c => c.district) || ['N/A'],
-            datasets: [{
-              data: salesData.top_10_lowest_cities?.map(c => c.count) || [100],
-              backgroundColor: [
-                'rgba(255, 99, 132, 0.6)', 'rgba(54, 162, 235, 0.6)', 'rgba(255, 206, 86, 0.6)',
-                'rgba(75, 192, 192, 0.6)', 'rgba(153, 102, 255, 0.6)', 'rgba(255, 159, 64, 0.6)',
-                'rgba(199, 199, 199, 0.6)', 'rgba(83, 102, 255, 0.6)', 'rgba(100, 192, 100, 0.6)',
-                'rgba(255, 102, 102, 0.6)'
-              ].slice(0, salesData.top_10_lowest_cities?.length || 1)
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom' } }
-          }
-        });
-      }
-
-      // Historical Highest Total (Bar Chart)
-      const ctx5 = document.getElementById('historicalHighestTotalChart')?.getContext('2d');
-      if (ctx5) {
-        chartsRef.current.historicalHighestTotalChart = new Chart(ctx5, {
-          type: 'bar',
-          data: {
-            labels: salesData.historical_totals?.map(h => h.analysis_date) || ['N/A'],
-            datasets: [{
-              label: 'Highest Total (Rs)',
-              data: salesData.historical_totals?.map(h => h.highest_total || 0) || [0],
-              backgroundColor: 'rgba(255, 206, 86, 0.6)',
-              borderColor: 'rgba(255, 206, 86, 1)',
-              borderWidth: 1
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              x: { title: { display: true, text: 'Date' } },
-              y: {
-                beginAtZero: true,
-                title: { display: true, text: 'Amount (Rs)' },
-                ticks: { callback: (value) => `₹${value.toLocaleString()}` }
-              }
-            },
-            plugins: { legend: { position: 'top' } }
-          }
-        });
-      }
-    }
-  }, [salesData]);
-
   const formatValue = (value) => {
     const numValue = Number(value);
     return isNaN(numValue) ? '0.00' : numValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  // Cleanup charts on component unmount
-  useEffect(() => {
-    return () => {
-      Object.values(chartsRef.current).forEach(chart => chart?.destroy());
-    };
-  }, []);
+  const calculatePercentage = (value, total) => {
+    if (!total || total === 0) return '0.00%';
+    return ((value / total) * 100).toFixed(2) + '%';
+  };
+
+  const renderTrendsReport = (trends) => (
+    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
+      <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Sales Trends Over Time</h2>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="bg-gray-200 dark:bg-gray-700">
+            <th className="border p-2 text-left dark:text-gray-100">Month</th>
+            <th className="border p-2 text-right dark:text-gray-100">Sales Volume</th>
+            <th className="border p-2 text-right dark:text-gray-100">Revenue (Rs)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {trends.length > 0 ? (
+            trends.map((t, index) => (
+              <tr key={index}>
+                <td className="border p-2 dark:text-gray-100">{t.month}</td>
+                <td className="border p-2 text-right dark:text-gray-100">{t.volume}</td>
+                <td className="border p-2 text-right dark:text-gray-100">₹{formatValue(t.revenue)}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan="3" className="border p-2 text-center dark:text-gray-100">No data available</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderProductReport = (products) => (
+    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
+      <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Product Performance</h2>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="bg-gray-200 dark:bg-gray-700">
+            <th className="border p-2 text-left dark:text-gray-100">Product</th>
+            <th className="border p-2 text-right dark:text-gray-100">Units Sold</th>
+            <th className="border p-2 text-right dark:text-gray-100">Revenue (Rs)</th>
+            <th className="border p-2 text-right dark:text-gray-100">Avg. Discount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {products.length > 0 ? (
+            products.map((p, index) => (
+              <tr key={index}>
+                <td className="border p-2 dark:text-gray-100">{p.productname}</td>
+                <td className="border p-2 text-right dark:text-gray-100">{p.quantity}</td>
+                <td className="border p-2 text-right dark:text-gray-100">₹{formatValue(p.revenue)}</td>
+                <td className="border p-2 text-right dark:text-gray-100">{p.avg_discount.toFixed(2)}%</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan="4" className="border p-2 text-center dark:text-gray-100">No data available</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderCityReport = (cities) => (
+    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
+      <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Regional Demand</h2>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="bg-gray-200 dark:bg-gray-700">
+            <th className="border p-2 text-left dark:text-gray-100">District</th>
+            <th className="border p-2 text-right dark:text-gray-100">Bookings</th>
+            <th className="border p-2 text-right dark:text-gray-100">Revenue (Rs)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cities.length > 0 ? (
+            cities.map((c, index) => (
+              <tr key={index}>
+                <td className="border p-2 dark:text-gray-100">{c.district}</td>
+                <td className="border p-2 text-right dark:text-gray-100">{c.count}</td>
+                <td className="border p-2 text-right dark:text-gray-100">₹{formatValue(c.revenue)}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan="3" className="border p-2 text-center dark:text-gray-100">No data available</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderProfitabilityReport = (profitability) => (
+    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
+      <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Profitability Analysis</h2>
+      <div className="space-y-2">
+        <p className="text-sm dark:text-gray-100">Total Revenue: ₹{formatValue(profitability.total_revenue)}</p>
+        <p className="text-sm dark:text-gray-100">Total Processing Fees: ₹{formatValue(profitability.total_fees)}</p>
+        <p className="text-sm dark:text-gray-100">Total Discounts Given: ₹{formatValue(profitability.total_discounts)}</p>
+        <p className="text-sm dark:text-gray-100">Estimated Net Profit: ₹{formatValue(profitability.estimated_profit)}</p>
+      </div>
+    </div>
+  );
+
+  const renderQuotationReport = (quotations) => {
+    const total = quotations.pending.count + quotations.booked.count + quotations.canceled.count;
+    return (
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
+        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Quotation Conversion Rates</h2>
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gray-200 dark:bg-gray-700">
+              <th className="border p-2 text-left dark:text-gray-100">Status</th>
+              <th className="border p-2 text-right dark:text-gray-100">Count</th>
+              <th className="border p-2 text-right dark:text-gray-100">Percentage</th>
+              <th className="border p-2 text-right dark:text-gray-100">Revenue (Rs)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="border p-2 dark:text-gray-100">Pending</td>
+              <td className="border p-2 text-right dark:text-gray-100">{quotations.pending.count}</td>
+              <td className="border p-2 text-right dark:text-gray-100">{calculatePercentage(quotations.pending.count, total)}</td>
+              <td className="border p-2 text-right dark:text-gray-100">₹{formatValue(quotations.pending.revenue)}</td>
+            </tr>
+            <tr>
+              <td className="border p-2 dark:text-gray-100">Booked</td>
+              <td className="border p-2 text-right dark:text-gray-100">{quotations.booked.count}</td>
+              <td className="border p-2 text-right dark:text-gray-100">{calculatePercentage(quotations.booked.count, total)}</td>
+              <td className="border p-2 text-right dark:text-gray-100">₹{formatValue(quotations.booked.revenue)}</td>
+            </tr>
+            <tr>
+              <td className="border p-2 dark:text-gray-100">Canceled</td>
+              <td className="border p-2 text-right dark:text-gray-100">{quotations.canceled.count}</td>
+              <td className="border p-2 text-right dark:text-gray-100">{calculatePercentage(quotations.canceled.count, total)}</td>
+              <td className="border p-2 text-right dark:text-gray-100">₹{formatValue(quotations.canceled.revenue)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  const renderCustomerTypeReport = (customerTypes) => (
+    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
+      <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Customer Type Analysis</h2>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="bg-gray-200 dark:bg-gray-700">
+            <th className="border p-2 text-left dark:text-gray-100">Customer Type</th>
+            <th className="border p-2 text-right dark:text-gray-100">Bookings</th>
+            <th className="border p-2 text-right dark:text-gray-100">Revenue (Rs)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {customerTypes.length > 0 ? (
+            customerTypes.map((ct, index) => (
+              <tr key={index}>
+                <td className="border p-2 dark:text-gray-100">{ct.customer_type}</td>
+                <td className="border p-2 text-right dark:text-gray-100">{ct.count}</td>
+                <td className="border p-2 text-right dark:text-gray-100">₹{formatValue(ct.revenue)}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan="3" className="border p-2 text-center dark:text-gray-100">No data available</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <ErrorBoundary>
@@ -205,7 +234,7 @@ export default function SalesAnalysis() {
         <Logout />
         <div className="flex-1 md:ml-64 p-6 pt-16 mobile:p-2">
           <div className="w-full max-w-5xl mx-auto">
-            <h1 className="text-4xl font-bold mb-8 text-center text-gray-800 mobile:text-2xl dark:text-gray-100">Sales Analysis</h1>
+            <h1 className="text-4xl font-bold mb-8 text-center text-gray-800 mobile:text-2xl dark:text-gray-100">Market Analysis Report</h1>
             {loading && <div className="text-center text-gray-500">Loading...</div>}
             {error && (
               <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
@@ -214,125 +243,12 @@ export default function SalesAnalysis() {
             )}
             {salesData && (
               <div className="space-y-8">
-                {/* Top 10 Highest Sold Products Report */}
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
-                  <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Top 10 Highest Sold Products</h2>
-                  <div className="h-64"> {/* Increased from h-40 to h-64 (256px) */}
-                    <canvas id="highestSoldProductsChart" className="w-full h-full"></canvas>
-                  </div>
-                  <table className="w-full mt-4 border-collapse">
-                    <thead>
-                      <tr className="bg-gray-200 dark:bg-gray-700 dark:text-gray-100">
-                        <th className="border p-2 text-left">Product</th>
-                        <th className="border p-2 text-left">Count</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {salesData.top_10_highest_products.map((p, index) => (
-                        <tr key={index}>
-                          <td className="border p-2 dark:text-gray-100">{p.productname}</td>
-                          <td className="border p-2 dark:text-gray-100">{p.count}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Top 10 Lowest Sold Products Report */}
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
-                  <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Top 10 Lowest Sold Products</h2>
-                  <div className="h-64"> {/* Increased from h-40 to h-64 (256px) */}
-                    <canvas id="lowestSoldProductsChart" className="w-full h-full"></canvas>
-                  </div>
-                  <table className="w-full mt-4 border-collapse">
-                    <thead>
-                      <tr className="bg-gray-200 dark:bg-gray-700">
-                        <th className="border p-2 text-left dark:text-gray-100">Product</th>
-                        <th className="border p-2 text-left dark:text-gray-100">Count</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {salesData.top_10_lowest_products.map((p, index) => (
-                        <tr key={index}>
-                          <td className="border p-2 dark:text-gray-100">{p.productname}</td>
-                          <td className="border p-2 dark:text-gray-100">{p.count}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Top 10 Highest Booked Cities Report */}
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
-                  <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Top 10 Highest Booked Cities</h2>
-                  <div className="h-64"> {/* Increased from h-40 to h-64 (256px) */}
-                    <canvas id="highestBookedCitiesChart" className="w-full h-full"></canvas>
-                  </div>
-                  <table className="w-full mt-4 border-collapse">
-                    <thead>
-                      <tr className="bg-gray-200 dark:bg-gray-700">
-                        <th className="border p-2 text-left dark:text-gray-100">City</th>
-                        <th className="border p-2 text-left dark:text-gray-100">Count</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {salesData.top_10_highest_cities.map((c, index) => (
-                        <tr key={index}>
-                          <td className="border p-2 dark:text-gray-100">{c.district}</td>
-                          <td className="border p-2 dark:text-gray-100">{c.count}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Top 10 Lowest Booked Cities Report */}
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
-                  <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Top 10 Lowest Booked Cities</h2>
-                  <div className="h-64"> {/* Increased from h-40 to h-64 (256px) */}
-                    <canvas id="lowestBookedCitiesChart" className="w-full h-full"></canvas>
-                  </div>
-                  <table className="w-full mt-4 border-collapse">
-                    <thead>
-                      <tr className="bg-gray-200 dark:bg-gray-700">
-                        <th className="border p-2 text-left dark:text-gray-100">City</th>
-                        <th className="border p-2 text-left dark:text-gray-100">Count</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {salesData.top_10_lowest_cities.map((c, index) => (
-                        <tr key={index}>
-                          <td className="border p-2 dark:text-gray-100">{c.district}</td>
-                          <td className="border p-2 dark:text-gray-100">{c.count}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Historical Highest Total Report */}
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
-                  <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Historical Highest Total</h2>
-                  <div className="h-40">
-                    <canvas id="historicalHighestTotalChart" className="w-full h-full"></canvas>
-                  </div>
-                  <table className="w-full mt-4 border-collapse">
-                    <thead>
-                      <tr className="bg-gray-200 dark:bg-gray-700">
-                        <th className="border p-2 text-left dark:text-gray-100">Date</th>
-                        <th className="border p-2 text-left dark:text-gray-100">Highest Total (Rs)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {salesData.historical_totals.map((h, index) => (
-                        <tr key={index}>
-                          <td className="border p-2 dark:text-gray-100">{h.analysis_date}</td>
-                          <td className="border p-2 dark:text-gray-100">₹{formatValue(h.highest_total)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {renderTrendsReport(salesData.trends || [])}
+                {renderProductReport(salesData.products || [])}
+                {renderCityReport(salesData.cities || [])}
+                {renderProfitabilityReport(salesData.profitability || {})}
+                {renderQuotationReport(salesData.quotations || {})}
+                {renderCustomerTypeReport(salesData.customer_types || [])}
               </div>
             )}
           </div>

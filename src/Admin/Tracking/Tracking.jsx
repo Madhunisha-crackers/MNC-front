@@ -37,21 +37,25 @@ export default function Tracking() {
     }
   };
 
-  useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        const response = await axios.get(`${API_BASE_URL}/api/tracking/bookings`, {
-          params: { status: filterStatus || undefined, customerType: filterCustomerType || undefined }
-        });
-        setBookings(response.data);
-        setError('');
+  const fetchBookings = async (resetPage = false) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/tracking/bookings`, {
+        params: { status: filterStatus || undefined, customerType: filterCustomerType || undefined }
+      });
+      const sortedBookings = response.data.sort((a, b) => b.id - a.id); // Sort by id in descending order (latest to oldest)
+      setBookings(sortedBookings);
+      setError('');
+      if (resetPage) {
         setCurrentPage(1);
-      } catch {
-        setError('Failed to fetch bookings');
       }
-    };
-    fetchBookings();
-    const interval = setInterval(fetchBookings, 10000);
+    } catch {
+      setError('Failed to fetch bookings');
+    }
+  };
+
+  useEffect(() => {
+    fetchBookings(true); // Initial fetch with page reset
+    const interval = setInterval(() => fetchBookings(false), 100000); // Interval fetch without page reset
     return () => clearInterval(interval);
   }, [filterStatus, filterCustomerType]);
 
@@ -71,7 +75,7 @@ export default function Tracking() {
       setBookings(prev =>
         prev.map(booking =>
           booking.id === id ? { ...booking, status: newStatus, payment_method: paymentDetails?.paymentMethod || null, transaction_id: paymentDetails?.transactionId || null } : booking
-        )
+        ).sort((a, b) => b.id - a.id) // Re-sort after update
       );
       setError('');
       setShowPaidModal(false);
