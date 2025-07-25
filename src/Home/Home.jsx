@@ -1188,7 +1188,9 @@ export default function Home() {
                   </p>
                   <div className="mt-5">
                     <p className="text-white font-medium">Office Address</p>
-                    <p className="text-gray-300">
+                    <p className="text-gray-300 mt-2">
+                      Gopi Pyro World
+                      <br/>
                       Sivagamipuram Colony, Viseanatham panchayat.,
                       <br />
                       Sivakasi

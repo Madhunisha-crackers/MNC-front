@@ -337,7 +337,7 @@ export default function About() {
                   <div className="flex items-start gap-3">
                     <MapPin className="w-5 h-5 text-orange-400 mt-1 flex-shrink-0" />
                     <div>
-                      <p className="text-white font-medium">Madhu Nisha Crackers</p>
+                      <p className="text-white font-medium">Madhu Nisha Pyrotech</p>
                       <p className="text-gray-300">
                         Pernayakkanpatti, Pachayapuram.,
                         <br />
@@ -349,7 +349,7 @@ export default function About() {
                   <div className="flex items-start gap-3">
                     <MapPin className="w-5 h-5 text-orange-400 mt-1 flex-shrink-0" />
                     <div>
-                      <p className="text-white font-medium">Office Address</p>
+                      <p className="text-white font-medium">Office Address : Gopi Pyro World</p>
                       <p className="text-gray-300">
                         Sivagamipuram Colony, Viseanatham panchayat.,
                         <br />
