@@ -176,7 +176,7 @@ export default function SalesAnalysis() {
       <div className="flex min-h-screen dark:bg-gray-800 bg-gray-50 mobile:flex-col">
         <Sidebar />
         <Logout />
-        <div className="flex-1 md:ml-64 p-6 pt-16 mobile:p-2">
+        <div className="flex-1 p-6 pt-16 mobile:p-2">
           <div className="w-full max-w-5xl mx-auto">
             <h1 className="text-4xl font-bold mb-8 text-center text-gray-900 mobile:text-2xl dark:text-gray-100">Market Analysis Report</h1>
             {loading && <div className="text-center text-gray-500">Loading...</div>}
