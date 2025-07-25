@@ -579,7 +579,13 @@ export default function Safety() {
                       >
                         +91 94875 24689
                       </a>
-           
+                      <a
+                        href="tel:+919497594689"
+                        className="text-gray-300 hover:text-orange-400 transition-colors block"
+                      >
+                        +91 94975 94689
+                      </a>
+              
                     </div>
                   </div>
 

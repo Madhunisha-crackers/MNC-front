@@ -1205,6 +1205,12 @@ export default function Home() {
                   >
                     +91 94875 24689
                   </a>
+                  <a
+                    href="tel:+919497594689"
+                    className="text-gray-300 hover:text-orange-400 transition-colors block"
+                  >
+                    +91 94975 94689
+                  </a>
                 </div>
                 <div>
                   <h4 className="font-semibold text-white mb-2">Email</h4>
