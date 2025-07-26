@@ -10,25 +10,6 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
-  const styles = {
-    input: { 
-      background: "linear-gradient(135deg, rgba(255,255,255,0.8), rgba(240,249,255,0.6))", 
-      backgroundDark: "linear-gradient(135deg, rgba(55,65,81,0.8), rgba(75,85,99,0.6))",
-      backdropFilter: "blur(10px)", 
-      border: "1px solid rgba(2,132,199,0.3)", 
-      borderDark: "1px solid rgba(59,130,246,0.4)"
-    },
-    button: { 
-      background: "linear-gradient(135deg, rgba(2,132,199,0.9), rgba(14,165,233,0.95))", 
-      backgroundDark: "linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.95))",
-      backdropFilter: "blur(15px)", 
-      border: "1px solid rgba(125,211,252,0.4)", 
-      borderDark: "1px solid rgba(147,197,253,0.4)",
-      boxShadow: "0 15px 35px rgba(2,132,199,0.3), inset 0 1px 0 rgba(255,255,255,0.2)",
-      boxShadowDark: "0 15px 35px rgba(59,130,246,0.4), inset 0 1px 0 rgba(255,255,255,0.1)"
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -54,81 +35,74 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col justify-center px-6 py-12 lg:px-8 bg-gray-50 dark:bg-gray-900">
-      <div className="sm:mx-auto sm:w-full sm:max-w-sm">
-        <h2 className="mt-10 text-center text-2xl/9 font-bold tracking-tight text-gray-900 dark:text-gray-100">Login</h2>
-      </div>
-      <div className="sm:mx-auto sm:w-full sm:max-w-sm">
+    <div
+      className="min-h-screen w-full flex items-center justify-center bg-cover bg-no-repeat bg-center"
+      style={{
+        backgroundImage: "url('/bg.jpg')",
+            backgroundPosition: 'center -80px', // 👈 shifts the image down
+
+      }}
+    >
+      <div className="bg-white/70 backdrop-blur-md p-8 rounded-2xl shadow-xl w-full max-w-md">
+        <h2 className="text-center text-3xl font-bold text-gray-800 mb-6">Login</h2>
+
         {error && (
-          <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-6 py-3 rounded-lg mb-4 text-center shadow-md sm:text-sm">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-center text-sm">
             {error}
           </div>
         )}
-        <form className="space-y-6" onSubmit={handleSubmit}>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Username */}
           <div>
-            <label htmlFor="username" className="block text-sm/6 font-medium text-gray-900 dark:text-gray-300">Username</label>
-            <div className="mt-2">
-              <input 
-                type="text" 
-                name="username" 
-                id="username" 
-                autoComplete="username" 
-                required 
-                className="block w-full rounded-md px-3 py-1.5 text-base text-gray-900 dark:text-gray-900 bg-white dark:bg-gray-900 outline-1 -outline-offset-1 outline-gray-300 dark:outline-gray-600 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:focus:outline-blue-500 sm:text-sm/6"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                style={{ background: styles.input.background, backgroundDark: styles.input.backgroundDark, border: styles.input.border, borderDark: styles.input.borderDark, backdropFilter: styles.input.backdropFilter }}
-              />
-            </div>
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              required
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white/80 backdrop-blur"
+            />
           </div>
+
+          {/* Password */}
           <div>
-            <div className="flex items-center justify-between">
-              <label htmlFor="password" className="block text-sm/6 font-medium text-gray-900 dark:text-gray-300">Password</label>
-            </div>
-            <div className="mt-2 relative">
-              <input 
-                type={showPassword ? 'text' : 'password'} 
-                name="password" 
-                id="password" 
-                autoComplete="current-password" 
-                required 
-                className="block w-full rounded-md px-3 py-1.5 text-base text-gray-900 dark:text-gray-900 bg-white dark:bg-gray-900 outline-1 -outline-offset-1 outline-gray-300 dark:outline-gray-600 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:focus:outline-blue-500 sm:text-sm/6"
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                id="password"
+                name="password"
+                required
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                style={{ background: styles.input.background, backgroundDark: styles.input.backgroundDark, border: styles.input.border, borderDark: styles.input.borderDark, backdropFilter: styles.input.backdropFilter }}
+                className="w-full px-4 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white/80 backdrop-blur"
               />
               <button
                 type="button"
-                className="absolute inset-y-0 right-0 flex items-center pr-3"
+                className="absolute inset-y-0 right-3 flex items-center text-gray-500"
                 onClick={() => setShowPassword(!showPassword)}
               >
-                {showPassword ? (
-                  <AiOutlineEyeInvisible className="h-5 w-5 text-gray-400 dark:text-sky-900" />
-                ) : (
-                  <AiOutlineEye className="h-5 w-5 text-gray-400 dark:text-sky-900" />
-                )}
+                {showPassword ? <AiOutlineEyeInvisible /> : <AiOutlineEye />}
               </button>
             </div>
           </div>
+
+          {/* Submit */}
           <div>
-            <button 
-              type="submit" 
-              className="flex w-full justify-center rounded-md px-3 py-1.5 text-sm/6 font-semibold text-white shadow-xs hover:bg-indigo-700 dark:hover:bg-blue-600 sm:text-sm/6"
-              style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
+            <button
+              type="submit"
+              className="w-full bg-sky-600 hover:bg-sky-700 text-white py-2 rounded-md font-semibold shadow-md transition duration-200"
             >
               Sign in
             </button>
           </div>
         </form>
       </div>
-      <style>{`
-        [style*="backgroundDark"] { background: var(--bg, ${styles.input.background}); }
-        [style*="backgroundDark"][data-dark] { --bg: ${styles.input.backgroundDark}; }
-        [style*="borderDark"] { border: var(--border, ${styles.input.border}); }
-        [style*="borderDark"][data-dark] { --border: ${styles.input.borderDark}; }
-        [style*="boxShadowDark"] { box-shadow: var(--shadow, ${styles.button.boxShadow}); }
-        [style*="boxShadowDark"][data-dark] { --shadow: ${styles.button.boxShadowDark}; }
-      `}</style>
     </div>
   );
 }

@@ -23,7 +23,7 @@ import { FaInfoCircle, FaArrowLeft, FaArrowRight } from "react-icons/fa"
 import Navbar from "../Component/Navbar"
 import "../App.css"
 import { API_BASE_URL } from "../../Config"
-import about from  '../../public/cont.png'
+import about from "../../public/cont.png"
 
 const categories = [
   { name: "Sparklers", icon: Sparkles, description: "Beautiful sparkling lights for celebrations" },
@@ -43,60 +43,365 @@ const statsData = [
 
 const navLinks = ["Home", "About Us", "Price List", "Safety Tips", "Contact Us"]
 
-// Flower Pot Fountain Animation Component - Shows all promocodes at once with close button
-const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPromo, copiedPromos }) => {
-  const [showingPromo, setShowingPromo] = useState(false)
-  const [animationComplete, setAnimationComplete] = useState(false)
-  const [showCloseButton, setShowCloseButton] = useState(false)
-  const sparkles = Array.from({ length: 80 }, (_, i) => i)
-  const fireParticles = Array.from({ length: 60 }, (_, i) => i)
+// Function to generate positions optimized for mobile and desktop
+const generatePositionsForScreen = (count) => {
+  const positions = []
+  const screenWidth = typeof window !== "undefined" ? window.innerWidth : 1920
+  const screenHeight = typeof window !== "undefined" ? window.innerHeight : 1080
+  const isMobile = screenWidth < 768
 
-  // Show all promocodes at once
-  const promosToShow = promocodes.length > 1 ? promocodes.slice(0, -1) : []
-  const lastPromo = promocodes.length > 0 ? promocodes[promocodes.length - 1] : null
+  if (isMobile) {
+    // Mobile: Stack promocodes vertically in center
+    const centerX = 0 // Relative to screen center
+    const startY = -screenHeight * 0.2 // Start above center
+    const spacing = 120 // Vertical spacing between promocodes
+
+    for (let i = 0; i < count; i++) {
+      positions.push({
+        x: centerX,
+        y: startY + i * spacing,
+      })
+    }
+  } else {
+    // Desktop: Use the existing non-overlapping logic
+    const padding = 150
+    const maxX = screenWidth - padding * 2
+    const maxY = screenHeight - padding * 2
+    const minDistance = 200
+    const maxAttempts = 50
+
+    for (let i = 0; i < count; i++) {
+      let attempts = 0
+      let newPosition
+      let validPosition = false
+
+      while (!validPosition && attempts < maxAttempts) {
+        newPosition = {
+          x: Math.random() * maxX - maxX / 2,
+          y: Math.random() * maxY - maxY / 2,
+        }
+
+        validPosition = true
+        for (const existingPos of positions) {
+          const distance = Math.sqrt(
+            Math.pow(newPosition.x - existingPos.x, 2) + Math.pow(newPosition.y - existingPos.y, 2),
+          )
+          if (distance < minDistance) {
+            validPosition = false
+            break
+          }
+        }
+        attempts++
+      }
+
+      if (newPosition) {
+        positions.push(newPosition)
+      }
+    }
+  }
+
+  return positions
+}
+
+// Modern Firework Animation Component
+const ModernFireworkAnimation = ({
+  delay = 0,
+  startPosition,
+  endPosition,
+  burstPosition,
+  colors,
+  onBurstComplete,
+  promocode,
+  onCopyPromo,
+  copiedPromos,
+}) => {
+  const screenWidth = typeof window !== "undefined" ? window.innerWidth : 1920
+  const screenHeight = typeof window !== "undefined" ? window.innerHeight : 1080
 
   useEffect(() => {
-    if (isActive && promosToShow.length > 0) {
-      const promoTimer = setTimeout(() => {
-        setShowingPromo(true)
-        setShowCloseButton(true)
-      }, 800)
-
-      const completeTimer = setTimeout(() => {
-        setAnimationComplete(true)
-        onComplete()
-      }, 3000)
-
-      return () => {
-        clearTimeout(promoTimer)
-        clearTimeout(completeTimer)
-      }
-    } else if (isActive && promosToShow.length === 0) {
-      // If no promos to show in air, just complete animation
-      setTimeout(() => {
-        setAnimationComplete(true)
-        onComplete()
-      }, 3000)
+    if (onBurstComplete) {
+      const timer = setTimeout(() => {
+        onBurstComplete()
+      }, delay + 3000) // Trigger after rocket reaches and bursts
+      return () => clearTimeout(timer)
     }
-  }, [isActive, promosToShow.length, onComplete])
+  }, [delay, onBurstComplete])
 
   const copyToClipboard = (code) => {
     navigator.clipboard.writeText(code)
     onCopyPromo(code)
   }
 
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {/* Rocket Trail */}
+      <motion.div
+        className="absolute w-3 h-8 rounded-full"
+        style={{
+          left: startPosition.x,
+          top: startPosition.y,
+          background: `linear-gradient(180deg, ${colors.primary} 0%, ${colors.secondary} 50%, ${colors.tertiary} 100%)`,
+          boxShadow: `0 0 20px ${colors.primary}`,
+        }}
+        animate={{
+          x: [0, endPosition.x - startPosition.x],
+          y: [0, endPosition.y - startPosition.y],
+          opacity: [1, 1, 0],
+          scale: [1, 1.2, 0.8],
+        }}
+        transition={{
+          duration: 2,
+          delay: delay,
+          ease: "easeOut",
+        }}
+      />
+
+      {/* Main Burst */}
+      <motion.div
+        className="absolute"
+        style={{
+          left: burstPosition.x,
+          top: burstPosition.y,
+          transform: "translate(-50%, -50%)",
+        }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 1, 0.8, 0] }}
+        transition={{
+          duration: 5,
+          delay: delay + 2,
+        }}
+      >
+        {/* Primary burst particles */}
+        {Array.from({ length: 32 }).map((_, i) => {
+          const angle = i * 11.25 * (Math.PI / 180)
+          const distance = screenWidth < 768 ? screenWidth * 0.08 : screenWidth * 0.15
+          const x = Math.cos(angle) * distance
+          const y = Math.sin(angle) * distance
+          return (
+            <motion.div
+              key={`primary-${i}`}
+              className="absolute w-4 h-4 rounded-full"
+              style={{
+                background: colors.burst[i % colors.burst.length],
+                boxShadow: `0 0 15px ${colors.burst[i % colors.burst.length]}`,
+              }}
+              animate={{
+                x: [0, x * 0.3, x * 0.7, x],
+                y: [0, y * 0.3, y * 0.7, y],
+                opacity: [1, 0.9, 0.5, 0],
+                scale: [1, 1.3, 0.8, 0],
+              }}
+              transition={{
+                duration: 4,
+                delay: delay + 2,
+                ease: "easeOut",
+              }}
+            />
+          )
+        })}
+
+        {/* Secondary sparkles */}
+        {Array.from({ length: 48 }).map((_, i) => {
+          const angle = i * 7.5 * (Math.PI / 180)
+          const distance = screenWidth < 768 ? screenWidth * 0.05 : screenWidth * 0.1
+          const x = Math.cos(angle) * distance
+          const y = Math.sin(angle) * distance
+          return (
+            <motion.div
+              key={`sparkle-${i}`}
+              className="absolute w-2 h-2 rounded-full"
+              style={{
+                background: colors.sparkles[i % colors.sparkles.length],
+                boxShadow: `0 0 10px ${colors.sparkles[i % colors.sparkles.length]}`,
+              }}
+              animate={{
+                x: [0, x * 0.4, x * 0.8, x * 1.2],
+                y: [0, y * 0.4, y * 0.8, y * 1.2],
+                opacity: [1, 0.8, 0.4, 0],
+                scale: [1, 0.8, 0.4, 0],
+              }}
+              transition={{
+                duration: 3.5,
+                delay: delay + 2.3,
+                ease: "easeOut",
+              }}
+            />
+          )
+        })}
+
+        {/* Center flash */}
+        <motion.div
+          className="absolute w-40 h-40 rounded-full"
+          style={{
+            background: `radial-gradient(circle, ${colors.center}aa 0%, ${colors.secondary}66 30%, transparent 70%)`,
+            transform: "translate(-50%, -50%)",
+          }}
+          animate={{
+            scale: [0, 4, 2, 0],
+            opacity: [0, 1, 0.3, 0],
+          }}
+          transition={{
+            duration: 2.5,
+            delay: delay + 2,
+            ease: "easeOut",
+          }}
+        />
+      </motion.div>
+
+      {/* Promocode appears after burst */}
+      {promocode && !copiedPromos.includes(promocode.code) && (
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: delay + 4, duration: 0.5 }}
+          className="absolute pointer-events-auto bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 text-white mobile:px-4 mobile:py-3 px-6 py-4 rounded-3xl shadow-2xl font-bold mobile:text-base text-lg border-4 border-white"
+          style={{
+            left: burstPosition.x,
+            top: burstPosition.y,
+            transform: "translate(-50%, -50%)",
+            boxShadow: "0 0 30px rgba(168, 85, 247, 0.8), 0 0 60px rgba(168, 85, 247, 0.4)",
+            zIndex: 45,
+            maxWidth: screenWidth < 768 ? "280px" : "auto",
+          }}
+        >
+          <div className="flex items-center mobile:gap-2 gap-3">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+            >
+              <Gift className="mobile:w-5 mobile:h-5 w-6 h-6" />
+            </motion.div>
+            <div className="text-center">
+              <div className="font-black mobile:text-lg text-xl">{promocode.code}</div>
+              <div className="bg-white text-purple-600 px-3 py-1 rounded-full mobile:text-xs text-sm font-bold mt-1">
+                {promocode.discount}% OFF
+              </div>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => copyToClipboard(promocode.code)}
+              className="bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full mobile:p-1.5 p-2 transition-all duration-300"
+            >
+              <Copy className="mobile:w-3 mobile:h-3 w-4 h-4" />
+            </motion.button>
+          </div>
+
+          {/* Sparkles around promocode - reduced for mobile */}
+          {Array.from({ length: screenWidth < 768 ? 6 : 8 }, (_, sparkleIndex) => (
+            <motion.div
+              key={sparkleIndex}
+              animate={{
+                scale: [0, 1, 0],
+                rotate: [0, 360],
+                x: [0, Math.cos(sparkleIndex * 60) * (screenWidth < 768 ? 20 : 30), 0],
+                y: [0, Math.sin(sparkleIndex * 60) * (screenWidth < 768 ? 20 : 30), 0],
+              }}
+              transition={{
+                duration: 2,
+                repeat: Number.POSITIVE_INFINITY,
+                delay: sparkleIndex * 0.2,
+              }}
+              className="absolute mobile:w-1.5 mobile:h-1.5 w-2 h-2 bg-yellow-300 rounded-full pointer-events-none"
+              style={{
+                boxShadow: "0 0 10px #fde047",
+              }}
+            />
+          ))}
+        </motion.div>
+      )}
+    </div>
+  )
+}
+
+// Rocket Badge Animation Component
+const RocketBadgeAnimation = ({ isActive, onComplete, promocodes, onCopyPromo, copiedPromos }) => {
+  const [currentRocketIndex, setCurrentRocketIndex] = useState(0)
+  const [showingFireworks, setShowingFireworks] = useState([])
+  const [animationComplete, setAnimationComplete] = useState(false)
+  const [showCloseButton, setShowCloseButton] = useState(false)
+  const [hasTriggered, setHasTriggered] = useState(false)
+  const [rocketPositions, setRocketPositions] = useState([])
+
+  const screenWidth = typeof window !== "undefined" ? window.innerWidth : 1920
+  const screenHeight = typeof window !== "undefined" ? window.innerHeight : 1080
+
+  useEffect(() => {
+    if (promocodes.length > 0) {
+      const positions = generatePositionsForScreen(promocodes.length)
+      setRocketPositions(positions)
+    }
+  }, [promocodes.length])
+
+  useEffect(() => {
+    if (isActive && promocodes.length > 0 && !hasTriggered) {
+      setHasTriggered(true)
+      fireNextRocket(0)
+    }
+  }, [isActive, promocodes.length, hasTriggered])
+
+  const fireNextRocket = (rocketIndex) => {
+    if (rocketIndex >= promocodes.length) {
+      setTimeout(() => {
+        setAnimationComplete(true)
+        onComplete()
+      }, 1000)
+      return
+    }
+
+    const position = rocketPositions[rocketIndex] || { x: 0, y: 0 }
+    const burstPosition = {
+      x: screenWidth / 2 + position.x,
+      y: screenHeight / 2 + position.y,
+    }
+
+    setShowingFireworks((prev) => [
+      ...prev,
+      {
+        index: rocketIndex,
+        startPosition: { x: screenWidth / 2, y: screenHeight - 100 },
+        endPosition: burstPosition,
+        burstPosition: burstPosition,
+        colors: {
+          primary: ["#ff6b35", "#e74c3c", "#f39c12", "#e67e22"][rocketIndex % 4],
+          secondary: ["#ff8c42", "#ec7063", "#f4d03f", "#eb984e"][rocketIndex % 4],
+          tertiary: ["#ffad5a", "#f1948a", "#f7dc6f", "#f0b27a"][rocketIndex % 4],
+          center: ["#ff6b35", "#e74c3c", "#f39c12", "#e67e22"][rocketIndex % 4],
+          burst: [
+            ["#ff6b35", "#ff8c42", "#ffad5a", "#ffc971", "#ffe066"],
+            ["#e74c3c", "#ec7063", "#f1948a", "#f5b7b1", "#fadbd8"],
+            ["#f39c12", "#f4d03f", "#f7dc6f", "#f8c471", "#fad7a0"],
+            ["#e67e22", "#eb984e", "#f0b27a", "#f5cba7", "#fdebd0"],
+          ][rocketIndex % 4],
+          sparkles: [
+            ["#ffffff", "#fff3cd", "#ffe066", "#ffad5a"],
+            ["#ffffff", "#fdf2e9", "#f5b7b1", "#ec7063"],
+            ["#ffffff", "#fef9e7", "#f8c471", "#f4d03f"],
+            ["#ffffff", "#fef5e7", "#f5cba7", "#eb984e"],
+          ][rocketIndex % 4],
+        },
+        promocode: promocodes[rocketIndex],
+      },
+    ])
+
+    if (rocketIndex === 0) {
+      setShowCloseButton(true)
+    }
+
+    // Fire next rocket after 3 seconds
+    setTimeout(() => {
+      fireNextRocket(rocketIndex + 1)
+    }, 3000)
+  }
+
   const handleCloseAll = () => {
-    setShowingPromo(false)
+    setShowingFireworks([])
     setShowCloseButton(false)
-    // Hide all promocodes by marking them as copied
-    promosToShow.forEach((promo) => {
+    promocodes.forEach((promo) => {
       if (!copiedPromos.includes(promo.code)) {
         onCopyPromo(promo.code)
       }
     })
-    if (lastPromo && !copiedPromos.includes(lastPromo.code)) {
-      onCopyPromo(lastPromo.code)
-    }
   }
 
   return (
@@ -106,7 +411,7 @@ const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPr
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 pointer-events-none z-40 hundred:-translate-y-40 mobile:-translate-y-44"
+          className="fixed inset-0 pointer-events-none z-40"
         >
           {/* Close Button */}
           {showCloseButton && (
@@ -117,227 +422,29 @@ const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPr
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={handleCloseAll}
-              className="fixed top-8 right-8 z-50 pointer-events-auto w-12 h-12 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl transition-all duration-300"
+              className="fixed mobile:top-24 mobile:right-4 top-8 right-8 z-50 pointer-events-auto mobile:w-10 mobile:h-10 w-12 h-12 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl transition-all duration-300"
               style={{
                 boxShadow: "0 0 20px rgba(239, 68, 68, 0.5)",
               }}
             >
-              <X className="w-6 h-6" />
+              <X className="mobile:w-5 mobile:h-5 w-6 h-6" />
             </motion.button>
           )}
 
-          {/* Fire particles shooting upward from bottom */}
-          {fireParticles.map((i) => (
-            <motion.div
-              key={`fire-${i}`}
-              initial={{
-                x: "50vw",
-                y: "100vh",
-                scale: 0,
-                rotate: 0,
-              }}
-              animate={{
-                x: `${50 + (Math.random() - 0.5) * (window.innerWidth < 768 ? 60 : 80)}vw`,
-                y: `${window.innerWidth < 768 ? 30 : 20 + Math.random() * 60}vh`,
-                scale: [0, window.innerWidth < 768 ? 1.2 : 1.5, 1, 0],
-                rotate: Math.random() * 360,
-              }}
-              transition={{
-                duration: 3 + Math.random() * 2,
-                delay: i * 0.02,
-                ease: "easeOut",
-              }}
-              className="absolute w-4 h-4 rounded-full"
-              style={{
-                background: `radial-gradient(circle, ${
-                  Math.random() > 0.5 ? "#ff6b35" : Math.random() > 0.5 ? "#fbbf24" : "#ef4444"
-                }, transparent)`,
-                boxShadow: `0 0 20px ${Math.random() > 0.5 ? "#ff6b35" : Math.random() > 0.5 ? "#fbbf24" : "#ef4444"}`,
-              }}
+          {/* Firework Animations */}
+          {showingFireworks.map((firework) => (
+            <ModernFireworkAnimation
+              key={`firework-${firework.index}`}
+              delay={0}
+              startPosition={firework.startPosition}
+              endPosition={firework.endPosition}
+              burstPosition={firework.burstPosition}
+              colors={firework.colors}
+              promocode={firework.promocode}
+              onCopyPromo={onCopyPromo}
+              copiedPromos={copiedPromos}
             />
           ))}
-
-          {/* Golden sparkles shooting upward */}
-          {sparkles.map((i) => (
-            <motion.div
-              key={`sparkle-${i}`}
-              initial={{
-                x: "50vw",
-                y: "100vh",
-                scale: 0,
-                rotate: 0,
-              }}
-              animate={{
-                x: `${50 + (Math.random() - 0.5) * (window.innerWidth < 768 ? 70 : 100)}vw`,
-                y: `${Math.random() * (window.innerWidth < 768 ? 50 : 40)}vh`,
-                scale: [0, window.innerWidth < 768 ? 0.8 : 1, window.innerWidth < 768 ? 0.6 : 0.8, 0],
-                rotate: 360 + Math.random() * 360,
-              }}
-              transition={{
-                duration: 4 + Math.random() * 3,
-                delay: i * 0.03,
-                ease: "easeOut",
-              }}
-              className="absolute w-3 h-3 bg-yellow-400 rounded-full shadow-lg"
-              style={{
-                boxShadow: "0 0 15px #fbbf24, 0 0 25px #fbbf24, 0 0 35px #fbbf24",
-              }}
-            />
-          ))}
-
-          {/* All Promocodes popping up at once (n-1 promos) */}
-          {showingPromo &&
-            promosToShow.map((promo, index) => {
-              if (copiedPromos.includes(promo.code)) return null // Hide copied promos
-
-              return (
-                <motion.div
-                  key={promo.id}
-                  initial={{
-                    x: "50vw",
-                    y: "100vh",
-                    scale: 0,
-                    rotate: -20,
-                    opacity: 0,
-                  }}
-                  animate={{
-                    x: `${window.innerWidth < 768 ? 10 + index * 25 : 30 + index * 15 + Math.random() * 20}vw`,
-                    y: `${window.innerWidth < 768 ? 25 + index * 18 : 20 + index * 12 + Math.random() * 15}vh`,
-                    scale: window.innerWidth < 768 ? 1 : 1.2,
-                    rotate: Math.random() * 20 - 10,
-                    opacity: 1,
-                  }}
-                  exit={{
-                    scale: 0,
-                    opacity: 0,
-                    y: "10vh",
-                  }}
-                  transition={{
-                    duration: 1.2,
-                    delay: index * 0.1, // Small stagger for visual effect
-                    ease: "backOut",
-                  }}
-                  className="absolute hundred:translate-y-20 mobile:translate-y-20 bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white mobile:px-3 mobile:py-2 px-6 py-4 rounded-3xl shadow-2xl font-bold mobile:text-sm text-lg border-4 border-white transform-gpu pointer-events-auto"
-                  style={{
-                    boxShadow: "0 0 30px rgba(251, 191, 36, 0.8), 0 0 60px rgba(251, 191, 36, 0.4)",
-                  }}
-                >
-                  <div className="flex items-center mobile:gap-2 gap-3">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-                    >
-                      <Gift className="mobile:w-4 mobile:h-4 w-6 h-6" />
-                    </motion.div>
-                    <div className="text-center">
-                      <div className="font-black mobile:text-lg text-xl">{promo.code}</div>
-                      <div className="bg-white text-orange-600 mobile:px-2 mobile:py-0.5 px-3 py-1 rounded-full mobile:text-xs text-sm font-bold mt-1">
-                        {promo.discount}% OFF
-                      </div>
-                    </div>
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => copyToClipboard(promo.code)}
-                      className="bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full mobile:p-1.5 p-2 transition-all duration-300"
-                    >
-                      <Copy className="mobile:w-3 mobile:h-3 w-4 h-4" />
-                    </motion.button>
-                  </div>
-                  {/* Sparkle effects around promocode */}
-                  {Array.from({ length: 8 }, (_, sparkleIndex) => (
-                    <motion.div
-                      key={sparkleIndex}
-                      animate={{
-                        scale: [0, 1, 0],
-                        rotate: [0, 360],
-                        x: [0, Math.cos(sparkleIndex * 45) * 30, 0],
-                        y: [0, Math.sin(sparkleIndex * 45) * 30, 0],
-                      }}
-                      transition={{
-                        duration: 2,
-                        repeat: Number.POSITIVE_INFINITY,
-                        delay: sparkleIndex * 0.2,
-                      }}
-                      className="absolute w-2 h-2 bg-yellow-300 rounded-full pointer-events-none"
-                      style={{
-                        boxShadow: "0 0 10px #fde047",
-                      }}
-                    />
-                  ))}
-                </motion.div>
-              )
-            })}
-
-          {/* Last promocode stays in/near the pot */}
-          {animationComplete && lastPromo && !copiedPromos.includes(lastPromo.code) && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0 }}
-              className="fixed hundred:translate-y-20 mobile:translate-y-20 mobile:bottom-28 bottom-32 left-1/2 -translate-x-1/2 z-50 pointer-events-auto"
-            >
-              <motion.div
-                animate={{
-                  y: [0, -5, 0],
-                  scale: [1, 1.05, 1],
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Number.POSITIVE_INFINITY,
-                  ease: "easeInOut",
-                }}
-                className="bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 text-white mobile:px-3 mobile:py-2 px-6 py-4 rounded-3xl shadow-2xl font-bold mobile:text-sm text-lg border-4 border-white"
-                style={{
-                  boxShadow: "0 0 30px rgba(168, 85, 247, 0.8), 0 0 60px rgba(168, 85, 247, 0.4)",
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-                  >
-                    <Gift className="w-6 h-6" />
-                  </motion.div>
-                  <div className="text-center">
-                    <div className="font-black text-xl">{lastPromo.code}</div>
-                    <div className="bg-white text-purple-600 px-3 py-1 rounded-full text-sm font-bold mt-1">
-                      {lastPromo.discount}% OFF
-                    </div>
-                  </div>
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => copyToClipboard(lastPromo.code)}
-                    className="bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full p-2 transition-all duration-300"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </motion.button>
-                </div>
-                {/* Special sparkles for last promo */}
-                {Array.from({ length: 12 }, (_, sparkleIndex) => (
-                  <motion.div
-                    key={sparkleIndex}
-                    animate={{
-                      scale: [0, 1, 0],
-                      rotate: [0, 360],
-                      x: [0, Math.cos(sparkleIndex * 30) * 40, 0],
-                      y: [0, Math.sin(sparkleIndex * 30) * 40, 0],
-                    }}
-                    transition={{
-                      duration: 3,
-                      repeat: Number.POSITIVE_INFINITY,
-                      delay: sparkleIndex * 0.15,
-                    }}
-                    className="absolute w-2 h-2 bg-purple-300 rounded-full pointer-events-none"
-                    style={{
-                      boxShadow: "0 0 10px #d8b4fe",
-                    }}
-                  />
-                ))}
-              </motion.div>
-            </motion.div>
-          )}
 
           {/* Shop Now Button - appears after animation */}
           {animationComplete && (
@@ -345,7 +452,7 @@ const FlowerPotFountainAnimation = ({ isActive, onComplete, promocodes, onCopyPr
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1 }}
-              className="fixed mobile:bottom-4 mobile:right-4 bottom-8 right-8 z-50 pointer-events-auto"
+              className="fixed mobile:bottom-22 mobile:right-4 bottom-8 right-8 z-50 pointer-events-auto"
             >
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -469,7 +576,6 @@ const ModernCarousel = ({ media }) => {
           )}
         </motion.div>
       </AnimatePresence>
-
       {mediaItems.length > 1 && (
         <>
           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-3xl" />
@@ -566,7 +672,7 @@ export default function Home() {
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [promocodes, setPromocodes] = useState([])
-  const [showFountain, setShowFountain] = useState(false)
+  const [showRocketAnimation, setShowRocketAnimation] = useState(false)
   const [copiedPromos, setCopiedPromos] = useState([])
   const containerRef = useRef(null)
   const { scrollYProgress } = useScroll({ target: containerRef, offset: ["start start", "end start"] })
@@ -584,20 +690,16 @@ export default function Home() {
     setShowDetailsModal(false)
   }
 
-  const handleFountainClick = () => {
-    setShowFountain(true)
+  const handleRocketClick = () => {
+    setShowRocketAnimation(true)
   }
 
-  const handleFountainComplete = () => {
-    // Don't auto-redirect, just complete the animation
+  const handleRocketComplete = () => {
+    // Animation completed
   }
 
   const handleCopyPromo = (code) => {
     setCopiedPromos((prev) => [...prev, code])
-    // Show success feedback
-    setTimeout(() => {
-      // Could add toast notification here
-    }, 100)
   }
 
   // Fetch banners
@@ -657,7 +759,7 @@ export default function Home() {
     >
       <Navbar />
 
-      {/* Flower Pot Fountain Cracker - Now at bottom */}
+      {/* Rocket Badge - Now at bottom */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -676,61 +778,21 @@ export default function Home() {
           }}
           className="relative"
         >
-          {/* Flower Pot Fountain Cracker */}
+          {/* Rocket Badge */}
           <motion.button
             whileHover={{ scale: 1.15, y: -10 }}
             whileTap={{ scale: 0.95 }}
-            onClick={handleFountainClick}
-            className="relative mobile:-translate-y-16 bg-gradient-to-b from-orange-600 via-orange-700 to-orange-900 shadow-2xl hover:shadow-orange-500/50 transition-all duration-300 overflow-hidden"
+            onClick={handleRocketClick}
+            className="relative mobile:-translate-y-16 bg-gradient-to-r from-orange-500 via-red-500 to-purple-500 shadow-2xl hover:shadow-orange-500/50 transition-all duration-300 overflow-hidden border-4 border-white rounded-full"
             style={{
-              width: window.innerWidth < 768 ? "60px" : "80px",
-              height: window.innerWidth < 768 ? "75px" : "100px",
-              clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)",
-              border: window.innerWidth < 768 ? "3px solid #ea580c" : "4px solid #ea580c",
+              width: window.innerWidth < 768 ? "80px" : "100px",
+              height: window.innerWidth < 768 ? "80px" : "100px",
             }}
           >
-            {/* Pot Base */}
-            <div
-              className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-b from-orange-800 to-orange-950 border-t-2 border-orange-600"
-              style={{ clipPath: "polygon(20% 0%, 0% 100%, 100% 100%, 80% 0%)" }}
-            />
-            {/* Fountain Opening */}
-            <div className="absolute ml-5 mobile:ml-3 mobile:w-4 mobile:h-4 mobile:-translate-y-5 hundred:-translate-y-10 hundred:ml-7 w-8 h-8 bg-gradient-to-t from-yellow-600 via-yellow-400 to-yellow-200 rounded-full border-2 border-yellow-700 overflow-hidden">
-              {/* Inner glow */}
-              <div className="absolute inset-1 bg-gradient-to-t from-orange-500 to-yellow-300 rounded-full animate-pulse" />
-            </div>
-            {/* Continuous Fire Sparkles */}
-            {Array.from({ length: 12 }, (_, i) => (
-              <motion.div
-                key={i}
-                animate={{
-                  y: [0, -25, -15],
-                  x: [0, (i - 6) * 3, (i - 6) * 2],
-                  opacity: [0, 1, 0],
-                  scale: [0, 1.2, 0],
-                }}
-                transition={{
-                  duration: 2.5,
-                  repeat: Number.POSITIVE_INFINITY,
-                  delay: i * 0.15,
-                  ease: "easeOut",
-                }}
-                className="absolute top-4 left-1/2 w-2 h-2 rounded-full"
-                style={{
-                  background: `radial-gradient(circle, ${
-                    i % 3 === 0 ? "#fbbf24" : i % 3 === 1 ? "#f59e0b" : "#ef4444"
-                  }, transparent)`,
-                  boxShadow: `0 0 12px ${i % 3 === 0 ? "#fbbf24" : i % 3 === 1 ? "#f59e0b" : "#ef4444"}`,
-                }}
-              />
-            ))}
-            {/* Pot Decorations */}
-            <div className="absolute top-1/3 left-1/4 right-1/4 h-1 bg-gradient-to-r from-transparent via-orange-400 to-transparent rounded-full opacity-60" />
-            <div className="absolute top-2/3 left-1/6 right-1/6 h-0.5 bg-gradient-to-r from-transparent via-orange-300 to-transparent rounded-full opacity-40" />
-            {/* Glow Effect */}
+            {/* Rocket Emoji */}
             <motion.div
               animate={{
-                opacity: [0.3, 0.8, 0.3],
+                rotate: [0, 10, -10, 0],
                 scale: [1, 1.1, 1],
               }}
               transition={{
@@ -738,10 +800,12 @@ export default function Home() {
                 repeat: Number.POSITIVE_INFINITY,
                 ease: "easeInOut",
               }}
-              className="absolute inset-0 -translate-y-50 bg-gradient-to-t from-transparent via-yellow-400/30 to-yellow-200/50 rounded-full"
-            />
+              className="text-4xl md:text-5xl"
+            >
+              🚀
+            </motion.div>
             {/* Label */}
-            <div className="absolute mobile:-bottom-10 -bottom-12 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white mobile:px-2 mobile:py-1 px-4 py-2 rounded-full mobile:text-xs text-sm font-bold whitespace-nowrap shadow-xl border-2 border-white">
+            <div className="absolute mobile:-bottom-10 -bottom-12 left-1/2 -translate-x-1/2 bg-gradient-to-r from-green-500 via-blue-500 to-purple-500 text-white mobile:px-3 mobile:py-1 px-6 py-2 rounded-full mobile:text-xs text-sm font-bold whitespace-nowrap shadow-xl border-2 border-white">
               <motion.div
                 animate={{
                   rotate: 360,
@@ -755,7 +819,7 @@ export default function Home() {
               >
                 🎆
               </motion.div>
-              Click for Offers!
+              <span className="font-black tracking-wider">M N C</span>
               <motion.div
                 animate={{
                   rotate: -360,
@@ -767,17 +831,17 @@ export default function Home() {
                 }}
                 className="inline-block ml-2"
               >
-                🎇
+                💥
               </motion.div>
             </div>
           </motion.button>
         </motion.div>
       </motion.div>
 
-      {/* Fountain Animation */}
-      <FlowerPotFountainAnimation
-        isActive={showFountain}
-        onComplete={handleFountainComplete}
+      {/* Rocket Badge Animation */}
+      <RocketBadgeAnimation
+        isActive={showRocketAnimation}
+        onComplete={handleRocketComplete}
         promocodes={promocodes}
         onCopyPromo={handleCopyPromo}
         copiedPromos={copiedPromos}
@@ -869,7 +933,7 @@ export default function Home() {
                           banner.image_url.startsWith("http") ? banner.image_url : `${API_BASE_URL}${banner.image_url}`
                         }
                         alt={`Banner ${banner.id}`}
-                        className="w-full h-full object-cover"
+                        className="w-[100%] h-[100%]"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                     </motion.div>
@@ -980,7 +1044,7 @@ export default function Home() {
             >
               <div className="relative rounded-3xl overflow-hidden shadow-2xl">
                 <img
-                  src={about}
+                  src={about || "/placeholder.svg"}
                   alt="Madhu Nisha Crackers"
                   className="w-full h-96 object-cover hover:scale-105 transition-transform duration-700"
                 />
@@ -1006,8 +1070,8 @@ export default function Home() {
               </div>
               <div className="space-y-6 text-lg text-gray-600 leading-relaxed">
                 <p>
-                  Madhu Nisha Crackers has been a well-known Fireworks Store in Sivakasi. What started out as a hobby has become
-                  our passion for creating magical moments.
+                  Madhu Nisha Crackers has been a well-known Fireworks Store in Sivakasi. What started out as a hobby
+                  has become our passion for creating magical moments.
                 </p>
                 <p>
                   We offer quality products, unparalleled service, and the most competitive prices in town, ensuring
@@ -1190,7 +1254,7 @@ export default function Home() {
                     <p className="text-white font-medium">Office Address</p>
                     <p className="text-gray-300 mt-2">
                       Gopi Pyro World
-                      <br/>
+                      <br />
                       Sivagamipuram Colony, Viseanatham panchayat.,
                       <br />
                       Sivakasi
@@ -1199,16 +1263,10 @@ export default function Home() {
                 </div>
                 <div>
                   <h4 className="font-semibold text-white mb-2">Phone</h4>
-                  <a
-                    href="tel:+919487524689"
-                    className="text-gray-300 hover:text-orange-400 transition-colors block"
-                  >
+                  <a href="tel:+919487524689" className="text-gray-300 hover:text-orange-400 transition-colors block">
                     +91 94875 24689
                   </a>
-                  <a
-                    href="tel:+919497594689"
-                    className="text-gray-300 hover:text-orange-400 transition-colors block"
-                  >
+                  <a href="tel:+919497594689" className="text-gray-300 hover:text-orange-400 transition-colors block">
                     +91 94975 94689
                   </a>
                 </div>
