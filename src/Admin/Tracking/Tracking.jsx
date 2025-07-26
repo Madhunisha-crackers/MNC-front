@@ -175,9 +175,6 @@ export default function Tracking() {
                     {renderSelect(booking.status, e => handleStatusChange(booking.id, e.target.value), [
                       { value: 'booked', label: 'Booked' },
                       { value: 'paid', label: 'Paid' },
-                      { value: 'packed', label: 'Packed' },
-                      { value: 'dispatched', label: 'Dispatched' },
-                      { value: 'delivered', label: 'Delivered' }
                     ], 'Update Status')}
                   </div>
                 </div>
