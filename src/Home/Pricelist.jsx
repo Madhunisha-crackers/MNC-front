@@ -1,495 +1,15 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { FaPlus, FaMinus, FaArrowLeft, FaArrowRight, FaInfoCircle } from "react-icons/fa"
-import { ShoppingCart, Search, Filter, X, Sparkles, CheckCircle, Download } from "lucide-react"
-import { useSwipeable } from "react-swipeable"
+import { ShoppingCart, Search, Filter, X } from "lucide-react"
 import Navbar from "../Component/Navbar"
 import { API_BASE_URL } from "../../Config"
+import RocketLoader from "../Component/RocketLoader"
+import ToasterNotification from "../Component/ToasterNotification"
+import SuccessAnimation from "../Component/SuccessAnimation"
+import ModernCarousel from "../Component/ModernCarousel"
+import LoadingSpinner from "../Component/LoadingSpinner"
 import "../App.css"
-
-const RocketCrackerLoader = ({ onComplete }) => {
-  const [stage, setStage] = useState("flying") // 'flying', 'burst', 'success'
-
-  useEffect(() => {
-    const timer1 = setTimeout(() => setStage("burst"), 1800)
-    const timer2 = setTimeout(() => setStage("success"), 2300)
-    const timer3 = setTimeout(() => {
-      if (onComplete) onComplete()
-    }, 4800) // Auto-close after showing success message for 2.5 seconds
-
-    return () => {
-      clearTimeout(timer1)
-      clearTimeout(timer2)
-      clearTimeout(timer3)
-    }
-  }, [onComplete])
-
-  return (
-    <div className="fixed inset-0 flex items-center justify-center z-[100] bg-black/60 backdrop-blur-sm">
-      <div className="relative w-full h-full flex items-center justify-center">
-        {/* Rocket Line Animation */}
-        <AnimatePresence>
-          {stage === "flying" && (
-            <motion.div
-              initial={{ y: 300, x: -200, rotate: 45 }}
-              animate={{ y: 0, x: 0, rotate: 0 }}
-              exit={{ opacity: 0, scale: 0 }}
-              transition={{ duration: 1.8, ease: "easeOut" }}
-              className="relative"
-            >
-              {/* Rocket Body - Simple Line Design */}
-              <motion.div
-                animate={{
-                  scaleY: [1, 1.1, 1],
-                  rotate: [0, 2, -2, 0],
-                }}
-                transition={{ duration: 0.15, repeat: 12 }}
-                className="relative"
-              >
-                {/* Main rocket body */}
-                <div className="w-1 h-16 bg-gradient-to-t from-gray-400 via-gray-300 to-gray-200 rounded-full relative">
-                  {/* Rocket tip */}
-                  <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-b-4 border-l-transparent border-r-transparent border-b-red-500"></div>
-                  {/* Rocket fins */}
-                  <div className="absolute -bottom-1 -left-1 w-0 h-0 border-t-3 border-r-2 border-t-orange-500 border-r-transparent"></div>
-                  <div className="absolute -bottom-1 -right-1 w-0 h-0 border-t-3 border-l-2 border-t-orange-500 border-l-transparent"></div>
-                </div>
-              </motion.div>
-
-              {/* Enhanced Rocket trail */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: [0, 1, 0.7, 1, 0] }}
-                transition={{ duration: 0.2, repeat: 9 }}
-                className="absolute -bottom-6 left-1/2 transform -translate-x-1/2"
-              >
-                <div className="w-3 h-12 bg-gradient-to-t from-orange-600 via-yellow-400 to-red-500 rounded-full opacity-80"></div>
-                <div className="absolute top-2 left-1/2 transform -translate-x-1/2 w-2 h-8 bg-gradient-to-t from-yellow-300 to-white rounded-full"></div>
-              </motion.div>
-
-              {/* Smoke particles */}
-              {Array.from({ length: 6 }).map((_, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, scale: 0 }}
-                  animate={{
-                    opacity: [0, 0.6, 0],
-                    scale: [0, 1, 1.5],
-                    y: [0, -20 - i * 5],
-                    x: [0, (i % 2 === 0 ? -1 : 1) * (5 + i)],
-                  }}
-                  transition={{
-                    duration: 0.8,
-                    repeat: 2,
-                    delay: i * 0.1,
-                  }}
-                  className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-gray-400 rounded-full"
-                />
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Enhanced Burst Effect */}
-        <AnimatePresence>
-          {stage === "burst" && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="relative z-[110]"
-            >
-              {/* Central massive burst */}
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: [0, 3, 2] }}
-                transition={{ duration: 0.6 }}
-                className="w-24 h-24 bg-gradient-to-r from-yellow-300 via-orange-400 to-red-500 rounded-full relative z-[110] shadow-2xl"
-              />
-
-              {/* Large sparkles - first ring */}
-              {Array.from({ length: 16 }).map((_, i) => (
-                <motion.div
-                  key={i}
-                  initial={{
-                    scale: 0,
-                    x: 0,
-                    y: 0,
-                    rotate: 0,
-                  }}
-                  animate={{
-                    scale: [0, 2, 0],
-                    x: Math.cos((i * 22.5 * Math.PI) / 180) * 150,
-                    y: Math.sin((i * 22.5 * Math.PI) / 180) * 150,
-                    rotate: 360,
-                  }}
-                  transition={{
-                    duration: 1,
-                    delay: 0.1 + i * 0.03,
-                    ease: "easeOut",
-                  }}
-                  className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[110]"
-                >
-                  <Sparkles className="w-8 h-8 text-yellow-300" />
-                </motion.div>
-              ))}
-
-              {/* Medium sparkles - second ring */}
-              {Array.from({ length: 12 }).map((_, i) => (
-                <motion.div
-                  key={`medium-${i}`}
-                  initial={{
-                    scale: 0,
-                    x: 0,
-                    y: 0,
-                    rotate: 0,
-                  }}
-                  animate={{
-                    scale: [0, 1.5, 0],
-                    x: Math.cos((i * 30 * Math.PI) / 180) * 200,
-                    y: Math.sin((i * 30 * Math.PI) / 180) * 200,
-                    rotate: -360,
-                  }}
-                  transition={{
-                    duration: 1.2,
-                    delay: 0.2 + i * 0.04,
-                    ease: "easeOut",
-                  }}
-                  className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[110]"
-                >
-                  <Sparkles className="w-6 h-6 text-orange-300" />
-                </motion.div>
-              ))}
-
-              {/* Large particle effects */}
-              {Array.from({ length: 20 }).map((_, i) => (
-                <motion.div
-                  key={`particle-${i}`}
-                  initial={{
-                    scale: 0,
-                    x: 0,
-                    y: 0,
-                    opacity: 1,
-                  }}
-                  animate={{
-                    scale: [0, 2, 0],
-                    x: Math.cos((i * 18 * Math.PI) / 180) * (180 + Math.random() * 100),
-                    y: Math.sin((i * 18 * Math.PI) / 180) * (180 + Math.random() * 100),
-                    opacity: [1, 1, 0],
-                  }}
-                  transition={{
-                    duration: 1.4,
-                    delay: 0.15 + i * 0.02,
-                    ease: "easeOut",
-                  }}
-                  className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[110]"
-                >
-                  <div className="w-4 h-4 bg-gradient-to-br from-yellow-200 to-orange-400 rounded-full shadow-lg"></div>
-                </motion.div>
-              ))}
-
-              {/* Shockwave effect */}
-              <motion.div
-                initial={{ scale: 0, opacity: 0.8 }}
-                animate={{ scale: 8, opacity: 0 }}
-                transition={{ duration: 1, ease: "easeOut" }}
-                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-16 h-16 border-4 border-yellow-300 rounded-full z-[110]"
-              />
-
-              <motion.div
-                initial={{ scale: 0, opacity: 0.6 }}
-                animate={{ scale: 12, opacity: 0 }}
-                transition={{ duration: 1.5, delay: 0.2, ease: "easeOut" }}
-                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-16 h-16 border-2 border-orange-300 rounded-full z-[110]"
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Enhanced Success Message */}
-        <AnimatePresence>
-          {stage === "success" && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.3, y: 50 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: -30 }}
-              transition={{
-                type: "spring",
-                stiffness: 200,
-                damping: 20,
-                duration: 0.6,
-              }}
-              className="text-center z-[110]"
-            >
-              <motion.div
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{
-                  delay: 0.2,
-                  type: "spring",
-                  stiffness: 300,
-                  damping: 15,
-                }}
-                className="w-32 h-32 bg-gradient-to-br from-green-400 via-green-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl"
-              >
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: 0.4, type: "spring", stiffness: 400 }}
-                >
-                  <CheckCircle className="w-16 h-16 text-white" />
-                </motion.div>
-              </motion.div>
-
-              <motion.h2
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.5 }}
-                className="text-5xl font-bold text-white mb-6 tracking-wide"
-              >
-                BOOKED!
-              </motion.h2>
-
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.7, duration: 0.4 }}
-                className="text-white/90 text-xl mb-6"
-              >
-                Your order has been successfully placed
-              </motion.p>
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.9, duration: 0.4 }}
-                className="flex items-center justify-center gap-3 text-yellow-300 text-lg"
-              >
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-                >
-                  <Sparkles className="w-6 h-6" />
-                </motion.div>
-                <span className="font-semibold">Thank you for choosing MN Crackers!</span>
-                <motion.div
-                  animate={{ rotate: -360 }}
-                  transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-                >
-                  <Sparkles className="w-6 h-6" />
-                </motion.div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </div>
-  )
-}
-
-const ToasterNotification = ({ show, onClose }) => {
-  useEffect(() => {
-    if (show) {
-      const timer = setTimeout(onClose, 5000)
-      return () => clearTimeout(timer)
-    }
-  }, [show, onClose])
-
-  return (
-    <AnimatePresence>
-      {show && (
-        <motion.div
-          initial={{ opacity: 0, y: -100, x: 100 }}
-          animate={{ opacity: 1, y: 0, x: 0 }}
-          exit={{ opacity: 0, y: -100, x: 100 }}
-          className="fixed top-20 right-4 z-50 bg-white rounded-2xl shadow-2xl border border-green-200 p-4 max-w-sm"
-        >
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-              <Download className="w-5 h-5 text-green-600" />
-            </div>
-            <div className="flex-1">
-              <h4 className="font-semibold text-gray-800 mb-1">Download Complete!</h4>
-              <p className="text-sm text-gray-600">Estimate bill downloaded. Please check your file explorer.</p>
-            </div>
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={onClose}
-              className="w-6 h-6 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0"
-            >
-              <X className="w-4 h-4 text-gray-600" />
-            </motion.button>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
-}
-
-const SuccessAnimation = () => (
-  <motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm"
-  >
-    <motion.div
-      initial={{ scale: 0.5, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      className="bg-white rounded-3xl p-8 max-w-md mx-4 text-center shadow-2xl"
-    >
-      <motion.div
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-        className="w-24 h-24 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-6"
-      >
-        <CheckCircle className="w-12 h-12 text-white" />
-      </motion.div>
-      <motion.h2
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="text-3xl font-bold text-gray-800 mb-4"
-      >
-        Order Booked!
-      </motion.h2>
-      <motion.p
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.6 }}
-        className="text-gray-600 mb-6"
-      >
-        Your order has been successfully placed. We'll contact you within 24 hours.
-      </motion.p>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.8 }}
-        className="flex items-center justify-center gap-2 text-orange-600"
-      >
-        <Sparkles className="w-5 h-5" />
-        <span className="font-medium">Thank you for choosing MN Crackers!</span>
-        <Sparkles className="w-5 h-5" />
-      </motion.div>
-    </motion.div>
-  </motion.div>
-)
-
-const ModernCarousel = ({ media, onImageClick }) => {
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const mediaItems = useMemo(() => {
-    const items = media && typeof media === "string" ? JSON.parse(media) : Array.isArray(media) ? media : []
-    return items.sort((a, b) => {
-      const aStr = typeof a === "string" ? a : ""
-      const bStr = typeof b === "string" ? b : ""
-      const isAVideo = aStr.startsWith("data:video/")
-      const isBVideo = bStr.startsWith("data:video/")
-      const isAGif = aStr.startsWith("data:image/gif") || aStr.toLowerCase().endsWith(".gif")
-      const isBGif = bStr.startsWith("data:image/gif") || bStr.toLowerCase().endsWith(".gif")
-      const isAImage = aStr.startsWith("data:image/") && !isAGif
-      const isBImage = bStr.startsWith("data:image/") && !isBGif
-      return (isAImage ? 0 : isAGif ? 1 : isAVideo ? 2 : 3) - (isBImage ? 0 : isBGif ? 1 : isBVideo ? 2 : 3)
-    })
-  }, [media])
-
-  const isVideo = (item) => typeof item === "string" && item.startsWith("data:video/")
-
-  const handlers = useSwipeable({
-    onSwipedLeft: () => setCurrentIndex((prev) => (prev === mediaItems.length - 1 ? 0 : prev + 1)),
-    onSwipedRight: () => setCurrentIndex((prev) => (prev === 0 ? mediaItems.length - 1 : prev - 1)),
-    preventDefaultTouchmoveEvent: true,
-    trackMouse: false,
-    trackTouch: true,
-  })
-
-  if (!mediaItems.length) {
-    return (
-      <div className="w-full h-48 rounded-2xl mb-4 overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center border border-orange-200">
-        <div className="text-center">
-          <Sparkles className="w-8 h-8 text-orange-400 mx-auto mb-2" />
-          <p className="text-orange-600 font-medium text-sm">No media available</p>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div
-      {...handlers}
-      className="relative w-full h-48 rounded-2xl mb-4 overflow-hidden group bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 cursor-pointer"
-      onClick={() => onImageClick && onImageClick(media)}
-    >
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={currentIndex}
-          initial={{ opacity: 0, scale: 1.1 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.9 }}
-          transition={{ duration: 0.3 }}
-          className="absolute inset-0"
-        >
-          {isVideo(mediaItems[currentIndex]) ? (
-            <video
-              src={mediaItems[currentIndex]}
-              autoPlay
-              muted
-              loop
-              className="w-full h-full object-cover rounded-2xl"
-            />
-          ) : (
-            <img
-              src={mediaItems[currentIndex] || "/placeholder.svg"}
-              alt="Product"
-              className="w-full h-full object-cover rounded-2xl"
-            />
-          )}
-        </motion.div>
-      </AnimatePresence>
-
-      {mediaItems.length > 1 && (
-        <>
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={(e) => {
-              e.stopPropagation()
-              setCurrentIndex((prev) => (prev === 0 ? mediaItems.length - 1 : prev - 1))
-            }}
-            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-white"
-          >
-            <FaArrowLeft className="text-orange-600 text-sm" />
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={(e) => {
-              e.stopPropagation()
-              setCurrentIndex((prev) => (prev === mediaItems.length - 1 ? 0 : prev + 1))
-            }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-white"
-          >
-            <FaArrowRight className="text-orange-600 text-sm" />
-          </motion.button>
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-            {mediaItems.map((_, index) => (
-              <motion.button
-                key={index}
-                whileHover={{ scale: 1.2 }}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setCurrentIndex(index)
-                }}
-                className={`w-2 h-2 rounded-full transition-all ${index === currentIndex ? "bg-white shadow-lg" : "bg-white/50 hover:bg-white/75"}`}
-              />
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
 
 const Pricelist = () => {
   const [products, setProducts] = useState([])
@@ -500,6 +20,7 @@ const Pricelist = () => {
   const [showMinOrderModal, setShowMinOrderModal] = useState(false)
   const [minOrderMessage, setMinOrderMessage] = useState("")
   const [showToaster, setShowToaster] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [customerDetails, setCustomerDetails] = useState({
     customer_name: "",
     address: "",
@@ -532,20 +53,33 @@ const Pricelist = () => {
   }
 
   useEffect(() => {
-    const savedCart = localStorage.getItem("firecracker-cart")
-    if (savedCart) setCart(JSON.parse(savedCart))
-    fetch(`${API_BASE_URL}/api/locations/states`)
-      .then((res) => res.json())
-      .then((data) => setStates(Array.isArray(data) ? data : []))
-      .catch((err) => console.error("Error fetching states:", err))
-    fetch(`${API_BASE_URL}/api/products`)
-      .then((res) => res.json())
-      .then((data) => setProducts(data.filter((p) => p.status === "on")))
-      .catch((err) => console.error("Error loading products:", err))
-    fetch(`${API_BASE_URL}/api/promocodes`)
-      .then((res) => res.json())
-      .then((data) => setPromocodes(Array.isArray(data) ? data : []))
-      .catch((err) => console.error("Error fetching promocodes:", err))
+    const initializeData = async () => {
+      setIsLoading(true)
+      try {
+        const savedCart = localStorage.getItem("firecracker-cart")
+        if (savedCart) setCart(JSON.parse(savedCart))
+        const [statesRes, productsRes, promocodesRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/locations/states`),
+          fetch(`${API_BASE_URL}/api/products`),
+          fetch(`${API_BASE_URL}/api/promocodes`),
+        ])
+        const [statesData, productsData, promocodesData] = await Promise.all([
+          statesRes.json(),
+          productsRes.json(),
+          promocodesRes.json(),
+        ])
+        setStates(Array.isArray(statesData) ? statesData : [])
+        setProducts(productsData.filter((p) => p.status === "on"))
+        setPromocodes(Array.isArray(promocodesData) ? promocodesData : [])
+      } catch (err) {
+        console.error("Error loading initial data:", err)
+      } finally {
+        setTimeout(() => {
+          setIsLoading(false)
+        }, 1500)
+      }
+    }
+    initializeData()
   }, [])
 
   useEffect(() => {
@@ -596,46 +130,50 @@ const Pricelist = () => {
   }, [])
 
   const handleFinalCheckout = async () => {
-    const order_id = `ORD-${Date.now()}`;
+    const order_id = `ORD-${Date.now()}`
     const selectedProducts = Object.entries(cart).map(([serial, qty]) => {
-      const product = products.find(p => p.serial_number === serial);
+      const product = products.find((p) => p.serial_number === serial)
       return {
         id: product.id,
         product_type: product.product_type,
         quantity: qty,
         per: product.per,
-        image: product.image,
         price: product.price,
         discount: product.discount,
         serial_number: product.serial_number,
         productname: product.productname,
-        status: product.status
-      };
-    });
-    if (!selectedProducts.length) return showError("Your cart is empty.");
-    if (!customerDetails.customer_name) return showError("Customer name is required.");
-    if (!customerDetails.address) return showError("Address is required.");
-    if (!customerDetails.district) return showError("District is required.");
-    if (!customerDetails.state) return showError("Please select a state.");
-    if (!customerDetails.mobile_number) return showError("Mobile number is required.");
-    const mobile = customerDetails.mobile_number.replace(/\D/g, '').slice(-10);
-    if (mobile.length !== 10) return showError("Mobile number must be 10 digits.");
-    const selectedState = customerDetails.state?.trim();
-    const minOrder = states.find(s => s.name === selectedState)?.min_rate;
-    if (minOrder && parseFloat(originalTotal) < minOrder) return showError(`Minimum order for ${selectedState} is ₹${minOrder}. Your total is ₹${originalTotal}.`);
+        status: product.status,
+      }
+    })
+
+    if (!selectedProducts.length) return showError("Your cart is empty.")
+    if (!customerDetails.customer_name) return showError("Customer name is required.")
+    if (!customerDetails.address) return showError("Address is required.")
+    if (!customerDetails.district) return showError("District is required.")
+    if (!customerDetails.state) return showError("Please select a state.")
+    if (!customerDetails.mobile_number) return showError("Mobile number is required.")
+
+    const mobile = customerDetails.mobile_number.replace(/\D/g, "").slice(-10)
+    if (mobile.length !== 10) return showError("Mobile number must be 10 digits.")
+
+    const selectedState = customerDetails.state?.trim()
+    const minOrder = states.find((s) => s.name === selectedState)?.min_rate
+    if (minOrder && Number.parseFloat(originalTotal) < minOrder)
+      return showError(`Minimum order for ${selectedState} is ₹${minOrder}. Your total is ₹${originalTotal}.`)
+
     try {
-      setShowLoader(true); // Show loader before API call
+      setShowLoader(true)
       const response = await fetch(`${API_BASE_URL}/api/direct/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           order_id,
           products: selectedProducts,
-          net_rate: parseFloat(totals.net),
-          you_save: parseFloat(totals.save),
-          processing_fee: parseFloat(totals.processing_fee), // Include processing fee
-          total: parseFloat(totals.total),
-          promo_discount: parseFloat(totals.promo_discount || '0.00'),
+          net_rate: Number.parseFloat(totals.net),
+          you_save: Number.parseFloat(totals.save),
+          processing_fee: Number.parseFloat(totals.processing_fee),
+          total: Number.parseFloat(totals.total),
+          promo_discount: Number.parseFloat(totals.promo_discount || "0.00"),
           customer_type: customerDetails.customer_type,
           customer_name: customerDetails.customer_name,
           address: customerDetails.address,
@@ -643,45 +181,44 @@ const Pricelist = () => {
           email: customerDetails.email,
           district: customerDetails.district,
           state: customerDetails.state,
-          promocode: appliedPromo?.code || null
-        })
-      });
+          promocode: appliedPromo?.code || null,
+        }),
+      })
+
       if (response.ok) {
-        const data = await response.json();
-        // Download PDF
-        const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: 'blob' });
-        const blob = await pdfResponse.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        const safeCustomerName = (customerDetails.customer_name || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-        link.setAttribute('download', `${safeCustomerName}-${data.order_id}.pdf`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
+        const data = await response.json()
+        const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: "blob" })
+        const blob = await pdfResponse.blob()
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = url
+        const safeCustomerName = (customerDetails.customer_name || "unknown")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "")
+        link.setAttribute("download", `${safeCustomerName}-${data.order_id}.pdf`)
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
       } else {
-        const data = await response.json();
-        setShowLoader(false); // Hide loader on error
-        showError(data.message || "Booking failed.");
+        const data = await response.json()
+        setShowLoader(false)
+        showError(data.message || "Booking failed.")
       }
     } catch (err) {
-      console.error("Checkout error:", err);
-      setShowLoader(false); // Hide loader on error
-      showError("Something went wrong during checkout.");
+      console.error("Checkout error:", err)
+      setShowLoader(false)
+      showError("Something went wrong during checkout.")
     }
-  };
+  }
 
   const handleRocketComplete = () => {
     setShowLoader(false)
-
-    // Close all modals
     setIsCartOpen(false)
     setShowModal(false)
     setShowDetailsModal(false)
     setShowMinOrderModal(false)
-
-    // Reset form data
     setCart({})
     setCustomerDetails({
       customer_name: "",
@@ -696,8 +233,6 @@ const Pricelist = () => {
     setPromocode("")
     setOriginalTotal(0)
     setTotalDiscount(0)
-
-    // Show toaster notification after a brief delay
     setTimeout(() => {
       setShowToaster(true)
     }, 500)
@@ -800,8 +335,8 @@ const Pricelist = () => {
       total -= promoDiscount
       save += promoDiscount
     }
-    const processingFee = (total) * 0.03 // 3% processing fee
-    total += processingFee // Add processing fee to total
+    const processingFee = total * 0.03
+    total += processingFee
     return {
       net: formatPrice(net),
       save: formatPrice(save),
@@ -836,12 +371,16 @@ const Pricelist = () => {
     [products, selectedType, searchTerm],
   )
 
+  if (isLoading) {
+    return <LoadingSpinner />
+  }
+
   return (
     <>
       <Navbar />
       <ToasterNotification show={showToaster} onClose={() => setShowToaster(false)} />
       <AnimatePresence>
-        {showLoader && <RocketCrackerLoader onComplete={handleRocketComplete} />}
+        {showLoader && <RocketLoader onComplete={handleRocketComplete} />}
         {showSuccess && <SuccessAnimation />}
         {showMinOrderModal && (
           <motion.div
@@ -963,7 +502,7 @@ const Pricelist = () => {
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl mobile:max-w-md mobile:w-[90%] onefifty:max-w-[40%] mx-4 max-h-[90vh] flex flex-col"
             >
-              <div className="flex justify-between items-center p-6 border-b border-orange-100 ">
+              <div className="flex justify-between items-center p-6 border-b border-orange-100">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                   <ShoppingCart className="w-5 h-5 text-orange-600" />
                   Your Cart
@@ -1000,7 +539,8 @@ const Pricelist = () => {
                           !item.startsWith("data:video/") &&
                           !item.startsWith("data:image/gif") &&
                           !item.toLowerCase().endsWith(".gif"),
-                      )[0] || "/placeholder.svg"
+                      )[0] || "/placeholder.svg?height=80&width=80"
+
                     return (
                       <motion.div
                         key={serial}
@@ -1031,14 +571,7 @@ const Pricelist = () => {
                           >
                             <FaMinus className="w-4 h-4" />
                           </motion.button>
-                          <motion.input
-                            key={qty}
-                            type="number"
-                            value={qty}
-                            onChange={(e) => updateCartQuantity(product, Number.parseInt(e.target.value) || 0)}
-                            min="0"
-                            className="text-sm font-medium w-8 text-center bg-transparent border-none focus:outline-none"
-                          />
+                          <span className="text-sm font-medium w-8 text-center">{qty}</span>
                           <motion.button
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
@@ -1130,7 +663,7 @@ const Pricelist = () => {
                   </motion.button>
                   <motion.button
                     whileHover={{ scale: 1.02 }}
-                    whileTap={{scale: 0.98 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={handleCheckoutClick}
                     className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg"
                   >
@@ -1176,14 +709,15 @@ const Pricelist = () => {
                       />
                     ) : (
                       <img
-                        src={selectedImages[currentImageIndex] || "/placeholder.svg"}
+                        src={
+                          selectedImages[currentImageIndex] || "/placeholder.svg?height=600&width=800&query=firecracker"
+                        }
                         alt="Product Image"
                         className="w-full max-h-[80vh] object-contain rounded-2xl"
                       />
                     )}
                   </motion.div>
                 </AnimatePresence>
-
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
@@ -1192,7 +726,6 @@ const Pricelist = () => {
                 >
                   <X className="w-6 h-6" />
                 </motion.button>
-
                 {selectedImages.length > 1 && (
                   <>
                     <motion.button
@@ -1217,13 +750,11 @@ const Pricelist = () => {
                     </motion.button>
                   </>
                 )}
-
                 {selectedImages.length > 1 && (
                   <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm rounded-full px-4 py-2 text-white text-sm">
                     {currentImageIndex + 1} / {selectedImages.length}
                   </div>
                 )}
-
                 {selectedImages.length > 1 && (
                   <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 max-w-md overflow-x-auto p-2">
                     {selectedImages.map((image, index) => (
@@ -1239,7 +770,7 @@ const Pricelist = () => {
                           <video src={image} className="w-full h-full object-cover" />
                         ) : (
                           <img
-                            src={image || "/placeholder.svg"}
+                            src={image || "/placeholder.svg?height=64&width=64&query=firecracker"}
                             alt={`Thumbnail ${index + 1}`}
                             className="w-full h-full object-cover"
                           />
@@ -1356,14 +887,9 @@ const Pricelist = () => {
                               >
                                 <FaMinus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                               </motion.button>
-                              <motion.input
-                                key={count}
-                                type="number"
-                                value={count}
-                                onChange={(e) => updateCartQuantity(product, Number.parseInt(e.target.value) || 0)}
-                                min="0"
-                                className="text-white font-bold text-sm sm:text-lg px-1 sm:px-2 w-10 sm:w-16 text-center bg-transparent border-none focus:outline-none"
-                              />
+                              <span className="text-white font-bold text-sm sm:text-lg px-1 sm:px-2 w-10 sm:w-16 text-center">
+                                {count}
+                              </span>
                               <motion.button
                                 whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.9 }}
@@ -1557,6 +1083,7 @@ const Pricelist = () => {
           </motion.span>
         )}
       </motion.button>
+
       <style jsx>{`
         .line-clamp-2 {
           display: -webkit-box;
