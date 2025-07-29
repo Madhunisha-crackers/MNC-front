@@ -346,7 +346,7 @@ export default function Inventory() {
               type="file"
               id="image"
               name="images"
-              accept="image/jpeg,image/png,image/gif,video/mp4,video/webm,video/ogg"
+              accept="image/jpeg,image/jpg,image/png,image/gif,video/mp4,video/webm,video/ogg"
               multiple
               onChange={handleImageChange}
               className="block w-full text-sm text-gray-900 dark:text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-gray-700 file:text-indigo-600 dark:file:text-gray-200 hover:file:bg-indigo-100 dark:hover:file:bg-gray-600"

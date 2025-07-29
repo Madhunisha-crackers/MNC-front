@@ -87,7 +87,7 @@ const Pricelist = () => {
       } finally {
         setTimeout(() => {
           setIsLoading(false);
-        }, 30000);
+        }, 1500);
       }
     };
     initializeData();

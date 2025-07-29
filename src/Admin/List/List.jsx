@@ -118,41 +118,33 @@ export default function List() {
     setCurrentPage(1);
   }, [filterType, products]);
 
-  const handleImageChange = async (e) => {
-    const files = Array.from(e.target.files).slice(0, 5);
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'video/mp4', 'video/webm', 'video/ogg'];
-    const maxSize = 5 * 1024 * 1024;
-    if (files.some(file => !allowedTypes.includes(file.type))) {
-      setError('Only JPG, PNG, GIF, MP4, WebM, or Ogg files allowed');
+  const handleImageChange = (event) => {
+  const files = Array.from(event.target.files);
+  const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+  const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/ogg'];
+  const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
+
+  const validFiles = [];
+
+  for (const file of files) {
+    const fileType = file.type.toLowerCase();
+    if (!allowedTypes.includes(fileType)) {
+      setError('Only JPG, PNG, GIF images and MP4, WebM, Ogg videos are allowed');
       return;
     }
-    if (files.some(file => file.size > maxSize)) {
+
+    if (file.size > 5 * 1024 * 1024) {
       setError('Each file must be less than 5MB');
       return;
     }
 
-    try {
-      const uploadPromises = files.map(async (file) => {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', 'your_upload_preset'); // Replace with your Cloudinary upload preset
+    validFiles.push(file);
+  }
 
-        const response = await fetch('https://api.cloudinary.com/v1_1/dodvn6aqi/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error?.message || 'Failed to upload file');
-        return data.secure_url;
-      });
-
-      const uploadedUrls = await Promise.all(uploadPromises);
-      setError('');
-      setFormData(prev => ({ ...prev, images: uploadedUrls }));
-    } catch (err) {
-      setError('Failed to upload files to Cloudinary: ' + err.message);
-    }
-  };
+  setError('');
+  // Update formData.images using setFormData
+  setFormData(prev => ({ ...prev, images: validFiles }));
+};
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -231,7 +223,7 @@ export default function List() {
         product_type: '',
         description: '',
         box_count: 1,
-        images: [],
+        image: [],
       });
     } catch (err) {
       setError(err.message);
@@ -346,13 +338,44 @@ export default function List() {
   };
 
   const renderMedia = (media, idx, sizeClass) => {
-    const isVideo = media.includes('/video/');
-    return isVideo ? (
-      <video key={idx} src={media} controls className={`${sizeClass} object-cover rounded-md inline-block mx-1`} />
-    ) : (
-      <img key={idx} src={media} alt={`media-${idx}`} className={`${sizeClass} object-cover rounded-md inline-block mx-1`} />
-    );
-  };
+  let src;
+  let isVideo = false;
+
+  if (media instanceof File) {
+    // For File objects (form preview), create a temporary URL
+    src = URL.createObjectURL(media);
+    isVideo = media.type.startsWith('video/');
+  } else if (typeof media === 'string') {
+    // For string URLs (fetched products)
+    src = media;
+    isVideo = media.includes('/video/');
+  } else {
+    // Fallback for invalid media
+    return <span key={idx} className="text-gray-500 dark:text-gray-400 text-sm">Invalid media</span>;
+  }
+
+  return isVideo ? (
+    <video
+      key={idx}
+      src={src}
+      controls
+      className={`${sizeClass} object-cover rounded-md inline-block mx-1`}
+      onLoad={() => {
+        if (media instanceof File) URL.revokeObjectURL(src); // Clean up temporary URL
+      }}
+    />
+  ) : (
+    <img
+      key={idx}
+      src={src}
+      alt={`media-${idx}`}
+      className={`${sizeClass} object-cover rounded-md inline-block mx-1`}
+      onLoad={() => {
+        if (media instanceof File) URL.revokeObjectURL(src); // Clean up temporary URL
+      }}
+    />
+  );
+};
 
   const renderModalForm = (isEdit) => (
     <div className="bg-white dark:bg-gray-900 rounded-lg p-6 mobile:p-3 max-w-md w-full sm:max-w-lg">
@@ -430,7 +453,7 @@ export default function List() {
               name="images"
               multiple
               onChange={handleImageChange}
-              accept="image/jpeg,image/png,image/gif,video/mp4,video/webm,video/ogg"
+              accept="image/jpeg,image/jpg,image/png,image/gif,video/mp4,video/webm,video/ogg"
               className="mt-1 mobile:mt-0.5 block w-full text-sm text-gray-900 dark:text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-gray-700 file:text-indigo-600 dark:file:text-gray-200 hover:file:bg-indigo-100 dark:hover:file:bg-gray-600"
             />
             {formData.images.length > 0 && (
