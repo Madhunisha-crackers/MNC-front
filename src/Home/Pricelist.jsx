@@ -76,7 +76,7 @@ const Pricelist = () => {
       } finally {
         setTimeout(() => {
           setIsLoading(false)
-        }, 1500)
+        }, 30000)
       }
     }
     initializeData()
