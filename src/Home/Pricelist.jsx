@@ -69,9 +69,28 @@ const Pricelist = () => {
           promocodesRes.json(),
         ]);
         setStates(Array.isArray(statesData) ? statesData : []);
-        // Parse image field as JSON if string, otherwise use as is
+
+        // Natural sort function for case-insensitive sorting with numeric handling
+        const naturalSort = (a, b) => {
+          const collator = new Intl.Collator(undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+          return collator.compare(a.productname, b.productname);
+        };
+
+        // Deduplicate and sort products
+        const seenSerials = new Set();
         const normalizedProducts = productsData.data
-          .filter((p) => p.status === "on")
+          .filter((p) => {
+            if (p.status !== "on") return false;
+            if (seenSerials.has(p.serial_number)) {
+              console.warn(`Duplicate serial_number found: ${p.serial_number}`);
+              return false;
+            }
+            seenSerials.add(p.serial_number);
+            return true;
+          })
           .map((product) => ({
             ...product,
             images: product.image
@@ -79,7 +98,9 @@ const Pricelist = () => {
                 ? JSON.parse(product.image)
                 : product.image
               : [],
-          }));
+          }))
+          .sort(naturalSort);
+
         setProducts(normalizedProducts);
         setPromocodes(Array.isArray(promocodesData) ? promocodesData : []);
       } catch (err) {
