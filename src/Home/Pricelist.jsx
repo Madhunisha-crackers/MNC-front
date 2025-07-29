@@ -1,26 +1,26 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { FaPlus, FaMinus, FaArrowLeft, FaArrowRight, FaInfoCircle } from "react-icons/fa"
-import { ShoppingCart, Search, Filter, X } from "lucide-react"
-import Navbar from "../Component/Navbar"
-import { API_BASE_URL } from "../../Config"
-import RocketLoader from "../Component/RocketLoader"
-import ToasterNotification from "../Component/ToasterNotification"
-import SuccessAnimation from "../Component/SuccessAnimation"
-import ModernCarousel from "../Component/ModernCarousel"
-import LoadingSpinner from "../Component/LoadingSpinner"
-import "../App.css"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { FaPlus, FaMinus, FaArrowLeft, FaArrowRight, FaInfoCircle } from "react-icons/fa";
+import { ShoppingCart, Search, Filter, X } from "lucide-react";
+import Navbar from "../Component/Navbar";
+import { API_BASE_URL } from "../../Config";
+import RocketLoader from "../Component/RocketLoader";
+import ToasterNotification from "../Component/ToasterNotification";
+import SuccessAnimation from "../Component/SuccessAnimation";
+import ModernCarousel from "../Component/ModernCarousel";
+import LoadingSpinner from "../Component/LoadingSpinner";
+import "../App.css";
 
 const Pricelist = () => {
-  const [products, setProducts] = useState([])
-  const [cart, setCart] = useState({})
-  const [isCartOpen, setIsCartOpen] = useState(false)
-  const [showModal, setShowModal] = useState(false)
-  const [showSuccess, setShowSuccess] = useState(false)
-  const [showMinOrderModal, setShowMinOrderModal] = useState(false)
-  const [minOrderMessage, setMinOrderMessage] = useState("")
-  const [showToaster, setShowToaster] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const [products, setProducts] = useState([]);
+  const [cart, setCart] = useState({});
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [showMinOrderModal, setShowMinOrderModal] = useState(false);
+  const [minOrderMessage, setMinOrderMessage] = useState("");
+  const [showToaster, setShowToaster] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [customerDetails, setCustomerDetails] = useState({
     customer_name: "",
     address: "",
@@ -29,110 +29,121 @@ const Pricelist = () => {
     mobile_number: "",
     email: "",
     customer_type: "User",
-  })
-  const [selectedType, setSelectedType] = useState("All")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [promocode, setPromocode] = useState("")
-  const [appliedPromo, setAppliedPromo] = useState(null)
-  const [states, setStates] = useState([])
-  const [districts, setDistricts] = useState([])
-  const [selectedProduct, setSelectedProduct] = useState(null)
-  const [showDetailsModal, setShowDetailsModal] = useState(false)
-  const [promocodes, setPromocodes] = useState([])
-  const [originalTotal, setOriginalTotal] = useState(0)
-  const [totalDiscount, setTotalDiscount] = useState(0)
-  const [showLoader, setShowLoader] = useState(false)
-  const debounceTimeout = useRef(null)
-  const [showImageModal, setShowImageModal] = useState(false)
-  const [selectedImages, setSelectedImages] = useState([])
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  });
+  const [selectedType, setSelectedType] = useState("All");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [promocode, setPromocode] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState(null);
+  const [states, setStates] = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [promocodes, setPromocodes] = useState([]);
+  const [originalTotal, setOriginalTotal] = useState(0);
+  const [totalDiscount, setTotalDiscount] = useState(0);
+  const [showLoader, setShowLoader] = useState(false);
+  const debounceTimeout = useRef(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const formatPrice = (price) => {
-    const num = Number.parseFloat(price)
-    return Number.isInteger(num) ? num.toString() : num.toFixed(2)
-  }
+    const num = Number.parseFloat(price);
+    return Number.isInteger(num) ? num.toString() : num.toFixed(2);
+  };
 
   useEffect(() => {
     const initializeData = async () => {
-      setIsLoading(true)
+      setIsLoading(true);
       try {
-        const savedCart = localStorage.getItem("firecracker-cart")
-        if (savedCart) setCart(JSON.parse(savedCart))
+        const savedCart = localStorage.getItem("firecracker-cart");
+        if (savedCart) setCart(JSON.parse(savedCart));
         const [statesRes, productsRes, promocodesRes] = await Promise.all([
           fetch(`${API_BASE_URL}/api/locations/states`),
           fetch(`${API_BASE_URL}/api/products`),
           fetch(`${API_BASE_URL}/api/promocodes`),
-        ])
+        ]);
         const [statesData, productsData, promocodesData] = await Promise.all([
           statesRes.json(),
           productsRes.json(),
           promocodesRes.json(),
-        ])
-        setStates(Array.isArray(statesData) ? statesData : [])
-        setProducts(productsData.filter((p) => p.status === "on"))
-        setPromocodes(Array.isArray(promocodesData) ? promocodesData : [])
+        ]);
+        setStates(Array.isArray(statesData) ? statesData : []);
+        // Parse image field as JSON if string, otherwise use as is
+        const normalizedProducts = productsData.data
+          .filter((p) => p.status === "on")
+          .map((product) => ({
+            ...product,
+            images: product.image
+              ? typeof product.image === "string"
+                ? JSON.parse(product.image)
+                : product.image
+              : [],
+          }));
+        setProducts(normalizedProducts);
+        setPromocodes(Array.isArray(promocodesData) ? promocodesData : []);
       } catch (err) {
-        console.error("Error loading initial data:", err)
+        console.error("Error loading initial data:", err);
       } finally {
         setTimeout(() => {
-          setIsLoading(false)
-        }, 30000)
+          setIsLoading(false);
+        }, 30000);
       }
-    }
-    initializeData()
-  }, [])
+    };
+    initializeData();
+  }, []);
 
   useEffect(() => {
     if (customerDetails.state) {
       fetch(`${API_BASE_URL}/api/locations/states/${customerDetails.state}/districts`)
         .then((res) => res.json())
         .then((data) => setDistricts(Array.isArray(data) ? data : []))
-        .catch((err) => console.error("Error fetching districts:", err))
+        .catch((err) => console.error("Error fetching districts:", err));
     }
-  }, [customerDetails.state])
+  }, [customerDetails.state]);
 
-  useEffect(() => localStorage.setItem("firecracker-cart", JSON.stringify(cart)), [cart])
+  useEffect(() => localStorage.setItem("firecracker-cart", JSON.stringify(cart)), [cart]);
 
   useEffect(() => {
-    if (debounceTimeout.current) clearTimeout(debounceTimeout.current)
+    if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
     debounceTimeout.current = setTimeout(() => {
-      if (promocode && promocode !== "custom") handleApplyPromo(promocode)
-      else setAppliedPromo(null)
-    }, 500)
-    return () => clearTimeout(debounceTimeout.current)
-  }, [promocode])
+      if (promocode && promocode !== "custom") handleApplyPromo(promocode);
+      else setAppliedPromo(null);
+    }, 500);
+    return () => clearTimeout(debounceTimeout.current);
+  }, [promocode]);
 
   const addToCart = useCallback((product) => {
-    if (!product || !product.serial_number) return console.error("Invalid product or missing serial_number:", product)
-    setCart((prev) => ({ ...prev, [product.serial_number]: (prev[product.serial_number] || 0) + 1 }))
-  }, [])
+    if (!product || !product.serial_number) return console.error("Invalid product or missing serial_number:", product);
+    setCart((prev) => ({ ...prev, [product.serial_number]: (prev[product.serial_number] || 0) + 1 }));
+  }, []);
 
   const removeFromCart = useCallback((product) => {
-    if (!product || !product.serial_number) return console.error("Invalid product or missing serial_number:", product)
+    if (!product || !product.serial_number) return console.error("Invalid product or missing serial_number:", product);
     setCart((prev) => {
-      const count = (prev[product.serial_number] || 1) - 1
-      const updated = { ...prev }
-      if (count <= 0) delete updated[product.serial_number]
-      else updated[product.serial_number] = count
-      return updated
-    })
-  }, [])
+      const count = (prev[product.serial_number] || 1) - 1;
+      const updated = { ...prev };
+      if (count <= 0) delete updated[product.serial_number];
+      else updated[product.serial_number] = count;
+      return updated;
+    });
+  }, []);
 
   const updateCartQuantity = useCallback((product, quantity) => {
-    if (!product?.serial_number) return console.error("Invalid product or missing serial_number:", product)
-    if (quantity < 0) quantity = 0
+    if (!product?.serial_number) return console.error("Invalid product or missing serial_number:", product);
+    if (quantity < 0) quantity = 0;
     setCart((prev) => {
-      const updated = { ...prev }
-      if (quantity === 0) delete updated[product.serial_number]
-      else updated[product.serial_number] = quantity
-      return updated
-    })
-  }, [])
+      const updated = { ...prev };
+      if (quantity === 0) delete updated[product.serial_number];
+      else updated[product.serial_number] = quantity;
+      return updated;
+    });
+  }, []);
 
   const handleFinalCheckout = async () => {
-    const order_id = `ORD-${Date.now()}`
+    const order_id = `ORD-${Date.now()}`;
     const selectedProducts = Object.entries(cart).map(([serial, qty]) => {
-      const product = products.find((p) => p.serial_number === serial)
+      const product = products.find((p) => p.serial_number === serial);
       return {
         id: product.id,
         product_type: product.product_type,
@@ -143,26 +154,26 @@ const Pricelist = () => {
         serial_number: product.serial_number,
         productname: product.productname,
         status: product.status,
-      }
-    })
+      };
+    });
 
-    if (!selectedProducts.length) return showError("Your cart is empty.")
-    if (!customerDetails.customer_name) return showError("Customer name is required.")
-    if (!customerDetails.address) return showError("Address is required.")
-    if (!customerDetails.district) return showError("District is required.")
-    if (!customerDetails.state) return showError("Please select a state.")
-    if (!customerDetails.mobile_number) return showError("Mobile number is required.")
+    if (!selectedProducts.length) return showError("Your cart is empty.");
+    if (!customerDetails.customer_name) return showError("Customer name is required.");
+    if (!customerDetails.address) return showError("Address is required.");
+    if (!customerDetails.district) return showError("District is required.");
+    if (!customerDetails.state) return showError("Please select a state.");
+    if (!customerDetails.mobile_number) return showError("Mobile number is required.");
 
-    const mobile = customerDetails.mobile_number.replace(/\D/g, "").slice(-10)
-    if (mobile.length !== 10) return showError("Mobile number must be 10 digits.")
+    const mobile = customerDetails.mobile_number.replace(/\D/g, "").slice(-10);
+    if (mobile.length !== 10) return showError("Mobile number must be 10 digits.");
 
-    const selectedState = customerDetails.state?.trim()
-    const minOrder = states.find((s) => s.name === selectedState)?.min_rate
+    const selectedState = customerDetails.state?.trim();
+    const minOrder = states.find((s) => s.name === selectedState)?.min_rate;
     if (minOrder && Number.parseFloat(originalTotal) < minOrder)
-      return showError(`Minimum order for ${selectedState} is ₹${minOrder}. Your total is ₹${originalTotal}.`)
+      return showError(`Minimum order for ${selectedState} is ₹${minOrder}. Your total is ₹${originalTotal}.`);
 
     try {
-      setShowLoader(true)
+      setShowLoader(true);
       const response = await fetch(`${API_BASE_URL}/api/direct/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -183,43 +194,43 @@ const Pricelist = () => {
           state: customerDetails.state,
           promocode: appliedPromo?.code || null,
         }),
-      })
+      });
 
       if (response.ok) {
-        const data = await response.json()
-        const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: "blob" })
-        const blob = await pdfResponse.blob()
-        const url = window.URL.createObjectURL(blob)
-        const link = document.createElement("a")
-        link.href = url
+        const data = await response.json();
+        const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: "blob" });
+        const blob = await pdfResponse.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
         const safeCustomerName = (customerDetails.customer_name || "unknown")
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "_")
-          .replace(/^_+|_+$/g, "")
-        link.setAttribute("download", `${safeCustomerName}-${data.order_id}.pdf`)
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(url)
+          .replace(/^_+|_+$/g, "");
+        link.setAttribute("download", `${safeCustomerName}-${data.order_id}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
       } else {
-        const data = await response.json()
-        setShowLoader(false)
-        showError(data.message || "Booking failed.")
+        const data = await response.json();
+        setShowLoader(false);
+        showError(data.message || "Booking failed.");
       }
     } catch (err) {
-      console.error("Checkout error:", err)
-      setShowLoader(false)
-      showError("Something went wrong during checkout.")
+      console.error("Checkout error:", err);
+      setShowLoader(false);
+      showError("Something went wrong during checkout.");
     }
-  }
+  };
 
   const handleRocketComplete = () => {
-    setShowLoader(false)
-    setIsCartOpen(false)
-    setShowModal(false)
-    setShowDetailsModal(false)
-    setShowMinOrderModal(false)
-    setCart({})
+    setShowLoader(false);
+    setIsCartOpen(false);
+    setShowModal(false);
+    setShowDetailsModal(false);
+    setShowMinOrderModal(false);
+    setCart({});
     setCustomerDetails({
       customer_name: "",
       address: "",
@@ -228,128 +239,128 @@ const Pricelist = () => {
       mobile_number: "",
       email: "",
       customer_type: "User",
-    })
-    setAppliedPromo(null)
-    setPromocode("")
-    setOriginalTotal(0)
-    setTotalDiscount(0)
+    });
+    setAppliedPromo(null);
+    setPromocode("");
+    setOriginalTotal(0);
+    setTotalDiscount(0);
     setTimeout(() => {
-      setShowToaster(true)
-    }, 500)
-  }
+      setShowToaster(true);
+    }, 500);
+  };
 
   const showError = (message) => {
-    setMinOrderMessage(message)
-    setShowMinOrderModal(true)
-    setTimeout(() => setShowMinOrderModal(false), 5000)
-  }
+    setMinOrderMessage(message);
+    setShowMinOrderModal(true);
+    setTimeout(() => setShowMinOrderModal(false), 5000);
+  };
 
   const handleCheckoutClick = () =>
-    Object.keys(cart).length ? (setShowModal(true), setIsCartOpen(false)) : showError("Your cart is empty.")
+    Object.keys(cart).length ? (setShowModal(true), setIsCartOpen(false)) : showError("Your cart is empty.");
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target
+    const { name, value } = e.target;
     if (name === "mobile_number") {
-      const cleaned = value.replace(/\D/g, "").slice(-10)
-      setCustomerDetails((prev) => ({ ...prev, [name]: cleaned }))
+      const cleaned = value.replace(/\D/g, "").slice(-10);
+      setCustomerDetails((prev) => ({ ...prev, [name]: cleaned }));
     } else {
-      setCustomerDetails((prev) => ({ ...prev, [name]: value }))
+      setCustomerDetails((prev) => ({ ...prev, [name]: value }));
     }
-  }
+  };
 
   const handleShowDetails = useCallback((product) => {
-    setSelectedProduct(product)
-    setShowDetailsModal(true)
-  }, [])
+    setSelectedProduct(product);
+    setShowDetailsModal(true);
+  }, []);
 
   const handleCloseDetails = useCallback(() => {
-    setSelectedProduct(null)
-    setShowDetailsModal(false)
-  }, [])
+    setSelectedProduct(null);
+    setShowDetailsModal(false);
+  }, []);
 
   const handleImageClick = useCallback((media) => {
-    const mediaItems = media && typeof media === "string" ? JSON.parse(media) : Array.isArray(media) ? media : []
-    setSelectedImages(mediaItems)
-    setCurrentImageIndex(0)
-    setShowImageModal(true)
-  }, [])
+    const mediaItems = Array.isArray(media) ? media : [];
+    setSelectedImages(mediaItems);
+    setCurrentImageIndex(0);
+    setShowImageModal(true);
+  }, []);
 
   const handleCloseImageModal = useCallback(() => {
-    setShowImageModal(false)
-    setSelectedImages([])
-    setCurrentImageIndex(0)
-  }, [])
+    setShowImageModal(false);
+    setSelectedImages([]);
+    setCurrentImageIndex(0);
+  }, []);
 
   const handleApplyPromo = useCallback(
     async (code) => {
-      if (!code) return setAppliedPromo(null)
+      if (!code) return setAppliedPromo(null);
       try {
-        const res = await fetch(`${API_BASE_URL}/api/promocodes`)
-        const promos = await res.json()
-        const found = promos.find((p) => p.code.toLowerCase() === code.toLowerCase())
+        const res = await fetch(`${API_BASE_URL}/api/promocodes`);
+        const promos = await res.json();
+        const found = promos.find((p) => p.code.toLowerCase() === code.toLowerCase());
         if (!found) {
-          showError("Invalid promocode.")
-          setAppliedPromo(null)
-          return
+          showError("Invalid promocode.");
+          setAppliedPromo(null);
+          return;
         }
         if (found.min_amount && Number.parseFloat(originalTotal) < found.min_amount) {
-          showError(`Minimum order amount for this promocode is ₹${found.min_amount}. Your total is ₹${originalTotal}.`)
-          setAppliedPromo(null)
-          return
+          showError(`Minimum order amount for this promocode is ₹${found.min_amount}. Your total is ₹${originalTotal}.`);
+          setAppliedPromo(null);
+          return;
         }
         if (found.end_date && new Date(found.end_date) < new Date()) {
-          showError("This promocode has expired.")
-          setAppliedPromo(null)
-          return
+          showError("This promocode has expired.");
+          setAppliedPromo(null);
+          return;
         }
-        setAppliedPromo(found)
+        setAppliedPromo(found);
       } catch (err) {
-        console.error("Promo apply error:", err)
-        showError("Could not validate promocode.")
-        setAppliedPromo(null)
+        console.error("Promo apply error:", err);
+        showError("Could not validate promocode.");
+        setAppliedPromo(null);
       }
     },
     [originalTotal],
-  )
+  );
 
   const totals = useMemo(() => {
     let net = 0,
       save = 0,
-      total = 0
+      total = 0;
     for (const serial in cart) {
-      const qty = cart[serial]
-      const product = products.find((p) => p.serial_number === serial)
-      if (!product) continue
-      const originalPrice = Number.parseFloat(product.price)
-      const discount = originalPrice * (product.discount / 100)
-      const priceAfterDiscount = originalPrice - discount
-      net += originalPrice * qty
-      save += discount * qty
-      total += priceAfterDiscount * qty
+      const qty = cart[serial];
+      const product = products.find((p) => p.serial_number === serial);
+      if (!product) continue;
+      const originalPrice = Number.parseFloat(product.price);
+      const discount = originalPrice * (product.discount / 100);
+      const priceAfterDiscount = originalPrice - discount;
+      net += originalPrice * qty;
+      save += discount * qty;
+      total += priceAfterDiscount * qty;
     }
-    setOriginalTotal(total)
-    setTotalDiscount(save)
-    let promoDiscount = 0
+    setOriginalTotal(total);
+    setTotalDiscount(save);
+    let promoDiscount = 0;
     if (appliedPromo) {
-      promoDiscount = (total * appliedPromo.discount) / 100
-      total -= promoDiscount
-      save += promoDiscount
+      promoDiscount = (total * appliedPromo.discount) / 100;
+      total -= promoDiscount;
+      save += promoDiscount;
     }
-    const processingFee = total * 0.03
-    total += processingFee
+    const processingFee = total * 0.03;
+    total += processingFee;
     return {
       net: formatPrice(net),
       save: formatPrice(save),
       total: formatPrice(total),
       promo_discount: formatPrice(promoDiscount),
       processing_fee: formatPrice(processingFee),
-    }
-  }, [cart, products, appliedPromo])
+    };
+  }, [cart, products, appliedPromo]);
 
   const productTypes = useMemo(
     () => ["All", ...new Set(products.map((p) => (p.product_type || "Others").replace(/_/g, " ")).sort())],
     [products],
-  )
+  );
 
   const grouped = useMemo(
     () =>
@@ -363,16 +374,16 @@ const Pricelist = () => {
               p.serial_number.toLowerCase().includes(searchTerm.toLowerCase())),
         )
         .reduce((acc, p) => {
-          const key = p.product_type || "Others"
-          acc[key] = acc[key] || []
-          acc[key].push(p)
-          return acc
+          const key = p.product_type || "Others";
+          acc[key] = acc[key] || [];
+          acc[key].push(p);
+          return acc;
         }, {}),
     [products, selectedType, searchTerm],
-  )
+  );
 
   if (isLoading) {
-    return <LoadingSpinner />
+    return <LoadingSpinner />;
   }
 
   return (
@@ -451,7 +462,7 @@ const Pricelist = () => {
                     <X className="w-5 h-5 text-gray-600" />
                   </motion.button>
                 </div>
-                <ModernCarousel media={selectedProduct.image} onImageClick={handleImageClick} />
+                <ModernCarousel media={selectedProduct.images} onImageClick={handleImageClick} />
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-lg font-semibold text-gray-800 mb-2">Description</h3>
@@ -465,8 +476,8 @@ const Pricelist = () => {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => {
-                        addToCart(selectedProduct)
-                        handleCloseDetails()
+                        addToCart(selectedProduct);
+                        handleCloseDetails();
                       }}
                       className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg flex items-center justify-center gap-2"
                     >
@@ -524,22 +535,18 @@ const Pricelist = () => {
                   </div>
                 ) : (
                   Object.entries(cart).map(([serial, qty]) => {
-                    const product = products.find((p) => p.serial_number === serial)
-                    if (!product) return null
-                    const discount = (product.price * product.discount) / 100
-                    const priceAfterDiscount = formatPrice(product.price - discount)
+                    const product = products.find((p) => p.serial_number === serial);
+                    if (!product) return null;
+                    const discount = (product.price * product.discount) / 100;
+                    const priceAfterDiscount = formatPrice(product.price - discount);
                     const imageSrc =
-                      (product.image && typeof product.image === "string"
-                        ? JSON.parse(product.image)
-                        : Array.isArray(product.image)
-                          ? product.image
-                          : []
+                      (Array.isArray(product.images)
+                        ? product.images
+                        : []
                       ).filter(
                         (item) =>
-                          !item.startsWith("data:video/") &&
-                          !item.startsWith("data:image/gif") &&
-                          !item.toLowerCase().endsWith(".gif"),
-                      )[0] || "/placeholder.svg?height=80&width=80"
+                          !item.includes("/video/") && !item.toLowerCase().endsWith(".gif")
+                      )[0] || "/placeholder.svg?height=80&width=80";
 
                     return (
                       <motion.div
@@ -549,9 +556,10 @@ const Pricelist = () => {
                         className="flex items-center gap-4 p-4 bg-orange-50 rounded-2xl border border-orange-100"
                       >
                         <img
-                          src={imageSrc || "/placeholder.svg"}
+                          src={imageSrc}
                           alt={product.productname}
                           className="w-20 h-20 rounded-xl object-cover bg-white"
+                          onClick={() => handleImageClick(product.images)}
                         />
                         <div className="flex-1">
                           <p className="text-base font-semibold text-gray-800 line-clamp-2">{product.productname}</p>
@@ -582,7 +590,7 @@ const Pricelist = () => {
                           </motion.button>
                         </div>
                       </motion.div>
-                    )
+                    );
                   })
                 )}
               </div>
@@ -699,7 +707,7 @@ const Pricelist = () => {
                     transition={{ duration: 0.3 }}
                     className="relative"
                   >
-                    {selectedImages[currentImageIndex]?.startsWith("data:video/") ? (
+                    {selectedImages[currentImageIndex]?.includes("/video/") ? (
                       <video
                         src={selectedImages[currentImageIndex]}
                         autoPlay
@@ -710,7 +718,8 @@ const Pricelist = () => {
                     ) : (
                       <img
                         src={
-                          selectedImages[currentImageIndex] || "/placeholder.svg?height=600&width=800&query=firecracker"
+                          selectedImages[currentImageIndex] ||
+                          "/placeholder.svg?height=600&width=800&query=firecracker"
                         }
                         alt="Product Image"
                         className="w-full max-h-[80vh] object-contain rounded-2xl"
@@ -766,7 +775,7 @@ const Pricelist = () => {
                           index === currentImageIndex ? "border-orange-400" : "border-white/30 hover:border-white/60"
                         }`}
                       >
-                        {image?.startsWith("data:video/") ? (
+                        {image?.includes("/video/") ? (
                           <video src={image} className="w-full h-full object-cover" />
                         ) : (
                           <img
@@ -828,12 +837,12 @@ const Pricelist = () => {
             </div>
             <div className="grid mobile:grid-cols-2 hundred:grid-cols-4 onefifty:grid-cols-3 gap-6">
               {items.map((product) => {
-                if (!product) return null
-                const originalPrice = Number.parseFloat(product.price)
-                const discount = originalPrice * (product.discount / 100)
+                if (!product) return null;
+                const originalPrice = Number.parseFloat(product.price);
+                const discount = originalPrice * (product.discount / 100);
                 const finalPrice =
-                  product.discount > 0 ? formatPrice(originalPrice - discount) : formatPrice(originalPrice)
-                const count = cart[product.serial_number] || 0
+                  product.discount > 0 ? formatPrice(originalPrice - discount) : formatPrice(originalPrice);
+                const count = cart[product.serial_number] || 0;
                 return (
                   <motion.div
                     key={product.serial_number}
@@ -843,7 +852,7 @@ const Pricelist = () => {
                     className="group bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-orange-100"
                   >
                     <div className="relative">
-                      <ModernCarousel media={product.image} onImageClick={handleImageClick} />
+                      <ModernCarousel media={product.images} onImageClick={handleImageClick} />
                       {product.discount > 0 && (
                         <div className="absolute top-4 left-4 bg-red-500 text-white text-sm font-bold px-3 py-1 rounded-full shadow-lg">
                           {product.discount}% OFF
@@ -918,7 +927,7 @@ const Pricelist = () => {
                       </div>
                     </div>
                   </motion.div>
-                )
+                );
               })}
             </div>
           </motion.div>
@@ -1106,7 +1115,7 @@ const Pricelist = () => {
         }
       `}</style>
     </>
-  )
-}
+  );
+};
 
-export default Pricelist
+export default Pricelist;

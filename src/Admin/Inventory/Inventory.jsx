@@ -84,7 +84,7 @@ export default function Inventory() {
 
   const handleImageChange = (event) => {
     const files = Array.from(event.target.files);
-    const allowedImageTypes = ['image JPEG', 'image/png', 'image/gif', 'image/jpg'];
+    const allowedImageTypes = ['image/jpeg', 'image/png', 'image/gif'];
     const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/ogg'];
     const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
 
@@ -111,7 +111,7 @@ export default function Inventory() {
 
   const handleProductTypeChange = (event) => {
     setProductType(event.target.value);
-    setValues({});
+    setValues({ description: '' });
     setFocused({});
     setImages([]);
     setError('');
@@ -149,7 +149,6 @@ export default function Inventory() {
       setError(err.message);
     }
   };
-
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
@@ -161,47 +160,42 @@ export default function Inventory() {
       return;
     }
 
-    let imageBase64Array = [];
+    const formData = new FormData();
+    formData.append('serial_number', values.serialNum);
+    formData.append('productname', values.productName);
+    formData.append('price', values.price);
+    formData.append('per', values.per);
+    formData.append('discount', values.discount);
+    formData.append('description', values.description || '');
+    formData.append('product_type', productType);
+
     if (Array.isArray(images) && images.length > 0) {
-      for (const file of images) {
-        const base64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        imageBase64Array.push(base64);
-      }
+      images.forEach(file => formData.append('images', file));
     }
-  
-    const payload = {
-      serial_number: values.serialNum,
-      productname: values.productName,
-      price: values.price,
-      per: values.per,
-      discount: values.discount,
-      description: values.description || '',
-      product_type: productType,
-      images: imageBase64Array.length ? imageBase64Array : null,
-    };
+
+    console.log('FormData contents:');
+    for (let [key, value] of formData.entries()) {
+      console.log(`${key}: ${value instanceof File ? value.name : value}`);
+    }
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/products`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: formData,
       });
 
       const result = await response.json();
-      if (!response.ok) throw new Error(result.message || 'Failed to save product');
+      if (!response.ok) throw new Error(result.error || result.message || 'Failed to save product');
 
       setSuccess('Product saved successfully!');
-      setValues({});
+      setValues({ description: '' });
       setImages([]);
+      setFocused({});
       setDiscountWarning('');
-      event.target.reset(); // This will now work as event.target is the form
+      event.target.reset();
     } catch (err) {
-      setError(err.message);
+      console.error('Submission error:', err);
+      setError(`Failed to save product: ${err.message}`);
     }
   };
 
@@ -225,6 +219,7 @@ export default function Inventory() {
             <input
               type="text"
               id={`serial-num-${productType}`}
+              name="serialNum"
               required
               value={values.serialNum || ''}
               onChange={(e) => handleChange('serialNum', e)}
@@ -243,6 +238,7 @@ export default function Inventory() {
             <input
               type="text"
               id="product-name"
+              name="productName"
               required
               value={values.productName || ''}
               onChange={(e) => handleChange('productName', e)}
@@ -261,6 +257,7 @@ export default function Inventory() {
             <input
               type="number"
               id="price"
+              name="price"
               required
               min="0"
               step="0.01"
@@ -280,6 +277,7 @@ export default function Inventory() {
           <div className="mt-2">
             <select
               id="per"
+              name="per"
               required
               value={values.per || ''}
               onChange={(e) => handleChange('per', e)}
@@ -303,6 +301,7 @@ export default function Inventory() {
             <input
               type="number"
               id="discount"
+              name="discount"
               required
               min="0"
               max="100"
@@ -326,6 +325,7 @@ export default function Inventory() {
           <div className="mt-2">
             <textarea
               id="description"
+              name="description"
               rows="3"
               value={values.description || ''}
               onChange={(e) => handleChange('description', e)}
@@ -345,6 +345,7 @@ export default function Inventory() {
             <input
               type="file"
               id="image"
+              name="images"
               accept="image/jpeg,image/png,image/gif,video/mp4,video/webm,video/ogg"
               multiple
               onChange={handleImageChange}
@@ -427,9 +428,10 @@ export default function Inventory() {
                     type="button"
                     className="text-sm cursor-pointer font-semibold text-gray-900 dark:text-gray-100"
                     onClick={() => {
-                      setValues({});
+                      setValues({ description: '' });
                       setImages([]);
                       setProductType('');
+                      setFocused({});
                       setDiscountWarning('');
                     }}
                   >

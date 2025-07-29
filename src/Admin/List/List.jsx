@@ -6,7 +6,7 @@ import { API_BASE_URL } from '../../../Config';
 import { FaEye, FaEdit, FaTrash, FaArrowLeft, FaArrowRight, FaExclamationTriangle } from 'react-icons/fa';
 import Logout from '../Logout';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable'; // Explicit import of autoTable
+import autoTable from 'jspdf-autotable';
 
 Modal.setAppElement('#root');
 
@@ -34,7 +34,7 @@ export default function List() {
     product_type: '',
     description: '',
     box_count: 1,
-    images: [],
+    images: [], // Will store Cloudinary URLs after upload
   });
   const productsPerPage = 9;
 
@@ -75,11 +75,11 @@ export default function List() {
   );
 
   const fetchProducts = () => fetchData(`${API_BASE_URL}/api/products`, 'Failed to fetch products', data => {
-    const normalizedData = data
+    const normalizedData = data.data // Adjusted to access data.data based on getProducts response structure
       .filter(product => product.product_type !== 'gift_box_dealers')
       .map(product => ({
         ...product,
-        images: product.image ? (Array.isArray(JSON.parse(product.image)) ? JSON.parse(product.image) : [product.image]) : [],
+        images: product.image ? (typeof product.image === 'string' ? JSON.parse(product.image) : product.image) : [],
         box_count: product.box_count || 1,
       }))
       .sort((a, b) => a.serial_number.localeCompare(b.serial_number));
@@ -118,21 +118,40 @@ export default function List() {
     setCurrentPage(1);
   }, [filterType, products]);
 
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
     const files = Array.from(e.target.files).slice(0, 5);
     const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'video/mp4', 'video/webm', 'video/ogg'];
     const maxSize = 5 * 1024 * 1024;
-    if (files.some(file => !allowedTypes.includes(file.type))) return setError('Only JPG, PNG, GIF, MP4, WebM, or Ogg files allowed');
-    if (files.some(file => file.size > maxSize)) return setError('Each file must be less than 5MB');
-    Promise.all(files.map(file => new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    }))).then(base64Files => {
+    if (files.some(file => !allowedTypes.includes(file.type))) {
+      setError('Only JPG, PNG, GIF, MP4, WebM, or Ogg files allowed');
+      return;
+    }
+    if (files.some(file => file.size > maxSize)) {
+      setError('Each file must be less than 5MB');
+      return;
+    }
+
+    try {
+      const uploadPromises = files.map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', 'your_upload_preset'); // Replace with your Cloudinary upload preset
+
+        const response = await fetch('https://api.cloudinary.com/v1_1/dodvn6aqi/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error?.message || 'Failed to upload file');
+        return data.secure_url;
+      });
+
+      const uploadedUrls = await Promise.all(uploadPromises);
       setError('');
-      setFormData(prev => ({ ...prev, images: base64Files }));
-    }).catch(() => setError('Failed to read files'));
+      setFormData(prev => ({ ...prev, images: uploadedUrls }));
+    } catch (err) {
+      setError('Failed to upload files to Cloudinary: ' + err.message);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -203,6 +222,17 @@ export default function List() {
       fetchProducts();
       closeModal();
       e.target.reset();
+      setFormData({
+        productname: '',
+        serial_number: '',
+        price: '',
+        discount: '',
+        per: '',
+        product_type: '',
+        description: '',
+        box_count: 1,
+        images: [],
+      });
     } catch (err) {
       setError(err.message);
     }
@@ -233,7 +263,17 @@ export default function List() {
     setProductToDelete(null);
     setError('');
     setDiscountWarning('');
-    setFormData({ productname: '', serial_number: '', price: '', discount: '', per: '', product_type: '', description: '', box_count: 1, images: [] });
+    setFormData({
+      productname: '',
+      serial_number: '',
+      price: '',
+      discount: '',
+      per: '',
+      product_type: '',
+      description: '',
+      box_count: 1,
+      images: [],
+    });
   };
 
   const capitalize = str => str ? str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : '';
@@ -249,7 +289,6 @@ export default function List() {
       const pageWidth = doc.internal.pageSize.getWidth();
       let yOffset = 20;
 
-      // Header
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
       doc.text('Madhu Nisha CRACKERS', pageWidth / 2, yOffset, { align: 'center' });
@@ -261,7 +300,6 @@ export default function List() {
       doc.text('Retail Pricelist - 2025', pageWidth / 2, yOffset, { align: 'center' });
       yOffset += 20;
 
-      // Table data
       const tableData = [];
       productTypes.forEach(type => {
         const typeProducts = products.filter(product => product.product_type === type);
@@ -276,11 +314,10 @@ export default function List() {
               product.per,
             ]);
           });
-          tableData.push([]); // Empty row for spacing
+          tableData.push([]);
         }
       });
 
-      // Generate table
       autoTable(doc, {
         startY: yOffset,
         head: [['SL.NO', 'Product Name', 'Rate', 'Per']],
@@ -289,10 +326,10 @@ export default function List() {
         styles: { fontSize: 10, cellPadding: 3 },
         headStyles: { fillColor: [100, 100, 100], textColor: [255, 255, 255] },
         columnStyles: {
-          0: { cellWidth: 20 }, // SL.NO
-          1: { cellWidth: 80 }, // Product Name
-          2: { cellWidth: 40 }, // Rate
-          3: { cellWidth: 30 }, // Per
+          0: { cellWidth: 20 },
+          1: { cellWidth: 80 },
+          2: { cellWidth: 40 },
+          3: { cellWidth: 30 },
         },
         didDrawCell: (data) => {
           if (data.row.section === 'body' && data.cell.raw && data.cell.raw.colSpan === 4) {
@@ -308,15 +345,14 @@ export default function List() {
     }
   };
 
-  const renderMedia = (media, idx, sizeClass) => (
-    media.startsWith('data:video/') ? (
+  const renderMedia = (media, idx, sizeClass) => {
+    const isVideo = media.includes('/video/');
+    return isVideo ? (
       <video key={idx} src={media} controls className={`${sizeClass} object-cover rounded-md inline-block mx-1`} />
-    ) : media.startsWith('data:image/') ? (
-      <img key={idx} src={media} alt={`media-${idx}`} className={`${sizeClass} object-cover rounded-md inline-block mx-1`} />
     ) : (
-      <span key={idx} className="text-xs text-gray-500 dark:text-gray-400">Unsupported format</span>
-    )
-  );
+      <img key={idx} src={media} alt={`media-${idx}`} className={`${sizeClass} object-cover rounded-md inline-block mx-1`} />
+    );
+  };
 
   const renderModalForm = (isEdit) => (
     <div className="bg-white dark:bg-gray-900 rounded-lg p-6 mobile:p-3 max-w-md w-full sm:max-w-lg">
