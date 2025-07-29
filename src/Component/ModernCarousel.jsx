@@ -8,21 +8,34 @@ const ModernCarousel = ({ media, onImageClick }) => {
   const [currentIndex, setCurrentIndex] = useState(0)
 
   const mediaItems = useMemo(() => {
+    // Parse media if it's a JSON string, or use as is if it's an array
     const items = media && typeof media === "string" ? JSON.parse(media) : Array.isArray(media) ? media : []
     return items.sort((a, b) => {
-      const aStr = typeof a === "string" ? a : ""
-      const bStr = typeof b === "string" ? b : ""
-      const isAVideo = aStr.startsWith("data:video/")
-      const isBVideo = bStr.startsWith("data:video/")
-      const isAGif = aStr.startsWith("data:image/gif") || aStr.toLowerCase().endsWith(".gif")
-      const isBGif = bStr.startsWith("data:image/gif") || bStr.toLowerCase().endsWith(".gif")
-      const isAImage = aStr.startsWith("data:image/") && !isAGif
-      const isBImage = bStr.startsWith("data:image/") && !isBGif
+      const aStr = typeof a === "string" ? a.toLowerCase() : ""
+      const bStr = typeof b === "string" ? b.toLowerCase() : ""
+      // Check for Cloudinary video URLs (containing '/video/' or specific extensions)
+      const isAVideo = aStr.includes('/video/') || aStr.endsWith('.mp4') || aStr.endsWith('.webm') || aStr.endsWith('.ogg')
+      const isBVideo = bStr.includes('/video/') || bStr.endsWith('.mp4') || bStr.endsWith('.webm') || bStr.endsWith('.ogg')
+      // Check for GIFs (by extension or URL pattern)
+      const isAGif = aStr.endsWith('.gif')
+      const isBGif = bStr.endsWith('.gif')
+      // Images are anything else (typically .jpg, .jpeg, .png)
+      const isAImage = !isAVideo && !isAGif
+      const isBImage = !isBVideo && !isBGif
+      // Sort: Images first (0), GIFs second (1), Videos third (2)
       return (isAImage ? 0 : isAGif ? 1 : isAVideo ? 2 : 3) - (isBImage ? 0 : isBGif ? 1 : isBVideo ? 2 : 3)
     })
   }, [media])
 
-  const isVideo = (item) => typeof item === "string" && item.startsWith("data:video/")
+  const isVideo = (item) => {
+    // Check if the item is a string and contains Cloudinary video URL pattern or video extensions
+    return typeof item === "string" && (
+      item.includes('/video/') ||
+      item.toLowerCase().endsWith('.mp4') ||
+      item.toLowerCase().endsWith('.webm') ||
+      item.toLowerCase().endsWith('.ogg')
+    )
+  }
 
   const handlers = useSwipeable({
     onSwipedLeft: () => setCurrentIndex((prev) => (prev === mediaItems.length - 1 ? 0 : prev + 1)),
@@ -71,6 +84,9 @@ const ModernCarousel = ({ media, onImageClick }) => {
               src={mediaItems[currentIndex] || "/placeholder.svg?height=192&width=300&query=firecracker"}
               alt="Product"
               className="w-full h-full object-cover rounded-2xl"
+              onError={(e) => {
+                e.target.src = "/placeholder.svg?height=192&width=300&query=firecracker"
+              }}
             />
           )}
         </motion.div>

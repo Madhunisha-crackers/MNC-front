@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../Sidebar/Sidebar';
 import { API_BASE_URL } from '../../../Config';
-import { FaPlus } from 'react-icons/fa';
+import { FaPlus, FaTrash } from 'react-icons/fa';
+import { X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Logout from '../Logout';
 
 export default function Inventory() {
@@ -14,24 +16,26 @@ export default function Inventory() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [discountWarning, setDiscountWarning] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [productTypeToDelete, setProductTypeToDelete] = useState(null);
 
   const styles = {
-    input: { 
-      background: "linear-gradient(135deg, rgba(255,255,255,0.8), rgba(240,249,255,0.6))", 
+    input: {
+      background: "linear-gradient(135deg, rgba(255,255,255,0.8), rgba(240,249,255,0.6))",
       backgroundDark: "linear-gradient(135deg, rgba(55,65,81,0.8), rgba(75,85,99,0.6))",
-      backdropFilter: "blur(10px)", 
-      border: "1px solid rgba(2,132,199,0.3)", 
-      borderDark: "1px solid rgba(59,130,246,0.4)"
+      backdropFilter: "blur(10px)",
+      border: "1px solid rgba(2,132,199,0.3)",
+      borderDark: "1px solid rgba(59,130,246,0.4)",
     },
-    button: { 
-      background: "linear-gradient(135deg, rgba(2,132,199,0.9), rgba(14,165,233,0.95))", 
+    button: {
+      background: "linear-gradient(135deg, rgba(2,132,199,0.9), rgba(14,165,233,0.95))",
       backgroundDark: "linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.95))",
-      backdropFilter: "blur(15px)", 
-      border: "1px solid rgba(125,211,252,0.4)", 
+      backdropFilter: "blur(15px)",
+      border: "1px solid rgba(125,211,252,0.4)",
       borderDark: "1px solid rgba(147,197,253,0.4)",
       boxShadow: "0 15px 35px rgba(2,132,199,0.3), inset 0 1px 0 rgba(255,255,255,0.2)",
-      boxShadowDark: "0 15px 35px rgba(59,130,246,0.4), inset 0 1px 0 rgba(255,255,255,0.1)"
-    }
+      boxShadowDark: "0 15px 35px rgba(59,130,246,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
+    },
   };
 
   const fetchProductTypes = async () => {
@@ -84,7 +88,7 @@ export default function Inventory() {
 
   const handleImageChange = (event) => {
     const files = Array.from(event.target.files);
-    const allowedImageTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
     const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/ogg'];
     const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
 
@@ -149,6 +153,33 @@ export default function Inventory() {
       setError(err.message);
     }
   };
+
+  const handleDeleteProductType = async () => {
+    if (!productTypeToDelete) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/product-types/${productTypeToDelete}`, {
+        method: 'DELETE',
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Failed to delete product type');
+      setProductTypes(productTypes.filter((type) => type !== productTypeToDelete));
+      setSuccess('Product type deleted successfully!');
+      setError('');
+      if (productType === productTypeToDelete) {
+        setProductType('');
+        setValues({ description: '' });
+        setImages([]);
+        setFocused({});
+        setDiscountWarning('');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setShowDeleteModal(false);
+      setProductTypeToDelete(null);
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
@@ -171,11 +202,6 @@ export default function Inventory() {
 
     if (Array.isArray(images) && images.length > 0) {
       images.forEach(file => formData.append('images', file));
-    }
-
-    console.log('FormData contents:');
-    for (let [key, value] of formData.entries()) {
-      console.log(`${key}: ${value instanceof File ? value.name : value}`);
     }
 
     try {
@@ -368,6 +394,7 @@ export default function Inventory() {
           {success && <div className="mb-4 text-green-600 dark:text-green-400 text-sm text-center">{success}</div>}
           <div className="space-y-8">
             <div className="border-b border-gray-900/10 dark:border-gray-700 pb-8">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Product Types</h3>
               <div className="mt-6 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
                 <div className="sm:col-span-4">
                   <label htmlFor="new-product-type" className="block text-sm font-medium text-gray-900 dark:text-gray-300">
@@ -383,14 +410,16 @@ export default function Inventory() {
                       style={{ background: styles.input.background, backgroundDark: styles.input.backgroundDark, border: styles.input.border, borderDark: styles.input.borderDark, backdropFilter: styles.input.backdropFilter }}
                       placeholder="Enter product type name"
                     />
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
                       type="button"
                       onClick={handleCreateProductType}
-                      className="rounded-full w-8 h-7 flex justify-center items-center text-white dark:text-gray-100 font-semibold shadow-xs hover:bg-gray-900 dark:hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:focus-visible:outline-blue-500"
+                      className="rounded-full w-8 h-7 flex justify-center items-center text-white dark:text-gray-100 font-semibold shadow-xs"
                       style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
                     >
                       <FaPlus className="h-4 w-4" />
-                    </button>
+                    </motion.button>
                   </div>
                 </div>
                 <div className="sm:col-span-4">
@@ -415,6 +444,31 @@ export default function Inventory() {
                   </div>
                 </div>
               </div>
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-gray-300 mb-2">Existing Product Types</h4>
+                {productTypes.length === 0 ? (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">No product types available.</p>
+                ) : (
+                  <ul className="space-y-2 grid hundred:grid-cols-3 onefifty:grid-cols-3 mobile:grid-cols-3">
+                    {productTypes.map(type => (
+                      <li key={type} className="flex items-center justify-between bg-white dark:bg-gray-800 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                        <span className="text-sm text-gray-900 dark:text-gray-100">{formatProductTypeDisplay(type)}</span>
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => {
+                            setProductTypeToDelete(type);
+                            setShowDeleteModal(true);
+                          }}
+                          className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                        >
+                          <FaTrash className="h-4 w-4" />
+                        </motion.button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
             {productType ? (
               <form onSubmit={handleSubmit}>
@@ -437,13 +491,15 @@ export default function Inventory() {
                   >
                     Cancel
                   </button>
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     type="submit"
-                    className="rounded-md cursor-pointer text-white dark:text-gray-100 px-3 py-2 text-sm font-semibold shadow-xs hover:bg-gray-900 dark:hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:focus-visible:outline-blue-500"
+                    className="rounded-md cursor-pointer text-white dark:text-gray-100 px-3 py-2 text-sm font-semibold shadow-xs"
                     style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
                   >
                     Save
-                  </button>
+                  </motion.button>
                 </div>
               </form>
             ) : (
@@ -454,6 +510,51 @@ export default function Inventory() {
               </div>
             )}
           </div>
+          <AnimatePresence>
+            {showDeleteModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm"
+                onClick={() => setShowDeleteModal(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.8, opacity: 0 }}
+                  className="bg-white dark:bg-gray-800 rounded-3xl p-8 max-w-md mx-4 text-center shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FaTrash className="w-8 h-8 text-red-500" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">Confirm Deletion</h3>
+                  <p className="text-gray-600 dark:text-gray-300 mb-6">
+                    Are you sure you want to delete the product type "{formatProductTypeDisplay(productTypeToDelete)}"? This action cannot be undone.
+                  </p>
+                  <div className="flex gap-3">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setShowDeleteModal(false)}
+                      className="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-100 font-semibold px-6 py-3 rounded-2xl"
+                    >
+                      Cancel
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleDeleteProductType}
+                      className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold px-6 py-3 rounded-2xl"
+                    >
+                      Delete
+                    </motion.button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
       <style>{`

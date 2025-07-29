@@ -15,7 +15,7 @@ const Pricelist = () => {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState({});
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [showModal, setShowModal] = useState(false);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showMinOrderModal, setShowMinOrderModal] = useState(false);
   const [minOrderMessage, setMinOrderMessage] = useState("");
@@ -69,9 +69,28 @@ const Pricelist = () => {
           promocodesRes.json(),
         ]);
         setStates(Array.isArray(statesData) ? statesData : []);
-        // Parse image field as JSON if string, otherwise use as is
+
+        // Natural sort function for case-insensitive sorting with numeric handling
+        const naturalSort = (a, b) => {
+          const collator = new Intl.Collator(undefined, {
+            numeric: true,
+            sensitivity: "base",
+          });
+          return collator.compare(a.productname, b.productname);
+        };
+
+        // Deduplicate and sort products
+        const seenSerials = new Set();
         const normalizedProducts = productsData.data
-          .filter((p) => p.status === "on")
+          .filter((p) => {
+            if (p.status !== "on") return false;
+            if (seenSerials.has(p.serial_number)) {
+              console.warn(`Duplicate serial_number found: ${p.serial_number}`);
+              return false;
+            }
+            seenSerials.add(p.serial_number);
+            return true;
+          })
           .map((product) => ({
             ...product,
             images: product.image
@@ -79,7 +98,9 @@ const Pricelist = () => {
                 ? JSON.parse(product.image)
                 : product.image
               : [],
-          }));
+          }))
+          .sort(naturalSort);
+
         setProducts(normalizedProducts);
         setPromocodes(Array.isArray(promocodesData) ? promocodesData : []);
       } catch (err) {
@@ -140,7 +161,42 @@ const Pricelist = () => {
     });
   }, []);
 
-  const handleFinalCheckout = async () => {
+  // Moved totals above handleFinalCheckout
+  const totals = useMemo(() => {
+    let net = 0,
+      save = 0,
+      total = 0;
+    for (const serial in cart) {
+      const qty = cart[serial];
+      const product = products.find((p) => p.serial_number === serial);
+      if (!product) continue;
+      const originalPrice = Number.parseFloat(product.price);
+      const discount = originalPrice * (product.discount / 100);
+      const priceAfterDiscount = originalPrice - discount;
+      net += originalPrice * qty;
+      save += discount * qty;
+      total += priceAfterDiscount * qty;
+    }
+    setOriginalTotal(total);
+    setTotalDiscount(save);
+    let promoDiscount = 0;
+    if (appliedPromo) {
+      promoDiscount = (total * appliedPromo.discount) / 100;
+      total -= promoDiscount;
+      save += promoDiscount;
+    }
+    const processingFee = total * 0.03;
+    total += processingFee;
+    return {
+      net: formatPrice(net),
+      save: formatPrice(save),
+      total: formatPrice(total),
+      promo_discount: formatPrice(promoDiscount),
+      processing_fee: formatPrice(processingFee),
+    };
+  }, [cart, products, appliedPromo]);
+
+  const handleFinalCheckout = useCallback(async () => {
     const order_id = `ORD-${Date.now()}`;
     const selectedProducts = Object.entries(cart).map(([serial, qty]) => {
       const product = products.find((p) => p.serial_number === serial);
@@ -198,7 +254,9 @@ const Pricelist = () => {
 
       if (response.ok) {
         const data = await response.json();
-        const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: "blob" });
+        const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, {
+          responseType: "blob",
+        });
         const blob = await pdfResponse.blob();
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -222,12 +280,25 @@ const Pricelist = () => {
       setShowLoader(false);
       showError("Something went wrong during checkout.");
     }
-  };
+  }, [cart, products, customerDetails, totals, states, appliedPromo, originalTotal]);
+
+  const handleCheckoutSubmit = useCallback(() => {
+    if (!customerDetails.customer_name) return showError("Customer name is required.");
+    if (!customerDetails.address) return showError("Address is required.");
+    if (!customerDetails.state) return showError("Please select a state.");
+    if (!customerDetails.district) return showError("District is required.");
+    if (!customerDetails.mobile_number) return showError("Mobile number is required.");
+    const mobile = customerDetails.mobile_number.replace(/\D/g, "").slice(-10);
+    if (mobile.length !== 10) return showError("Mobile number must be 10 digits.");
+
+    setShowCheckoutModal(false);
+    handleFinalCheckout();
+  }, [customerDetails, handleFinalCheckout]);
 
   const handleRocketComplete = () => {
     setShowLoader(false);
     setIsCartOpen(false);
-    setShowModal(false);
+    setShowCheckoutModal(false);
     setShowDetailsModal(false);
     setShowMinOrderModal(false);
     setCart({});
@@ -255,8 +326,14 @@ const Pricelist = () => {
     setTimeout(() => setShowMinOrderModal(false), 5000);
   };
 
-  const handleCheckoutClick = () =>
-    Object.keys(cart).length ? (setShowModal(true), setIsCartOpen(false)) : showError("Your cart is empty.");
+  const handleCheckoutClick = () => {
+    if (Object.keys(cart).length) {
+      setShowCheckoutModal(true);
+      setIsCartOpen(false);
+    } else {
+      showError("Your cart is empty.");
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -323,40 +400,6 @@ const Pricelist = () => {
     [originalTotal],
   );
 
-  const totals = useMemo(() => {
-    let net = 0,
-      save = 0,
-      total = 0;
-    for (const serial in cart) {
-      const qty = cart[serial];
-      const product = products.find((p) => p.serial_number === serial);
-      if (!product) continue;
-      const originalPrice = Number.parseFloat(product.price);
-      const discount = originalPrice * (product.discount / 100);
-      const priceAfterDiscount = originalPrice - discount;
-      net += originalPrice * qty;
-      save += discount * qty;
-      total += priceAfterDiscount * qty;
-    }
-    setOriginalTotal(total);
-    setTotalDiscount(save);
-    let promoDiscount = 0;
-    if (appliedPromo) {
-      promoDiscount = (total * appliedPromo.discount) / 100;
-      total -= promoDiscount;
-      save += promoDiscount;
-    }
-    const processingFee = total * 0.03;
-    total += processingFee;
-    return {
-      net: formatPrice(net),
-      save: formatPrice(save),
-      total: formatPrice(total),
-      promo_discount: formatPrice(promoDiscount),
-      processing_fee: formatPrice(processingFee),
-    };
-  }, [cart, products, appliedPromo]);
-
   const productTypes = useMemo(
     () => ["All", ...new Set(products.map((p) => (p.product_type || "Others").replace(/_/g, " ")).sort())],
     [products],
@@ -419,6 +462,150 @@ const Pricelist = () => {
               >
                 Got it
               </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+        {showCheckoutModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm"
+            onClick={() => setShowCheckoutModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto p-6"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-gray-800">Enter Your Details</h3>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setShowCheckoutModal(false)}
+                  className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center"
+                >
+                  <X className="w-5 h-5 text-gray-600" />
+                </motion.button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Name *</label>
+                  <input
+                    type="text"
+                    name="customer_name"
+                    value={customerDetails.customer_name}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 mt-1 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400"
+                    placeholder="Enter your name"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Address *</label>
+                  <textarea
+                    name="address"
+                    value={customerDetails.address}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 mt-1 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400"
+                    placeholder="Enter your address"
+                    rows="3"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">State *</label>
+                  <select
+                    name="state"
+                    value={customerDetails.state}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 mt-1 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400"
+                    required
+                  >
+                    <option value="">Select State</option>
+                    {states.map((state) => (
+                      <option key={state.name} value={state.name}>
+                        {state.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">District *</label>
+                  <select
+                    name="district"
+                    value={customerDetails.district}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 mt-1 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400"
+                    required
+                    disabled={!customerDetails.state}
+                  >
+                    <option value="">Select District</option>
+                    {districts.map((district) => (
+                      <option key={district} value={district}>
+                        {district}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Mobile Number *</label>
+                  <input
+                    type="text"
+                    name="mobile_number"
+                    value={customerDetails.mobile_number}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 mt-1 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400"
+                    placeholder="Enter 10-digit mobile number"
+                    pattern="\d{0,10}"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={customerDetails.email}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 mt-1 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400"
+                    placeholder="Enter your email (optional)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Customer Type</label>
+                  <select
+                    name="customer_type"
+                    value={customerDetails.customer_type}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 mt-1 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400"
+                  >
+                    <option value="User">User</option>
+                    <option value="Dealer">Dealer</option>
+                  </select>
+                </div>
+                <div className="flex gap-3 mt-6">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowCheckoutModal(false)}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl"
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleCheckoutSubmit}
+                    className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg"
+                  >
+                    Confirm & Checkout
+                  </motion.button>
+                </div>
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -511,7 +698,7 @@ const Pricelist = () => {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.8, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl mobile:max-w-md mobile:w-[90%] onefifty:max-w-[40%] mx-4 max-h-[90vh] flex flex-col"
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl mobile:max-w-[90%] onefifty:max-w-[40%] mx-4 max-h-[90vh] flex flex-col"
             >
               <div className="flex justify-between items-center p-6 border-b border-orange-100">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -539,14 +726,11 @@ const Pricelist = () => {
                     if (!product) return null;
                     const discount = (product.price * product.discount) / 100;
                     const priceAfterDiscount = formatPrice(product.price - discount);
-                    const imageSrc =
-                      (Array.isArray(product.images)
-                        ? product.images
-                        : []
-                      ).filter(
-                        (item) =>
-                          !item.includes("/video/") && !item.toLowerCase().endsWith(".gif")
-                      )[0] || "/placeholder.svg?height=80&width=80";
+                    const imageSrc = (
+                      Array.isArray(product.images) ? product.images : []
+                    ).filter(
+                      (item) => !item.includes("/video/") && !item.toLowerCase().endsWith(".gif")
+                    )[0] || "/placeholder.svg?height=80&width=80";
 
                     return (
                       <motion.div
@@ -562,7 +746,9 @@ const Pricelist = () => {
                           onClick={() => handleImageClick(product.images)}
                         />
                         <div className="flex-1">
-                          <p className="text-base font-semibold text-gray-800 line-clamp-2">{product.productname}</p>
+                          <p className="text-base font-semibold text-gray-800 line-clamp-2">
+                            {product.productname}
+                          </p>
                           <p className="text-sm text-orange-600 font-bold">
                             ₹{priceAfterDiscount} x {qty}
                           </p>
@@ -632,7 +818,8 @@ const Pricelist = () => {
                     <p className="text-green-600 text-xs mt-1">
                       Applied: {appliedPromo.code} ({appliedPromo.discount}% OFF)
                       {appliedPromo.min_amount && `, Min: ₹${appliedPromo.min_amount}`}
-                      {appliedPromo.end_date && `, Expires: ${new Date(appliedPromo.end_date).toLocaleDateString()}`}
+                      {appliedPromo.end_date &&
+                        `, Expires: ${new Date(appliedPromo.end_date).toLocaleDateString()}`}
                     </p>
                   )}
                 </div>
@@ -768,7 +955,7 @@ const Pricelist = () => {
                   <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 max-w-md overflow-x-auto p-2">
                     {selectedImages.map((image, index) => (
                       <motion.button
-                        key={index}
+                        key={image}
                         whileHover={{ scale: 1.1 }}
                         onClick={() => setCurrentImageIndex(index)}
                         className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
@@ -794,20 +981,20 @@ const Pricelist = () => {
         )}
       </AnimatePresence>
 
-      <main className="pt-28 px-4 sm:px-8 max-w-7xl mx-auto">
+      <main className="hundred:pt-30 mobile:pt-2 onefifty:pt-5 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col sm:flex-row gap-4 mb-8 mobile:-mt-20"
+          className="mb-8 grid grid-cols-1 sm:grid-cols-2 gap-4"
         >
-          <div className="relative flex-1">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
               placeholder="Search by name or serial number..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent shadow-sm"
+              className="w-full pl-10 pr-4 py-3 bg-white border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent shadow-sm text-sm sm:text-base"
             />
           </div>
           <div className="relative">
@@ -815,7 +1002,7 @@ const Pricelist = () => {
             <select
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value)}
-              className="pl-10 pr-8 py-3 bg-white border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent shadow-sm appearance-none cursor-pointer min-w-[200px]"
+              className="w-full pl-10 pr-8 py-3 bg-white border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent shadow-sm appearance-none cursor-pointer text-sm sm:text-base"
             >
               {productTypes.map((type) => (
                 <option key={type} value={type}>
@@ -827,15 +1014,17 @@ const Pricelist = () => {
         </motion.div>
 
         {Object.entries(grouped).map(([type, items]) => (
-          <motion.div key={type} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="mb-16">
-            <div className="flex items-center gap-4 mb-8">
-              <h2 className="text-3xl font-bold text-gray-800 capitalize">{type.replace(/_/g, " ")}</h2>
+          <motion.div key={type} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="mb-12">
+            <div className="flex items-center gap-4 mb-6">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 capitalize">
+                {type.replace(/_/g, " ")}
+              </h2>
               <div className="flex-1 h-1 bg-gradient-to-r from-orange-400 to-transparent rounded-full" />
               <span className="text-orange-600 font-semibold bg-orange-100 px-3 py-1 rounded-full text-sm">
                 {items.length} items
               </span>
             </div>
-            <div className="grid mobile:grid-cols-2 hundred:grid-cols-4 onefifty:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {items.map((product) => {
                 if (!product) return null;
                 const originalPrice = Number.parseFloat(product.price);
@@ -849,12 +1038,12 @@ const Pricelist = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     whileHover={{ y: -8, scale: 1.02 }}
-                    className="group bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-orange-100"
+                    className="group bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-orange-100"
                   >
                     <div className="relative">
                       <ModernCarousel media={product.images} onImageClick={handleImageClick} />
                       {product.discount > 0 && (
-                        <div className="absolute top-4 left-4 bg-red-500 text-white text-sm font-bold px-3 py-1 rounded-full shadow-lg">
+                        <div className="absolute top-4 left-4 bg-red-500 text-white text-xs sm:text-sm font-bold px-2 sm:px-3 py-1 rounded-full shadow-lg">
                           {product.discount}% OFF
                         </div>
                       )}
@@ -862,21 +1051,23 @@ const Pricelist = () => {
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => handleShowDetails(product)}
-                        className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-all"
+                        className="absolute top-4 right-4 w-8 sm:w-10 h-8 sm:h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-all"
                       >
-                        <FaInfoCircle className="text-orange-600" />
+                        <FaInfoCircle className="text-orange-600 w-4 h-4 sm:w-5 sm:h-5" />
                       </motion.button>
                     </div>
-                    <div className="p-6">
-                      <h3 className="text-lg font-bold text-gray-800 mb-3 line-clamp-2 group-hover:text-orange-600">
+                    <div className="p-4 sm:p-6">
+                      <h3 className="text-base sm:text-lg font-bold text-gray-800 mb-2 sm:mb-3 line-clamp-2 group-hover:text-orange-600">
                         {product.productname}
                       </h3>
-                      <div className="flex items-center gap-3 mb-4">
+                      <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                         {product.discount > 0 && (
-                          <span className="text-sm text-gray-500 line-through">₹{formatPrice(originalPrice)}</span>
+                          <span className="text-xs sm:text-sm text-gray-500 line-through">
+                            ₹{formatPrice(originalPrice)}
+                          </span>
                         )}
-                        <span className="text-xl font-bold text-orange-600">₹{finalPrice}</span>
-                        <span className="text-sm text-gray-600">/ {product.per}</span>
+                        <span className="text-lg sm:text-xl font-bold text-orange-600">₹{finalPrice}</span>
+                        <span className="text-xs sm:text-sm text-gray-600">/ {product.per}</span>
                       </div>
                       <div className="flex items-center justify-end">
                         <AnimatePresence mode="wait">
@@ -886,26 +1077,26 @@ const Pricelist = () => {
                               initial={{ scale: 0.8, opacity: 0 }}
                               animate={{ scale: 1, opacity: 1 }}
                               exit={{ scale: 0.8, opacity: 0 }}
-                              className="flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl sm:rounded-2xl p-1.5 sm:p-2"
+                              className="flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-1.5 sm:p-2"
                             >
                               <motion.button
                                 whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.9 }}
                                 onClick={() => removeFromCart(product)}
-                                className="w-6 h-6 sm:w-8 sm:h-8 bg-white/20 rounded-full flex items-center justify-center text-white"
+                                className="w-6 sm:w-8 h-6 sm:h-8 bg-white/20 rounded-full flex items-center justify-center text-white"
                               >
-                                <FaMinus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                                <FaMinus className="w-3 h-3 sm:w-4 sm:h-4" />
                               </motion.button>
-                              <span className="text-white font-bold text-sm sm:text-lg px-1 sm:px-2 w-10 sm:w-16 text-center">
+                              <span className="text-white font-bold text-sm sm:text-base px-1 sm:px-2 w-8 sm:w-10 text-center">
                                 {count}
                               </span>
                               <motion.button
                                 whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.9 }}
                                 onClick={() => addToCart(product)}
-                                className="w-6 h-6 sm:w-8 sm:h-8 bg-white/20 rounded-full flex items-center justify-center text-white"
+                                className="w-6 sm:w-8 h-6 sm:h-8 bg-white/20 rounded-full flex items-center justify-center text-white"
                               >
-                                <FaPlus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                                <FaPlus className="w-3 h-3 sm:w-4 sm:h-4" />
                               </motion.button>
                             </motion.div>
                           ) : (
@@ -917,7 +1108,7 @@ const Pricelist = () => {
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.95 }}
                               onClick={() => addToCart(product)}
-                              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-xl sm:rounded-2xl shadow-lg flex items-center gap-1 sm:gap-2 text-sm sm:text-base"
+                              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl shadow-lg flex items-center gap-1 sm:gap-2 text-sm sm:text-base"
                             >
                               <FaPlus className="w-3 h-3 sm:w-4 sm:h-4" />
                               <span className="hidden sm:inline">Add</span>
@@ -934,159 +1125,20 @@ const Pricelist = () => {
         ))}
       </main>
 
-      <AnimatePresence>
-        {showModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm"
-          >
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto"
-            >
-              <div className="p-6">
-                <h2 className="text-2xl font-bold mb-6 text-gray-800">Customer Details</h2>
-                <div className="space-y-4">
-                  {["customer_name", "address", "mobile_number", "email"].map((field) => (
-                    <input
-                      key={field}
-                      name={field}
-                      type={field === "email" ? "email" : "text"}
-                      placeholder={field.replace(/_/g, " ").toUpperCase()}
-                      value={customerDetails[field]}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent"
-                      required={field !== "email"}
-                    />
-                  ))}
-                  <select
-                    name="state"
-                    value={customerDetails.state}
-                    onChange={(e) => setCustomerDetails((prev) => ({ ...prev, state: e.target.value, district: "" }))}
-                    className="w-full px-4 py-3 border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent"
-                    required
-                  >
-                    <option value="">Select State</option>
-                    {states.map((s) => (
-                      <option key={s.name} value={s.name}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                  {customerDetails.state && (
-                    <select
-                      name="district"
-                      value={customerDetails.district}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent"
-                      required
-                    >
-                      <option value="">Select District</option>
-                      {districts.map((d) => (
-                        <option key={d.id} value={d.name}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Promocode</label>
-                    <select
-                      value={promocode}
-                      onChange={(e) => setPromocode(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400 transition-all duration-300"
-                    >
-                      <option value="">Select Promocode</option>
-                      {promocodes.map((promo) => (
-                        <option key={promo.id} value={promo.code}>
-                          {promo.code} ({promo.discount}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}
-                          {promo.end_date ? `, Exp: ${new Date(promo.end_date).toLocaleDateString()}` : ""})
-                        </option>
-                      ))}
-                      <option value="custom">Enter custom code</option>
-                    </select>
-                    {promocode === "custom" && (
-                      <input
-                        type="text"
-                        value={promocode === "custom" ? "" : promocode}
-                        onChange={(e) => setPromocode(e.target.value)}
-                        placeholder="Enter custom code"
-                        className="w-full px-3 py-2 mt-2 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400 transition-all duration-300"
-                      />
-                    )}
-                    {appliedPromo && (
-                      <p className="text-green-600 text-xs mt-1">
-                        Applied: {appliedPromo.code} ({appliedPromo.discount}% OFF)
-                        {appliedPromo.min_amount && `, Min: ₹${appliedPromo.min_amount}`}
-                        {appliedPromo.end_date && `, Expires: ${new Date(appliedPromo.end_date).toLocaleDateString()}`}
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-700 space-y-2">
-                    <div className="flex justify-between">
-                      <span>Net Total:</span>
-                      <span>₹{totals.net}</span>
-                    </div>
-                    {appliedPromo && (
-                      <div className="flex justify-between text-green-600">
-                        <span>Promocode ({appliedPromo.code}):</span>
-                        <span>-₹{totals.promo_discount}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-green-600">
-                      <span>Discount (promocode included):</span>
-                      <span>-₹{totals.save}</span>
-                    </div>
-                    <div className="flex justify-between text-gray-600">
-                      <span>Processing Fee:</span>
-                      <span>₹{totals.processing_fee}</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-lg text-orange-600 pt-2 border-t border-orange-200">
-                      <span>Total:</span>
-                      <span>₹{totals.total}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-6 flex gap-3">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowModal(false)}
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl"
-                  >
-                    Cancel
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleFinalCheckout}
-                    className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg"
-                  >
-                    Confirm Booking
-                  </motion.button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <motion.button
         onClick={() => setIsCartOpen(true)}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
-        className={`fixed bottom-6 right-6 z-50 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-full shadow-2xl w-16 h-16 flex items-center justify-center ${isCartOpen ? "hidden" : ""}`}
+        className={`fixed bottom-6 right-6 z-50 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-full shadow-2xl w-14 sm:w-16 h-14 sm:h-16 flex items-center justify-center ${
+          isCartOpen ? "hidden" : ""
+        }`}
       >
-        <ShoppingCart className="w-6 h-6" />
+        <ShoppingCart className="w-5 sm:w-6 h-5 sm:h-6" />
         {Object.keys(cart).length > 0 && (
           <motion.span
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-6 h-6 flex items-center justify-center rounded-full font-bold"
+            className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center rounded-full font-bold"
           >
             {Object.values(cart).reduce((a, b) => a + b, 0)}
           </motion.span>

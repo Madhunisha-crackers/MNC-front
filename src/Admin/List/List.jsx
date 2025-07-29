@@ -34,7 +34,7 @@ export default function List() {
     product_type: '',
     description: '',
     box_count: 1,
-    images: [], // Will store Cloudinary URLs after upload
+    images: [], // Will store File objects for new uploads or URLs for existing images
   });
   const productsPerPage = 9;
 
@@ -75,7 +75,7 @@ export default function List() {
   );
 
   const fetchProducts = () => fetchData(`${API_BASE_URL}/api/products`, 'Failed to fetch products', data => {
-    const normalizedData = data.data // Adjusted to access data.data based on getProducts response structure
+    const normalizedData = data.data
       .filter(product => product.product_type !== 'gift_box_dealers')
       .map(product => ({
         ...product,
@@ -119,32 +119,31 @@ export default function List() {
   }, [filterType, products]);
 
   const handleImageChange = (event) => {
-  const files = Array.from(event.target.files);
-  const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-  const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/ogg'];
-  const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
+    const files = Array.from(event.target.files);
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/ogg'];
+    const allowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
 
-  const validFiles = [];
+    const validFiles = [];
 
-  for (const file of files) {
-    const fileType = file.type.toLowerCase();
-    if (!allowedTypes.includes(fileType)) {
-      setError('Only JPG, PNG, GIF images and MP4, WebM, Ogg videos are allowed');
-      return;
+    for (const file of files) {
+      const fileType = file.type.toLowerCase();
+      if (!allowedTypes.includes(fileType)) {
+        setError('Only JPG, PNG, GIF images and MP4, WebM, Ogg videos are allowed');
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Each file must be less than 5MB');
+        return;
+      }
+
+      validFiles.push(file);
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Each file must be less than 5MB');
-      return;
-    }
-
-    validFiles.push(file);
-  }
-
-  setError('');
-  // Update formData.images using setFormData
-  setFormData(prev => ({ ...prev, images: validFiles }));
-};
+    setError('');
+    setFormData(prev => ({ ...prev, images: validFiles }));
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -196,18 +195,33 @@ export default function List() {
       return;
     }
 
+    const formDataToSend = new FormData();
+    formDataToSend.append('productname', formData.productname);
+    formDataToSend.append('serial_number', formData.serial_number);
+    formDataToSend.append('price', formData.price);
+    formDataToSend.append('per', formData.per);
+    formDataToSend.append('discount', formData.discount);
+    formDataToSend.append('description', formData.description || '');
+    formDataToSend.append('product_type', formData.product_type);
+    formDataToSend.append('box_count', Math.max(1, parseInt(formData.box_count) || 1));
+
+    // Handle images
+    if (isEdit && formData.images.length > 0 && typeof formData.images[0] === 'string') {
+      // If editing and images are URLs (existing images), send them as JSON
+      formDataToSend.append('images', JSON.stringify(formData.images));
+    } else {
+      // If new files are uploaded, append each file
+      formData.images.forEach(file => formDataToSend.append('images', file));
+    }
+
     const url = isEdit
       ? `${API_BASE_URL}/api/products/${selectedProduct.product_type.toLowerCase().replace(/\s+/g, '_')}/${selectedProduct.id}`
       : `${API_BASE_URL}/api/products`;
+
     try {
       const response = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          box_count: Math.max(1, parseInt(formData.box_count) || 1),
-          images: formData.images.length ? formData.images : null,
-        }),
+        body: formDataToSend,
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || `Failed to ${isEdit ? 'update' : 'add'} product`);
@@ -223,7 +237,7 @@ export default function List() {
         product_type: '',
         description: '',
         box_count: 1,
-        image: [],
+        images: [],
       });
     } catch (err) {
       setError(err.message);
@@ -338,44 +352,41 @@ export default function List() {
   };
 
   const renderMedia = (media, idx, sizeClass) => {
-  let src;
-  let isVideo = false;
+    let src;
+    let isVideo = false;
 
-  if (media instanceof File) {
-    // For File objects (form preview), create a temporary URL
-    src = URL.createObjectURL(media);
-    isVideo = media.type.startsWith('video/');
-  } else if (typeof media === 'string') {
-    // For string URLs (fetched products)
-    src = media;
-    isVideo = media.includes('/video/');
-  } else {
-    // Fallback for invalid media
-    return <span key={idx} className="text-gray-500 dark:text-gray-400 text-sm">Invalid media</span>;
-  }
+    if (media instanceof File) {
+      src = URL.createObjectURL(media);
+      isVideo = media.type.startsWith('video/');
+    } else if (typeof media === 'string') {
+      src = media;
+      isVideo = media.includes('/video/');
+    } else {
+      return <span key={idx} className="text-gray-500 dark:text-gray-400 text-sm">Invalid media</span>;
+    }
 
-  return isVideo ? (
-    <video
-      key={idx}
-      src={src}
-      controls
-      className={`${sizeClass} object-cover rounded-md inline-block mx-1`}
-      onLoad={() => {
-        if (media instanceof File) URL.revokeObjectURL(src); // Clean up temporary URL
-      }}
-    />
-  ) : (
-    <img
-      key={idx}
-      src={src}
-      alt={`media-${idx}`}
-      className={`${sizeClass} object-cover rounded-md inline-block mx-1`}
-      onLoad={() => {
-        if (media instanceof File) URL.revokeObjectURL(src); // Clean up temporary URL
-      }}
-    />
-  );
-};
+    return isVideo ? (
+      <video
+        key={idx}
+        src={src}
+        controls
+        className={`${sizeClass} object-cover rounded-md inline-block mx-1`}
+        onLoad={() => {
+          if (media instanceof File) URL.revokeObjectURL(src);
+        }}
+      />
+    ) : (
+      <img
+        key={idx}
+        src={src}
+        alt={`media-${idx}`}
+        className={`${sizeClass} object-cover rounded-md inline-block mx-1`}
+        onLoad={() => {
+          if (media instanceof File) URL.revokeObjectURL(src);
+        }}
+      />
+    );
+  };
 
   const renderModalForm = (isEdit) => (
     <div className="bg-white dark:bg-gray-900 rounded-lg p-6 mobile:p-3 max-w-md w-full sm:max-w-lg">
