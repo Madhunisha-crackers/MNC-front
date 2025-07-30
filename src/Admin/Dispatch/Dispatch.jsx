@@ -109,7 +109,7 @@ export default function Dispatch() {
   const generatePDF = (booking) => {
     const doc = new jsPDF();
     doc.setFontSize(22);
-    doc.text('Fun with Crackers', doc.internal.pageSize.width / 2, 20, { align: 'center' });
+    doc.text('Madhu Nisha Crackers', doc.internal.pageSize.width / 2, 20, { align: 'center' });
     doc.setFontSize(12);
     const lines = [
       `Order ID: ${booking.order_id || 'N/A'}`,
@@ -129,7 +129,7 @@ export default function Dispatch() {
       head: [['Sl. No', 'Serial No', 'Product Type', 'Product Name', 'Price', 'Quantity', 'Per']],
       body: (booking.products || []).map((product, index) => [
         index + 1,
-        product.serial_number || 'N/A',
+        product.id || 'N/A',
         product.product_type || 'N/A',
         product.productname || 'N/A',
         `Rs.${product.price || '0.00'}`,

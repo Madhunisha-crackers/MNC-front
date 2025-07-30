@@ -657,6 +657,9 @@ const Pricelist = () => {
                     </p>
                   )}
                 </div>
+                <div>
+                  <p className="text-red-500 font-semibold text-sm">T&C - The images given for crackers are provides for your references the products may vary according to avilability</p>
+                </div>
                 <div className="text-sm text-gray-700 space-y-2 mb-4">
                   <div className="flex justify-between">
                     <span>Net Total:</span>

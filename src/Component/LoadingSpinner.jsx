@@ -1,7 +1,18 @@
-import { motion } from "framer-motion"
-import { Sparkles } from 'lucide-react'
+import { motion } from "framer-motion";
+import { Sparkles } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 const LoadingSpinner = () => {
+  const [showSlowNetworkMessage, setShowSlowNetworkMessage] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSlowNetworkMessage(true);
+    }, 5000); // Show message after 5 seconds
+
+    return () => clearTimeout(timer); // Clean up timer on component unmount
+  }, []);
+
   return (
     <div className="fixed inset-0 flex items-center justify-center z-[100] bg-gradient-to-br from-orange-50 to-orange-100">
       <div className="text-center">
@@ -19,7 +30,13 @@ const LoadingSpinner = () => {
           className="mb-4"
         >
           <h2 className="text-2xl font-bold text-orange-600 mb-2">Loading Products</h2>
-          <p className="text-orange-500">Please wait while we fetch the latest fireworks...</p>
+          {showSlowNetworkMessage ? (
+            <p className="text-orange-500 max-w-xs">
+              Your network speed is low, and it takes more time to fetch products. Please check your network connection and try again.
+            </p>
+          ) : (
+            <p className="text-orange-500">Please wait while we fetch the latest fireworks...</p>
+          )}
         </motion.div>
 
         <motion.div
@@ -33,7 +50,7 @@ const LoadingSpinner = () => {
         </motion.div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default LoadingSpinner
+export default LoadingSpinner;

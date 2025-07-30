@@ -1054,7 +1054,7 @@ export default function Home() {
               </div>
               <div className="space-y-6 text-lg text-gray-600 leading-relaxed">
                 <p>
-                  Madhu Nisha Crackers has been a well-known Fireworks Store in Sivakasi. What started out as a hobby
+                  Madhu Nisha Crackers has been a well-known Fireworks Store in Sivakasi with legal name " Madhu Nisha Pyrotech ". What started out as a hobby
                   has become our passion for creating magical moments.
                 </p>
                 <p>
