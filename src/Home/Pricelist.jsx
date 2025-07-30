@@ -47,6 +47,10 @@ const Pricelist = () => {
   const [selectedImages, setSelectedImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+  const formatPercentage = (value) => {
+    return Math.round(Number.parseFloat(value)).toString();
+  };
+
   const formatPrice = (price) => {
     const num = Number.parseFloat(price);
     return Number.isInteger(num) ? num.toString() : num.toFixed(2);
@@ -70,7 +74,6 @@ const Pricelist = () => {
         ]);
         setStates(Array.isArray(statesData) ? statesData : []);
 
-        // Natural sort function for case-insensitive sorting with numeric handling
         const naturalSort = (a, b) => {
           const collator = new Intl.Collator(undefined, {
             numeric: true,
@@ -79,7 +82,6 @@ const Pricelist = () => {
           return collator.compare(a.productname, b.productname);
         };
 
-        // Deduplicate and sort products
         const seenSerials = new Set();
         const normalizedProducts = productsData.data
           .filter((p) => {
@@ -465,7 +467,7 @@ const Pricelist = () => {
                     <div className="flex items-center gap-2">
                       {selectedProduct.discount > 0 && (
                         <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-                          {selectedProduct.discount}% OFF
+                          {formatPercentage(selectedProduct.discount)}% OFF
                         </span>
                       )}
                       <span className="text-orange-600 font-semibold text-lg">
@@ -634,7 +636,7 @@ const Pricelist = () => {
                     <option value="">Select Promocode</option>
                     {promocodes.map((promo) => (
                       <option key={promo.id} value={promo.code}>
-                        {promo.code} ({promo.discount}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}
+                        {promo.code} ({formatPercentage(promo.discount)}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}
                         {promo.end_date ? `, Exp: ${new Date(promo.end_date).toLocaleDateString()}` : ""})
                       </option>
                     ))}
@@ -651,7 +653,7 @@ const Pricelist = () => {
                   )}
                   {appliedPromo && (
                     <p className="text-green-600 text-xs mt-1">
-                      Applied: {appliedPromo.code} ({appliedPromo.discount}% OFF)
+                      Applied: {appliedPromo.code} ({formatPercentage(appliedPromo.discount)}% OFF)
                       {appliedPromo.min_amount && `, Min: ₹${appliedPromo.min_amount}`}
                       {appliedPromo.end_date && `, Expires: ${new Date(appliedPromo.end_date).toLocaleDateString()}`}
                     </p>
@@ -818,7 +820,7 @@ const Pricelist = () => {
         )}
       </AnimatePresence>
 
-      <main className="pt-28 px-4 sm:px-8 max-w-7xl mx-auto">
+      <main className="hundred:pt-48 mobile:pt-34 px-4 sm:px-8 max-w-7xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -834,7 +836,7 @@ const Pricelist = () => {
               className="w-full pl-10 pr-4 py-3 bg-white border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent shadow-sm"
             />
           </div>
-          <div className="relative">
+          <motion.div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <select
               value={selectedType}
@@ -847,7 +849,7 @@ const Pricelist = () => {
                 </option>
               ))}
             </select>
-          </div>
+          </motion.div>
         </motion.div>
 
         {Object.entries(grouped).map(([type, items]) => (
@@ -879,7 +881,7 @@ const Pricelist = () => {
                       <ModernCarousel media={product.images} onImageClick={handleImageClick} />
                       {product.discount > 0 && (
                         <div className="absolute top-4 left-4 bg-red-500 text-white text-sm font-bold px-3 py-1 rounded-full shadow-lg">
-                          {product.discount}% OFF
+                          {formatPercentage(product.discount)}% OFF
                         </div>
                       )}
                       <motion.button
@@ -1027,7 +1029,7 @@ const Pricelist = () => {
                       <option value="">Select Promocode</option>
                       {promocodes.map((promo) => (
                         <option key={promo.id} value={promo.code}>
-                          {promo.code} ({promo.discount}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}
+                          {promo.code} ({formatPercentage(promo.discount)}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}
                           {promo.end_date ? `, Exp: ${new Date(promo.end_date).toLocaleDateString()}` : ""})
                         </option>
                       ))}
@@ -1044,7 +1046,7 @@ const Pricelist = () => {
                     )}
                     {appliedPromo && (
                       <p className="text-green-600 text-xs mt-1">
-                        Applied: {appliedPromo.code} ({appliedPromo.discount}% OFF)
+                        Applied: {appliedPromo.code} ({formatPercentage(appliedPromo.discount)}% OFF)
                         {appliedPromo.min_amount && `, Min: ₹${appliedPromo.min_amount}`}
                         {appliedPromo.end_date && `, Expires: ${new Date(appliedPromo.end_date).toLocaleDateString()}`}
                       </p>
