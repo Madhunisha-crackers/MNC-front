@@ -21,6 +21,7 @@ const Pricelist = () => {
   const [minOrderMessage, setMinOrderMessage] = useState("");
   const [showToaster, setShowToaster] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBookingLoading, setIsBookingLoading] = useState(false);
   const [customerDetails, setCustomerDetails] = useState({
     customer_name: "",
     address: "",
@@ -131,10 +132,13 @@ const Pricelist = () => {
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
     debounceTimeout.current = setTimeout(() => {
       if (promocode && promocode !== "custom") handleApplyPromo(promocode);
-      else setAppliedPromo(null);
+      else {
+        setAppliedPromo(null);
+        setPromocode("");
+      }
     }, 500);
     return () => clearTimeout(debounceTimeout.current);
-  }, [promocode]);
+  }, [promocode, cart]);
 
   const addToCart = useCallback((product) => {
     if (!product || !product.serial_number) return console.error("Invalid product or missing serial_number:", product);
@@ -164,6 +168,7 @@ const Pricelist = () => {
   }, []);
 
   const handleFinalCheckout = async () => {
+    setIsBookingLoading(true);
     const order_id = `ORD-${Date.now()}`;
     const selectedProducts = Object.entries(cart).map(([serial, qty]) => {
       const product = products.find((p) => p.serial_number === serial);
@@ -180,20 +185,51 @@ const Pricelist = () => {
       };
     });
 
-    if (!selectedProducts.length) return showError("Your cart is empty.");
-    if (!customerDetails.customer_name) return showError("Customer name is required.");
-    if (!customerDetails.address) return showError("Address is required.");
-    if (!customerDetails.district) return showError("District is required.");
-    if (!customerDetails.state) return showError("Please select a state.");
-    if (!customerDetails.mobile_number) return showError("Mobile number is required.");
+    if (!selectedProducts.length) {
+      showError("Your cart is empty.");
+      setIsBookingLoading(false);
+      return;
+    }
+    if (!customerDetails.customer_name) {
+      showError("Customer name is required.");
+      setIsBookingLoading(false);
+      return;
+    }
+    if (!customerDetails.address) {
+      showError("Address is required.");
+      setIsBookingLoading(false);
+      return;
+    }
+    if (!customerDetails.district) {
+      showError("District is required.");
+      setIsBookingLoading(false);
+      return;
+    }
+    if (!customerDetails.state) {
+      showError("Please select a state.");
+      setIsBookingLoading(false);
+      return;
+    }
+    if (!customerDetails.mobile_number) {
+      showError("Mobile number is required.");
+      setIsBookingLoading(false);
+      return;
+    }
 
     const mobile = customerDetails.mobile_number.replace(/\D/g, "").slice(-10);
-    if (mobile.length !== 10) return showError("Mobile number must be 10 digits.");
+    if (mobile.length !== 10) {
+      showError("Mobile number must be 10 digits.");
+      setIsBookingLoading(false);
+      return;
+    }
 
     const selectedState = customerDetails.state?.trim();
     const minOrder = states.find((s) => s.name === selectedState)?.min_rate;
-    if (minOrder && Number.parseFloat(originalTotal) < minOrder)
-      return showError(`Minimum order for ${selectedState} is ₹${minOrder}. Your total is ₹${originalTotal}.`);
+    if (minOrder && Number.parseFloat(originalTotal) < minOrder) {
+      showError(`Minimum order for ${selectedState} is ₹${minOrder}. Your total is ₹${originalTotal}.`);
+      setIsBookingLoading(false);
+      return;
+    }
 
     try {
       setShowLoader(true);
@@ -238,17 +274,20 @@ const Pricelist = () => {
       } else {
         const data = await response.json();
         setShowLoader(false);
+        setIsBookingLoading(false);
         showError(data.message || "Booking failed.");
       }
     } catch (err) {
       console.error("Checkout error:", err);
       setShowLoader(false);
+      setIsBookingLoading(false);
       showError("Something went wrong during checkout.");
     }
   };
 
   const handleRocketComplete = () => {
     setShowLoader(false);
+    setIsBookingLoading(false);
     setIsCartOpen(false);
     setShowModal(false);
     setShowDetailsModal(false);
@@ -316,7 +355,11 @@ const Pricelist = () => {
 
   const handleApplyPromo = useCallback(
     async (code) => {
-      if (!code) return setAppliedPromo(null);
+      if (!code) {
+        setAppliedPromo(null);
+        setPromocode("");
+        return;
+      }
       try {
         const res = await fetch(`${API_BASE_URL}/api/promocodes`);
         const promos = await res.json();
@@ -324,32 +367,52 @@ const Pricelist = () => {
         if (!found) {
           showError("Invalid promocode.");
           setAppliedPromo(null);
+          setPromocode("");
           return;
         }
-        if (found.min_amount && Number.parseFloat(originalTotal) < found.min_amount) {
+        if (found.min_amount && Number.parseFloat(originalTotal) < Number.parseFloat(found.min_amount)) {
           showError(`Minimum order amount for this promocode is ₹${found.min_amount}. Your total is ₹${originalTotal}.`);
           setAppliedPromo(null);
+          setPromocode("");
           return;
         }
         if (found.end_date && new Date(found.end_date) < new Date()) {
           showError("This promocode has expired.");
           setAppliedPromo(null);
+          setPromocode("");
           return;
+        }
+        if (found.product_type) {
+          const cartProductTypes = new Set(
+            Object.keys(cart).map((serial) => {
+              const product = products.find((p) => p.serial_number === serial);
+              return product?.product_type || "Others";
+            })
+          );
+          if (!cartProductTypes.has(found.product_type)) {
+            showError(`This promocode is only valid for ${found.product_type} products.`);
+            setAppliedPromo(null);
+            setPromocode("");
+            return;
+          }
         }
         setAppliedPromo(found);
       } catch (err) {
         console.error("Promo apply error:", err);
         showError("Could not validate promocode.");
         setAppliedPromo(null);
+        setPromocode("");
       }
     },
-    [originalTotal],
+    [originalTotal, cart, products],
   );
 
   const totals = useMemo(() => {
     let net = 0,
       save = 0,
-      total = 0;
+      total = 0,
+      productDiscount = 0,
+      promoDiscount = 0;
     for (const serial in cart) {
       const qty = cart[serial];
       const product = products.find((p) => p.serial_number === serial);
@@ -358,24 +421,24 @@ const Pricelist = () => {
       const discount = originalPrice * (product.discount / 100);
       const priceAfterDiscount = originalPrice - discount;
       net += originalPrice * qty;
-      save += discount * qty;
+      productDiscount += discount * qty;
       total += priceAfterDiscount * qty;
     }
     setOriginalTotal(total);
-    setTotalDiscount(save);
-    let promoDiscount = 0;
+    setTotalDiscount(productDiscount);
     if (appliedPromo) {
       promoDiscount = (total * appliedPromo.discount) / 100;
       total -= promoDiscount;
-      save += promoDiscount;
     }
     const processingFee = total * 0.03;
     total += processingFee;
+    save = productDiscount + promoDiscount;
     return {
       net: formatPrice(net),
       save: formatPrice(save),
       total: formatPrice(total),
       promo_discount: formatPrice(promoDiscount),
+      product_discount: formatPrice(productDiscount),
       processing_fee: formatPrice(processingFee),
     };
   }, [cart, products, appliedPromo]);
@@ -637,6 +700,7 @@ const Pricelist = () => {
                     {promocodes.map((promo) => (
                       <option key={promo.id} value={promo.code}>
                         {promo.code} ({formatPercentage(promo.discount)}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}
+                        {promo.product_type ? `, Type: ${promo.product_type.replace(/_/g, " ")}` : ""}
                         {promo.end_date ? `, Exp: ${new Date(promo.end_date).toLocaleDateString()}` : ""})
                       </option>
                     ))}
@@ -655,6 +719,7 @@ const Pricelist = () => {
                     <p className="text-green-600 text-xs mt-1">
                       Applied: {appliedPromo.code} ({formatPercentage(appliedPromo.discount)}% OFF)
                       {appliedPromo.min_amount && `, Min: ₹${appliedPromo.min_amount}`}
+                      {appliedPromo.product_type && `, Type: ${appliedPromo.product_type.replace(/_/g, " ")}`}
                       {appliedPromo.end_date && `, Expires: ${new Date(appliedPromo.end_date).toLocaleDateString()}`}
                     </p>
                   )}
@@ -668,8 +733,8 @@ const Pricelist = () => {
                     <span>₹{totals.net}</span>
                   </div>
                   <div className="flex justify-between text-green-600">
-                    <span>Discount:</span>
-                    <span>₹{totals.save}</span>
+                    <span>Product Discount:</span>
+                    <span>-₹{totals.product_discount}</span>
                   </div>
                   {appliedPromo && (
                     <div className="flex justify-between text-green-600">
@@ -677,6 +742,10 @@ const Pricelist = () => {
                       <span>-₹{totals.promo_discount}</span>
                     </div>
                   )}
+                  <div className="flex justify-between text-green-600">
+                    <span>Total Discount:</span>
+                    <span>-₹{totals.save}</span>
+                  </div>
                   <div className="flex justify-between text-gray-600">
                     <span>Processing Fee:</span>
                     <span>₹{totals.processing_fee}</span>
@@ -1030,6 +1099,7 @@ const Pricelist = () => {
                       {promocodes.map((promo) => (
                         <option key={promo.id} value={promo.code}>
                           {promo.code} ({formatPercentage(promo.discount)}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}
+                          {promo.product_type ? `, Type: ${promo.product_type.replace(/_/g, " ")}` : ""}
                           {promo.end_date ? `, Exp: ${new Date(promo.end_date).toLocaleDateString()}` : ""})
                         </option>
                       ))}
@@ -1048,6 +1118,7 @@ const Pricelist = () => {
                       <p className="text-green-600 text-xs mt-1">
                         Applied: {appliedPromo.code} ({formatPercentage(appliedPromo.discount)}% OFF)
                         {appliedPromo.min_amount && `, Min: ₹${appliedPromo.min_amount}`}
+                        {appliedPromo.product_type && `, Type: ${appliedPromo.product_type.replace(/_/g, " ")}`}
                         {appliedPromo.end_date && `, Expires: ${new Date(appliedPromo.end_date).toLocaleDateString()}`}
                       </p>
                     )}
@@ -1057,6 +1128,10 @@ const Pricelist = () => {
                       <span>Net Total:</span>
                       <span>₹{totals.net}</span>
                     </div>
+                    <div className="flex justify-between text-green-600">
+                      <span>Product Discount:</span>
+                      <span>-₹{totals.product_discount}</span>
+                    </div>
                     {appliedPromo && (
                       <div className="flex justify-between text-green-600">
                         <span>Promocode ({appliedPromo.code}):</span>
@@ -1064,7 +1139,7 @@ const Pricelist = () => {
                       </div>
                     )}
                     <div className="flex justify-between text-green-600">
-                      <span>Discount (promocode included):</span>
+                      <span>Total Discount:</span>
                       <span>-₹{totals.save}</span>
                     </div>
                     <div className="flex justify-between text-gray-600">
@@ -1087,12 +1162,41 @@ const Pricelist = () => {
                     Cancel
                   </motion.button>
                   <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={{ scale: isBookingLoading ? 1 : 1.02 }}
+                    whileTap={{ scale: isBookingLoading ? 1 : 0.98 }}
                     onClick={handleFinalCheckout}
-                    className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg"
+                    disabled={isBookingLoading}
+                    className={`flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg flex items-center justify-center gap-2 ${
+                      isBookingLoading ? "opacity-75 cursor-not-allowed" : ""
+                    }`}
                   >
-                    Confirm Booking
+                    {isBookingLoading ? (
+                      <>
+                        <svg
+                          className="animate-spin h-5 w-5 text-white"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        Booking...
+                      </>
+                    ) : (
+                      "Confirm Booking"
+                    )}
                   </motion.button>
                 </div>
               </div>

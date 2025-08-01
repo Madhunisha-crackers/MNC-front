@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa"
 import { Sparkles } from 'lucide-react'
 import { useSwipeable } from "react-swipeable"
+import defaults from "../../public/default.jpg"
 
 const ModernCarousel = ({ media, onImageClick }) => {
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -49,8 +50,7 @@ const ModernCarousel = ({ media, onImageClick }) => {
     return (
       <div className="w-full h-48 rounded-2xl mb-4 overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center border border-orange-200">
         <div className="text-center">
-          <Sparkles className="w-8 h-8 text-orange-400 mx-auto mb-2" />
-          <p className="text-orange-600 font-medium text-sm">No media available</p>
+          <img src={defaults} />
         </div>
       </div>
     )

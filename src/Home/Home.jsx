@@ -7,7 +7,8 @@ import { FaInfoCircle, FaArrowLeft, FaArrowRight } from "react-icons/fa"
 import Navbar from "../Component/Navbar"
 import "../App.css"
 import { API_BASE_URL } from "../../Config"
-import about from "../../public/cont.png"
+import about from "../../public/cont.jpg"
+import defaults from "../../public/default.jpg"
 
 const categories = [
   { name: "Sparklers", icon: Sparkles, description: "Beautiful sparkling lights for celebrations" },
@@ -406,12 +407,12 @@ const RocketBadgeAnimation = ({ isActive, onComplete, promocodes, onCopyPromo, c
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={handleCloseAll}
-              className="fixed mobile:top-24 mobile:right-4 top-8 right-8 z-50 pointer-events-auto mobile:w-10 mobile:h-10 w-12 h-12 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl transition-all duration-300"
+              className="fixed mobile:top-24 mobile:right-4 hundred:mt-3 tab:mt-3 tab:h-14 tab:w-14 top-8 right-8 z-50 pointer-events-auto mobile:w-10 mobile:h-10 w-12 h-12 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl transition-all duration-300"
               style={{
                 boxShadow: "0 0 20px rgba(239, 68, 68, 0.5)",
               }}
             >
-              <X className="mobile:w-5 mobile:h-5 w-6 h-6" />
+              <X className="mobile:w-5 mobile:h-5 tab:h-8 tab:w-8 w-6 h-6" />
             </motion.button>
           )}
 
@@ -517,10 +518,7 @@ const ModernCarousel = ({ media }) => {
     return (
       <div className="w-full h-64 rounded-3xl mb-6 overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center border border-orange-200">
         <div className="text-center">
-          <div className="w-16 h-16 bg-orange-200 rounded-full flex items-center justify-center mb-4 mx-auto">
-            <Sparkles className="w-8 h-8 text-orange-500" />
-          </div>
-          <p className="text-orange-600 font-medium">No media available</p>
+          <img src={defaults} />
         </div>
       </div>
     )
