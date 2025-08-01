@@ -7,8 +7,8 @@ import { FaInfoCircle, FaArrowLeft, FaArrowRight } from "react-icons/fa"
 import Navbar from "../Component/Navbar"
 import "../App.css"
 import { API_BASE_URL } from "../../Config"
-import about from "../../public/cont.jpg"
-import need from "../../public/default.jpg"
+import about from "../cont.jpg"
+import need from "../default.jpg"
 
 const categories = [
   { name: "Sparklers", icon: Sparkles, description: "Beautiful sparkling lights for celebrations" },

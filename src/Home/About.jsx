@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { Sparkles, Target, Eye, Rocket, ArrowRight, Phone, Mail, MapPin } from "lucide-react"
 import Navbar from "../Component/Navbar"
-import fire from '../../public/fire.jpg'
+import fire from '../fire.jpg'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 50 },

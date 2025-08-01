@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa"
 import { Sparkles } from 'lucide-react'
 import { useSwipeable } from "react-swipeable"
-import need from "../../public/default.jpg"
+import need from "../default.jpg"
 
 const ModernCarousel = ({ media, onImageClick }) => {
   const [currentIndex, setCurrentIndex] = useState(0)
