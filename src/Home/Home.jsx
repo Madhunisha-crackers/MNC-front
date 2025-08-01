@@ -8,7 +8,7 @@ import Navbar from "../Component/Navbar"
 import "../App.css"
 import { API_BASE_URL } from "../../Config"
 import about from "../../public/cont.jpg"
-import defaults from "../../public/default.jpg"
+import need from "../../public/default.jpg"
 
 const categories = [
   { name: "Sparklers", icon: Sparkles, description: "Beautiful sparkling lights for celebrations" },
@@ -518,7 +518,7 @@ const ModernCarousel = ({ media }) => {
     return (
       <div className="w-full h-64 rounded-3xl mb-6 overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center border border-orange-200">
         <div className="text-center">
-          <img src={defaults} />
+          <img src={need} alt="image" />
         </div>
       </div>
     )

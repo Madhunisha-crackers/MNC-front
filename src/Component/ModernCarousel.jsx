@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa"
 import { Sparkles } from 'lucide-react'
 import { useSwipeable } from "react-swipeable"
-import defaults from "../../public/default.jpg"
+import need from "../../public/default.jpg"
 
 const ModernCarousel = ({ media, onImageClick }) => {
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -50,7 +50,7 @@ const ModernCarousel = ({ media, onImageClick }) => {
     return (
       <div className="w-full h-48 rounded-2xl mb-4 overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center border border-orange-200">
         <div className="text-center">
-          <img src={defaults} />
+          <img src={need} alt="image"/>
         </div>
       </div>
     )
