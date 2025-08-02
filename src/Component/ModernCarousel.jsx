@@ -50,7 +50,7 @@ const ModernCarousel = ({ media, onImageClick }) => {
     return (
       <div className="w-full h-48 rounded-2xl mb-4 overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center border border-orange-200">
         <div className="text-center">
-          <img src={need} alt="image"/>
+          <img src={need} alt="image" className="mobile:h-[200px] hundred:h-[100%] hundred:w-[100%] onefifty:h-[100%] onefifty:w-[100%]"/>
         </div>
       </div>
     )
