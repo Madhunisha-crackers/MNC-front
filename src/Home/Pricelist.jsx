@@ -413,6 +413,7 @@ const Pricelist = () => {
       total = 0,
       productDiscount = 0,
       promoDiscount = 0;
+    
     for (const serial in cart) {
       const qty = cart[serial];
       const product = products.find((p) => p.serial_number === serial);
@@ -423,16 +424,24 @@ const Pricelist = () => {
       net += originalPrice * qty;
       productDiscount += discount * qty;
       total += priceAfterDiscount * qty;
+
+      // Apply promocode discount only to matching product types
+      if (appliedPromo) {
+        if (!appliedPromo.product_type || product.product_type === appliedPromo.product_type) {
+          const productTotal = priceAfterDiscount * qty;
+          promoDiscount += (productTotal * appliedPromo.discount) / 100;
+        }
+      }
     }
+
     setOriginalTotal(total);
     setTotalDiscount(productDiscount);
-    if (appliedPromo) {
-      promoDiscount = (total * appliedPromo.discount) / 100;
-      total -= promoDiscount;
-    }
+    
+    total -= promoDiscount;
     const processingFee = total * 0.03;
     total += processingFee;
     save = productDiscount + promoDiscount;
+    
     return {
       net: formatPrice(net),
       save: formatPrice(save),
