@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
-import {Sparkles,Rocket,Volume2,Bomb,Disc,CloudSun,Heart,SmilePlus,Clock,ArrowRight,Gift,Copy,ShoppingCart,X,} from "lucide-react"
+import {Sparkles,Rocket,Volume2,Bomb,Disc,CloudSun,Heart,SmilePlus,Clock,ArrowRight,Gift,Copy,ShoppingCart,X,AlertTriangle} from "lucide-react"
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion"
 import { useInView } from "react-intersection-observer"
 import { FaInfoCircle, FaArrowLeft, FaArrowRight } from "react-icons/fa"
@@ -1063,6 +1063,7 @@ export default function Home() {
                   Trusted name among top companies in the Sivakasi fireworks business — manufacturing, wholesaling, and
                   retailing traditional and modern fireworks.
                 </p>
+                <h4 className="text-orange-500 inline-flex items-center gap-1"><AlertTriangle />We don't usually support online shopping, Every products displayed here are for your references...</h4>
               </div>
               <motion.button
                 whileHover={{ scale: 1.05 }}

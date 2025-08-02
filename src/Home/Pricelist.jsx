@@ -9,7 +9,10 @@ import ToasterNotification from "../Component/ToasterNotification";
 import SuccessAnimation from "../Component/SuccessAnimation";
 import ModernCarousel from "../Component/ModernCarousel";
 import LoadingSpinner from "../Component/LoadingSpinner";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import "../App.css";
+import need from '../default.jpg'
 
 const Pricelist = () => {
   const [products, setProducts] = useState([]);
@@ -55,6 +58,73 @@ const Pricelist = () => {
   const formatPrice = (price) => {
     const num = Number.parseFloat(price);
     return Number.isInteger(num) ? num.toString() : num.toFixed(2);
+  };
+
+  const capitalize = str => str ? str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : '';
+
+  const downloadPDF = () => {
+    try {
+      if (!products.length || !productTypes.length) {
+        showError('No products or product types available to export');
+        return;
+      }
+
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      let yOffset = 20;
+
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('MADHU NISHA CRACKERS', pageWidth / 2, yOffset, { align: 'center' });
+      yOffset += 10;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Website - www.madhunishacrackers.com', pageWidth / 2, yOffset, { align: 'center' });
+      yOffset += 10;
+      doc.text('Retail Pricelist - 2025', pageWidth / 2, yOffset, { align: 'center' });
+      yOffset += 20;
+
+      const tableData = [];
+      productTypes
+        .filter(type => type !== "All")
+        .forEach(type => {
+          const typeKey = type.replace(/ /g, "_");
+          const typeProducts = products.filter(product => product.product_type === typeKey);
+          if (typeProducts.length > 0) {
+            tableData.push([{ content: capitalize(type), colSpan: 4, styles: { fontStyle: 'bold', halign: 'left', fillColor: [200, 200, 200] } }]);
+            tableData.push(['Serial No.', 'Product Name', 'Rate', 'Per']);
+            typeProducts.forEach(product => {
+              tableData.push([
+                product.serial_number,
+                product.productname,
+                `Rs.${formatPrice(product.price)}`,
+                product.per,
+              ]);
+            });
+            tableData.push([]);
+          }
+        });
+
+      autoTable(doc, {
+        startY: yOffset,
+        head: [['Serial No.', 'Product Name', 'Rate', 'Per']],
+        body: tableData,
+        theme: 'grid',
+        styles: { fontSize: 10, cellPadding: 3 },
+        headStyles: { fillColor: [100, 100, 100], textColor: [255, 255, 255] },
+        columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 70 }, 2: { cellWidth: 40 }, 3: { cellWidth: 30 } },
+        didDrawCell: (data) => {
+          if (data.row.section === 'body' && data.cell.raw && data.cell.raw.colSpan === 4) {
+            data.cell.styles.cellPadding = 5;
+            data.cell.styles.fontSize = 12;
+          }
+        },
+      });
+
+      doc.save('Retail_Pricelist_2025.pdf');
+    } catch (err) {
+      showError('Failed to generate PDF: ' + err.message);
+    }
   };
 
   useEffect(() => {
@@ -425,7 +495,6 @@ const Pricelist = () => {
       productDiscount += discount * qty;
       total += priceAfterDiscount * qty;
 
-      // Apply promocode discount only to matching product types
       if (appliedPromo) {
         if (!appliedPromo.product_type || product.product_type === appliedPromo.product_type) {
           const productTotal = priceAfterDiscount * qty;
@@ -634,14 +703,14 @@ const Pricelist = () => {
                     if (!product) return null;
                     const discount = (product.price * product.discount) / 100;
                     const priceAfterDiscount = formatPrice(product.price - discount);
+                    // Use need image as fallback when no valid images are available
                     const imageSrc =
                       (Array.isArray(product.images)
-                        ? product.images
-                        : []
-                      ).filter(
-                        (item) =>
-                          !item.includes("/video/") && !item.toLowerCase().endsWith(".gif")
-                      )[0] || "/placeholder.svg?height=80&width=80";
+                        ? product.images.filter(
+                            (item) =>
+                              !item.includes("/video/") && !item.toLowerCase().endsWith(".gif")
+                          )[0]
+                        : null) || need;
 
                     return (
                       <motion.div
@@ -689,6 +758,7 @@ const Pricelist = () => {
                   })
                 )}
               </div>
+              {/* Rest of the cart footer remains unchanged */}
               <div className="p-6 border-t border-orange-100 bg-white rounded-b-3xl">
                 <div className="mb-4 p-3 bg-orange-50 rounded-2xl border border-orange-200">
                   <p className="text-xs font-medium text-orange-800 mb-2 text-center">Minimum Purchase Rates</p>
@@ -928,6 +998,21 @@ const Pricelist = () => {
               ))}
             </select>
           </motion.div>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex justify-center mb-8"
+        >
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={downloadPDF}
+            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-8 py-3 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2"
+          >
+            Download Pricelist
+            <FaArrowRight className="w-4 h-4" />
+          </motion.button>
         </motion.div>
 
         {Object.entries(grouped).map(([type, items]) => (
