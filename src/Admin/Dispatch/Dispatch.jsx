@@ -73,11 +73,28 @@ export default function Dispatch() {
 
   const updateStatus = async (id, newStatus, transportInfo = null) => {
     try {
-      const payload = { status: newStatus, ...transportInfo };
-      await axios.put(`${API_BASE_URL}/api/tracking/fbookings/${id}/status`, payload);
-      setBookings(prev =>
-        prev.map(booking =>
-          booking.id === id ? { ...booking, status: newStatus, ...transportInfo } : booking
+      const payload = { 
+        status: newStatus, 
+        ...(transportInfo && {
+          transportDetails: {
+            transportName: transportInfo.transportName,
+            lrNumber: transportInfo.lrNumber,
+            transportContact: transportInfo.transportContact,
+          },
+        }),
+      };
+      const response = await axios.put(`${API_BASE_URL}/api/tracking/fbookings/${id}/status`, payload);
+      setBookings((prev) =>
+        prev.map((booking) =>
+          booking.id === id
+            ? {
+                ...booking,
+                status: response.data.data.status,
+                transport_name: response.data.data.transport_name || booking.transport_name,
+                lr_number: response.data.data.lr_number || booking.lr_number,
+                transport_contact: response.data.data.transport_contact || booking.transport_contact,
+              }
+            : booking
         )
       );
       if (newStatus === 'dispatched' && transportInfo) {
@@ -85,6 +102,13 @@ export default function Dispatch() {
         setTimeout(() => setSuccessMessage(''), 3000);
       }
       setError('');
+      // Trigger immediate refresh to ensure all data is up-to-date
+      const allowedStatuses = ['paid', 'packed', 'dispatched', 'delivered'];
+      const statuses = filterStatus ? [filterStatus] : allowedStatuses;
+      const refreshResponse = await axios.get(`${API_BASE_URL}/api/tracking/filtered-bookings`, {
+        params: { status: statuses.join(',') }
+      });
+      setBookings(refreshResponse.data);
     } catch {
       setError('Failed to update status');
     }
@@ -117,7 +141,12 @@ export default function Dispatch() {
       `Contact Number: ${booking.mobile_number || 'N/A'}`,
       `District: ${booking.district || 'N/A'}`,
       `State: ${booking.state || 'N/A'}`,
-      `Address: ${booking.address || 'N/A'}`
+      `Address: ${booking.address || 'N/A'}`,
+      ...(booking.status === 'dispatched' ? [
+        `Transport Name: ${booking.transport_name || 'N/A'}`,
+        `LR Number: ${booking.lr_number || 'N/A'}`,
+        `Transport Contact: ${booking.transport_contact || 'N/A'}`
+      ] : [])
     ];
     let yOffset = 40;
     lines.forEach(line => {

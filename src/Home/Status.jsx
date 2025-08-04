@@ -103,7 +103,7 @@ const Status = () => {
         return "text-yellow-600 bg-yellow-100"
       case "confirmed":
         return "text-blue-600 bg-blue-100"
-      case "processing":
+      case "packed":
         return "text-purple-600 bg-purple-100"
       case "dispatched":
         return "text-orange-600 bg-orange-100"
@@ -124,7 +124,7 @@ const Status = () => {
         return <Clock className="w-4 h-4" />
       case "confirmed":
         return <CheckCircle className="w-4 h-4" />
-      case "processing":
+      case "packed":
         return <Package className="w-4 h-4" />
       case "dispatched":
         return <Truck className="w-4 h-4" />
@@ -151,7 +151,7 @@ const Status = () => {
 
     if (
       order.status === "confirmed" ||
-      order.status === "processing" ||
+      order.status === "packed" ||
       order.status === "dispatched" ||
       order.status === "delivered" ||
       order.status === "booked"
@@ -164,9 +164,9 @@ const Status = () => {
       })
     }
 
-    if (order.status === "processing" || order.status === "dispatched" || order.status === "delivered") {
+    if (order.status === "packed" || order.status === "dispatched" || order.status === "delivered") {
       timeline.push({
-        status: "Processing",
+        status: "Packed",
         date: order.processing_date || order.updated_at,
         completed: true,
         icon: <Package className="w-4 h-4" />,
@@ -243,7 +243,7 @@ const Status = () => {
   return (
     <>
       <Navbar />
-      <main className="hundred:pt-48 mobile:pt-34 px-4 sm:px-8 max-w-7xl mx-auto">
+      <main className="hundred:pt-48 mobile:pt-34 px-4 sm:px-8 max-w-7xl mx-auto mobile:mb-32 hundred:mb-0">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 mobile:-mt-20">
           <div className="text-center mb-8">
             <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Track Your Orders</h1>
@@ -412,30 +412,6 @@ const Status = () => {
                                           </p>
                                           {step.date && <p className="text-xs text-gray-500">{formatDate(step.date)}</p>}
                                         </div>
-                                        {step.transport && (
-                                          <div className="mt-2 p-3 bg-orange-50 rounded-xl border border-orange-100">
-                                            <p className="text-sm font-medium text-orange-800 mb-1">Transport Details</p>
-                                            <div className="text-xs text-orange-700 space-y-1">
-                                              {step.transport.company && (
-                                                <p>
-                                                  <span className="font-medium">Company:</span> {step.transport.company}
-                                                </p>
-                                              )}
-                                              {step.transport.tracking_number && (
-                                                <p>
-                                                  <span className="font-medium">LR Number:</span>{" "}
-                                                  {step.transport.tracking_number}
-                                                </p>
-                                              )}
-                                              {step.transport.driver_contact && (
-                                                <p>
-                                                  <span className="font-medium">Contact:</span>{" "}
-                                                  {step.transport.driver_contact}
-                                                </p>
-                                              )}
-                                            </div>
-                                          </div>
-                                        )}
                                       </div>
                                       {index < array.length - 1 && (
                                         <div
@@ -456,164 +432,6 @@ const Status = () => {
                     ))}
                   </div>
                 )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Order Details Modal */}
-          <AnimatePresence>
-            {showOrderDetails && selectedOrder && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm"
-                onClick={() => setShowOrderDetails(false)}
-              >
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.8, opacity: 0 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
-                >
-                  <div className="p-6">
-                    <div className="flex justify-between items-start mb-6">
-                      <div>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                          {selectedOrder.type === "booking" ? "Order Details" : "Quotation Details"}
-                        </h2>
-                        <p className="text-gray-600">
-                          {selectedOrder.type === "booking" ? selectedOrder.order_id : selectedOrder.quotation_id}
-                        </p>
-                      </div>
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => setShowOrderDetails(false)}
-                        className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center"
-                      >
-                        ✕
-                      </motion.button>
-                    </div>
-
-                    <div className="space-y-6">
-                      {/* Customer Details */}
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-800 mb-3">Customer Information</h3>
-                        <div className="bg-gray-50 rounded-2xl p-4 space-y-2">
-                          <p>
-                            <span className="font-medium">Name:</span> {selectedOrder.customer_name}
-                          </p>
-                          <p>
-                            <span className="font-medium">Mobile:</span> {selectedOrder.mobile_number}
-                          </p>
-                          <p>
-                            <span className="font-medium">Email:</span> {selectedOrder.email || "N/A"}
-                          </p>
-                          <p>
-                            <span className="font-medium">Address:</span> {selectedOrder.address}
-                          </p>
-                          <p>
-                            <span className="font-medium">Location:</span> {selectedOrder.district}, {selectedOrder.state}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Transport Details (for bookings with dispatched or delivered status) */}
-                      {selectedOrder.type === "booking" &&
-                        (selectedOrder.status === "dispatched" || selectedOrder.status === "delivered") && (
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-800 mb-3">Transport Details</h3>
-                            <div className="bg-orange-50 rounded-2xl p-4 space-y-2">
-                              <p>
-                                <span className="font-medium">Transport Name:</span> {selectedOrder.transport_name || "N/A"}
-                              </p>
-                              <p>
-                                <span className="font-medium">LR Number:</span> {selectedOrder.lr_number || "N/A"}
-                              </p>
-                              <p>
-                                <span className="font-medium">Transport Contact:</span>{" "}
-                                {selectedOrder.transport_contact || "N/A"}
-                              </p>
-                              <p>
-                                <span className="font-medium">Dispatch Date:</span>{" "}
-                                {selectedOrder.dispatch_date
-                                  ? formatDate(selectedOrder.dispatch_date)
-                                  : "N/A"}
-                              </p>
-                              {selectedOrder.status === "delivered" && (
-                                <p>
-                                  <span className="font-medium">Delivery Date:</span>{" "}
-                                  {selectedOrder.delivery_date
-                                    ? formatDate(selectedOrder.delivery_date)
-                                    : "N/A"}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                      {/* Products */}
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-800 mb-3">Products</h3>
-                        <div className="space-y-3">
-                          {JSON.parse(selectedOrder.products || "[]").map((product, index) => (
-                            <div key={index} className="bg-orange-50 rounded-2xl p-4 border border-orange-100">
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <p className="font-medium text-gray-800">{product.productname}</p>
-                                  <p className="text-sm text-gray-600">Quantity: {product.quantity}</p>
-                                  <p className="text-sm text-gray-600">
-                                    Price: ₹{formatPrice(product.price)} per {product.per}
-                                  </p>
-                                </div>
-                                <p className="font-bold text-orange-600">
-                                  ₹{formatPrice(product.price * product.quantity)}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Order Summary */}
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-800 mb-3">Order Summary</h3>
-                        <div className="bg-gray-50 rounded-2xl p-4 space-y-2">
-                          <div className="flex justify-between">
-                            <span>Net Rate:</span>
-                            <span>₹{formatPrice(selectedOrder.net_rate)}</span>
-                          </div>
-                          <div className="flex justify-between text-green-600">
-                            <span>You Save:</span>
-                            <span>-₹{formatPrice(selectedOrder.you_save)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Processing Fee:</span>
-                            <span>₹{formatPrice(selectedOrder.processing_fee || 0)}</span>
-                          </div>
-                          <div className="flex justify-between font-bold text-lg text-orange-600 pt-2 border-t border-gray-200">
-                            <span>Total:</span>
-                            <span>₹{formatPrice(selectedOrder.total)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 flex gap-3">
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => downloadInvoice(selectedOrder)}
-                        className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg flex items-center justify-center gap-2"
-                      >
-                        <Download className="w-5 h-5" />
-                        Download {selectedOrder.type === "booking" ? "Invoice" : "Quotation"}
-                      </motion.button>
-                    </div>
-                  </div>
-                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>
