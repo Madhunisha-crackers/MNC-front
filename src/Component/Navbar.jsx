@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Sparkles, Home, Users, List, Shield, Phone } from "lucide-react"
+import { Sparkles, Home, Users, List, Shield, Phone, MapIcon } from "lucide-react"
 import { useNavigate, useLocation } from "react-router-dom"
 
 export default function Navbar() {
@@ -19,6 +19,7 @@ export default function Navbar() {
     { name: "Home", path: "/", icon: Home },
     { name: "About", path: "/about-us", icon: Users },
     { name: "Prices", path: "/price-list", icon: List },
+    { name: "Tracking", path: "/status", icon: MapIcon },
     { name: "Safety", path: "/safety-tips", icon: Shield },
     { name: "Contact", path: "/contact-us", icon: Phone },
   ]
