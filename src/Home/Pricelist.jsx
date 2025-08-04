@@ -941,7 +941,7 @@ const Pricelist = () => {
                   </div>
                 )}
                 {selectedImages.length > 1 && (
-                  <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 max-w-md overflow-x-auto p-2">
+                  <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 max-w-md overflow-x-auto p-2 mobile:translate-y-40">
                     {selectedImages.map((image, index) => (
                       <motion.button
                         key={index}
