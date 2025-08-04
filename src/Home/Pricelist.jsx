@@ -82,7 +82,9 @@ const Pricelist = () => {
       doc.text('Website - www.madhunishacrackers.com', pageWidth / 2, yOffset, { align: 'center' });
       yOffset += 10;
       doc.text('Retail Pricelist - 2025', pageWidth / 2, yOffset, { align: 'center' });
-      yOffset += 20;
+      yOffset += 10;
+      doc.text('Contact Number - 9487524689', pageWidth / 2, yOffset, { align: 'center' });
+      yOffset += 30;
 
       const tableData = [];
       productTypes
