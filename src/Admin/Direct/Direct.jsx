@@ -347,7 +347,7 @@ export default function Direct() {
       try {
         const [customersResponse, productsResponse, quotationsResponse] = await Promise.all([
           axios.get(`${API_BASE_URL}/api/direct/customers`),
-          axios.get(`${API_BASE_URL}/api/direct/products`),
+          axios.get(`${API_BASE_URL}/api/direct/aproducts`),
           axios.get(`${API_BASE_URL}/api/direct/quotations`),
         ])
         setCustomers(Array.isArray(customersResponse.data) ? customersResponse.data : [])
