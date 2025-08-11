@@ -1057,11 +1057,11 @@ export default function Home() {
                 </p>
                 <p>
                   We offer quality products, unparalleled service, and the most competitive prices in town, ensuring
-                  every celebration becomes unforgettable.
+                  every celebration becomes unforgettable. And also ensure we do business with best crackers
                 </p>
                 <p>
                   Trusted name among top companies in the Sivakasi fireworks business — manufacturing, wholesaling, and
-                  retailing traditional and modern fireworks.
+                  retailing traditional and modern fireworks. And selling out best crackers in Sivakasi.
                 </p>
                 <h4 className="text-orange-500 inline-flex items-center gap-1"><AlertTriangle />We don't usually support online shopping, Every products displayed here are for your references...</h4>
               </div>

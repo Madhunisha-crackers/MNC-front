@@ -95,7 +95,7 @@ export default function About() {
       icon: Target,
       title: "Our Mission",
       content:
-        "We respect consumer's benefit, safety, good quality, beautiful packing, effective service, and reasonable price. Our products are market-oriented and meet high-quality standards with innovative designs that bring joy to every celebration.",
+        "We respect consumer's benefit, safety, good quality, beautiful packing, effective service, and reasonable price. Our products are market-oriented and meet high-quality standards with innovative designs that bring joy to every celebration. Being best dealers of crackers in Sivakasi",
     },
     {
       icon: Eye,
@@ -169,7 +169,7 @@ export default function About() {
 
                 <p>
                   We partner with top manufacturers to deliver innovative, safe, and spectacular products that create lasting
-                  memories. Our commitment to excellence ensures every sparkler and burst is crafted with precision and care.
+                  memories. Our commitment to excellence ensures every sparkler and burst is crafted with precision and care and being best dealers in Sivakasi.
                 </p>
 
                 <p>
