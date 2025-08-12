@@ -93,14 +93,18 @@ const Pricelist = () => {
           const typeKey = type.replace(/ /g, "_");
           const typeProducts = products.filter(product => product.product_type === typeKey);
           if (typeProducts.length > 0) {
-            tableData.push([{ content: capitalize(type), colSpan: 4, styles: { fontStyle: 'bold', halign: 'left', fillColor: [200, 200, 200] } }]);
-            tableData.push(['Serial No.', 'Product Name', 'Rate', 'Per']);
+            tableData.push([{ content: capitalize(type), colSpan: 6, styles: { fontStyle: 'bold', halign: 'left', fillColor: [200, 200, 200] } }]);
+            tableData.push(['Serial No.', 'Product Name', 'Rate', 'Discounted Rate', 'Per', 'Quantity']);
             typeProducts.forEach(product => {
+              const discountedPrice = product.price * 0.8; // Calculate 80% of original price
+              const disp = product.price-discountedPrice;
               tableData.push([
                 product.serial_number,
                 product.productname,
                 `Rs.${formatPrice(product.price)}`,
+                `Rs.${formatPrice(disp)}`,
                 product.per,
+                '',
               ]);
             });
             tableData.push([]);
@@ -109,25 +113,32 @@ const Pricelist = () => {
 
       autoTable(doc, {
         startY: yOffset,
-        head: [['Serial No.', 'Product Name', 'Rate', 'Per']],
+        head: [['Serial No.', 'Product Name', 'Rate', 'Discounted Rate', 'Per', 'Quantity']],
         body: tableData,
         theme: 'grid',
         styles: { fontSize: 10, cellPadding: 3 },
-        headStyles: { fillColor: [100, 100, 100], textColor: [255, 255, 255] },
-        columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 70 }, 2: { cellWidth: 40 }, 3: { cellWidth: 30 } },
+        headStyles: { fillColor: [2, 132, 199], textColor: [255, 255, 255] },
+        columnStyles: { 
+          0: { cellWidth: 25 }, 
+          1: { cellWidth: 50 }, 
+          2: { cellWidth: 30 }, 
+          3: { cellWidth: 30 }, 
+          4: { cellWidth: 25 },
+          5: { cellWidth: 25 },
+        },
         didDrawCell: (data) => {
-          if (data.row.section === 'body' && data.cell.raw && data.cell.raw.colSpan === 4) {
+          if (data.row.section === 'body' && data.cell.raw && data.cell.raw.colSpan === 5) {
             data.cell.styles.cellPadding = 5;
             data.cell.styles.fontSize = 12;
           }
         },
       });
 
-      doc.save('Retail_Pricelist_2025.pdf');
+      doc.save('MNC_Pricelist_2025.pdf');
     } catch (err) {
       showError('Failed to generate PDF: ' + err.message);
     }
-  };
+};
 
   useEffect(() => {
     const initializeData = async () => {
