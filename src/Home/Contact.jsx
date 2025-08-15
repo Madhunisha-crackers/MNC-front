@@ -234,9 +234,8 @@ const contactCards = [
     icon: Phone,
     title: "Call Information",
     content: [
-      { text: "Online Enquiry: 9487524689", href: "tel:9487524689" },
+      { text: "Online Enquiry: 9600608504", href: "tel:9600608504" },
       { text: "Whole Sale Enquiry: 9487524689", href: "tel:9487524689" },
-      { text: "Order & Payment Confirm: 9487594689", href: "tel:9487594689" },
       { text: "Dispatch: 9487594689", href: "tel:9487594689" },
     ],
     gradient: "bg-gradient-to-br from-green-400 to-green-600",
@@ -670,9 +669,9 @@ const contactCards = [
                   <div className="flex items-start gap-3">
                     <MapPin className="w-5 h-5 text-orange-400 mt-1 flex-shrink-0" />
                     <div>
-                      <p className="text-white font-medium">Office Address : Gopi Pyro World</p>
+                      <p className="text-white font-medium">Office Address :</p>
                       <p className="text-gray-300">
-                        Sivagamipuram Colony, Viseanatham panchayat.,
+                        Sivagamipuram Colony, Viswanatham panchayat.,
                         <br />
                         Sivakasi
                       </p>
