@@ -62,10 +62,18 @@ const Pricelist = () => {
 
   const capitalize = str => str ? str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : '';
 
+  const serialSort = (a, b) => {
+    const collator = new Intl.Collator(undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+    return collator.compare(a.serial_number, b.serial_number);
+  };
+
   const downloadPDF = () => {
     try {
-      if (!products.length || !productTypes.length) {
-        showError('No products or product types available to export');
+      if (!products.length) {
+        showError('No products available to export');
         return;
       }
 
@@ -87,47 +95,67 @@ const Pricelist = () => {
       yOffset += 30;
 
       const tableData = [];
-      productTypes
-        .filter(type => type !== "All")
-        .forEach(type => {
-          const typeKey = type.replace(/ /g, "_");
-          const typeProducts = products.filter(product => product.product_type === typeKey);
-          if (typeProducts.length > 0) {
-            tableData.push([{ content: capitalize(type), colSpan: 6, styles: { fontStyle: 'bold', halign: 'left', fillColor: [200, 200, 200] } }]);
-            tableData.push(['Serial No.', 'Product Name', 'Rate', 'Discounted Rate', 'Per', 'Quantity']);
-            typeProducts.forEach(product => {
-              const discountedPrice = product.price * 0.8; // Calculate 80% of original price
-              const disp = product.price-discountedPrice;
-              tableData.push([
-                product.serial_number,
-                product.productname,
-                `Rs.${formatPrice(product.price)}`,
-                `Rs.${formatPrice(disp)}`,
-                product.per,
-                '',
-              ]);
-            });
-            tableData.push([]);
-          }
-        });
+      let slNo = 1;
+      const orderedTypes = [
+        "One sound crackers",
+        "Ground Chakkar",
+        "Flower Pots",
+        "Twinkling Star",
+        "Rockets",
+        "Bombs",
+        "Repeating Shots",
+        "Comets Sky Shots",
+        "Fancy pencil varieties",
+        "Fountain and Fancy Novelties",
+        "Matches",
+        "Guns and Caps",
+        "Sparklers",
+        "Premium Sparklers",
+        "Gift Boxes",
+        "Kids Special "
+      ];
+
+      orderedTypes.forEach(type => {
+        const typeKey = type.replace(/ /g, "_").toLowerCase();
+        const typeProducts = products
+          .filter(product => product.product_type.toLowerCase() === typeKey)
+          .sort(serialSort);
+        if (typeProducts.length > 0) {
+          tableData.push([{ content: capitalize(type), colSpan: 6, styles: { fontStyle: 'bold', halign: 'left', fillColor: [200, 200, 200] } }]);
+          tableData.push(['Sl No.', 'Code', 'Product Name', 'Rate', 'Discounted Rate', 'Per']);
+          typeProducts.forEach(product => {
+            const discount = product.price * (product.discount / 100);
+            const discountedRate = product.price - discount;
+            tableData.push([
+              slNo++,
+              product.serial_number,
+              product.productname,
+              `Rs.${formatPrice(product.price)}`,
+              `Rs.${formatPrice(discountedRate)}`,
+              product.per
+            ]);
+          });
+          tableData.push([]);
+        }
+      });
 
       autoTable(doc, {
         startY: yOffset,
-        head: [['Serial No.', 'Product Name', 'Rate', 'Discounted Rate', 'Per', 'Quantity']],
+        head: [['Sl No.', 'Code', 'Product Name', 'Rate', 'Discounted Rate', 'Per']],
         body: tableData,
         theme: 'grid',
         styles: { fontSize: 10, cellPadding: 3 },
         headStyles: { fillColor: [2, 132, 199], textColor: [255, 255, 255] },
         columnStyles: { 
-          0: { cellWidth: 25 }, 
-          1: { cellWidth: 50 }, 
-          2: { cellWidth: 30 }, 
-          3: { cellWidth: 30 }, 
-          4: { cellWidth: 25 },
-          5: { cellWidth: 25 },
+          0: { cellWidth: 15 }, 
+          1: { cellWidth: 20 }, 
+          2: { cellWidth: 70 }, 
+          3: { cellWidth: 20 }, 
+          4: { cellWidth: 30 }, 
+          5: { cellWidth: 25 }
         },
         didDrawCell: (data) => {
-          if (data.row.section === 'body' && data.cell.raw && data.cell.raw.colSpan === 5) {
+          if (data.row.section === 'body' && data.cell.raw && data.cell.raw.colSpan === 6) {
             data.cell.styles.cellPadding = 5;
             data.cell.styles.fontSize = 12;
           }
@@ -138,7 +166,7 @@ const Pricelist = () => {
     } catch (err) {
       showError('Failed to generate PDF: ' + err.message);
     }
-};
+  };
 
   useEffect(() => {
     const initializeData = async () => {
@@ -534,30 +562,76 @@ const Pricelist = () => {
     };
   }, [cart, products, appliedPromo]);
 
-  const productTypes = useMemo(
-    () => ["All", ...new Set(products.map((p) => (p.product_type || "Others").replace(/_/g, " ")).sort())],
-    [products],
-  );
+  const productTypes = useMemo(() => {
+    const orderedTypes = [
+      "One sound crackers",
+      "Ground Chakkar",
+      "Flower Pots",
+      "Twinkling Star",
+      "Rockets",
+      "Bombs",
+      "Repeating Shots",
+      "Comets Sky Shots",
+      "Fancy pencil varieties",
+      "Fountain and Fancy Novelties",
+      "Matches",
+      "Guns and Caps",
+      "Sparklers",
+      "Premium Sparklers",
+      "Gift Boxes",
+      "Kids Special "
+    ];
+    const availableTypes = [...new Set(products
+      .filter(p => p.product_type !== "gift_box_dealers")
+      .map(p => p.product_type || "Others")
+    )];
+    const filteredOrderedTypes = orderedTypes.filter(type => 
+      availableTypes.includes(type.replace(/ /g, "_").toLowerCase())
+    );
+    return ["All", ...filteredOrderedTypes];
+  }, [products]);
 
-  const grouped = useMemo(
-    () =>
-      products
-        .filter(
-          (p) =>
-            p.product_type !== "gift_box_dealers" &&
-            (selectedType === "All" || p.product_type === selectedType.replace(/ /g, "_")) &&
-            (!searchTerm ||
-              p.productname.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              p.serial_number.toLowerCase().includes(searchTerm.toLowerCase())),
-        )
-        .reduce((acc, p) => {
-          const key = p.product_type || "Others";
-          acc[key] = acc[key] || [];
-          acc[key].push(p);
-          return acc;
-        }, {}),
-    [products, selectedType, searchTerm],
-  );
+  const grouped = useMemo(() => {
+    const orderedTypes = [
+      "One sound crackers",
+      "Ground Chakkar",
+      "Flower Pots",
+      "Twinkling Star",
+      "Rockets",
+      "Bombs",
+      "Repeating Shots",
+      "Comets Sky Shots",
+      "Fancy pencil varieties",
+      "Fountain and Fancy Novelties",
+      "Matches",
+      "Guns and Caps",
+      "Sparklers",
+      "Premium Sparklers",
+      "Gift Boxes",
+      "Kids Special "
+    ];
+    const result = products
+      .filter(p => p.product_type !== "gift_box_dealers" &&
+                   (selectedType === "All" || p.product_type === selectedType.replace(/ /g, "_").toLowerCase()) &&
+                   (!searchTerm || 
+                    p.productname.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                    p.serial_number.toLowerCase().includes(searchTerm.toLowerCase())))
+      .reduce((acc, p) => {
+        const key = p.product_type || "Others";
+        acc[key] = acc[key] || [];
+        acc[key].push(p);
+        return acc;
+      }, {});
+    const orderedResult = {};
+    orderedTypes
+      .map(type => type.replace(/ /g, "_").toLowerCase())
+      .forEach(type => {
+        if (result[type]) {
+          orderedResult[type] = result[type].sort(serialSort);
+        }
+      });
+    return orderedResult;
+  }, [products, selectedType, searchTerm]);
 
   if (isLoading) {
     return <LoadingSpinner />;
@@ -1187,7 +1261,7 @@ const Pricelist = () => {
                       className="w-full px-4 py-3 border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent"
                       required
                     >
-                      <option value="">Select District</option>
+                      <option value="">Select Place / City</option>
                       {districts.map((d) => (
                         <option key={d.id} value={d.name}>
                           {d.name}
