@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { FaDownload } from 'react-icons/fa';
+import { toast } from 'react-toastify'; // Added for toast notifications
 import { API_BASE_URL } from '../../../Config';
 import Sidebar from '../Sidebar/Sidebar';
 import Logout from '../Logout';
@@ -73,28 +72,11 @@ export default function Dispatch() {
 
   const updateStatus = async (id, newStatus, transportInfo = null) => {
     try {
-      const payload = { 
-        status: newStatus, 
-        ...(transportInfo && {
-          transportDetails: {
-            transportName: transportInfo.transportName,
-            lrNumber: transportInfo.lrNumber,
-            transportContact: transportInfo.transportContact,
-          },
-        }),
-      };
-      const response = await axios.put(`${API_BASE_URL}/api/tracking/fbookings/${id}/status`, payload);
-      setBookings((prev) =>
-        prev.map((booking) =>
-          booking.id === id
-            ? {
-                ...booking,
-                status: response.data.data.status,
-                transport_name: response.data.data.transport_name || booking.transport_name,
-                lr_number: response.data.data.lr_number || booking.lr_number,
-                transport_contact: response.data.data.transport_contact || booking.transport_contact,
-              }
-            : booking
+      const payload = { status: newStatus, ...transportInfo };
+      await axios.put(`${API_BASE_URL}/api/tracking/fbookings/${id}/status`, payload);
+      setBookings(prev =>
+        prev.map(booking =>
+          booking.id === id ? { ...booking, status: newStatus, ...transportInfo } : booking
         )
       );
       if (newStatus === 'dispatched' && transportInfo) {
@@ -102,13 +84,6 @@ export default function Dispatch() {
         setTimeout(() => setSuccessMessage(''), 3000);
       }
       setError('');
-      // Trigger immediate refresh to ensure all data is up-to-date
-      const allowedStatuses = ['paid', 'packed', 'dispatched', 'delivered'];
-      const statuses = filterStatus ? [filterStatus] : allowedStatuses;
-      const refreshResponse = await axios.get(`${API_BASE_URL}/api/tracking/filtered-bookings`, {
-        params: { status: statuses.join(',') }
-      });
-      setBookings(refreshResponse.data);
     } catch {
       setError('Failed to update status');
     }
@@ -130,47 +105,40 @@ export default function Dispatch() {
     setTransportDetails({ transportName: '', lrNumber: '', transportContact: '' });
   };
 
-  const generatePDF = (booking) => {
-    const doc = new jsPDF();
-    doc.setFontSize(22);
-    doc.text('Madhu Nisha Crackers', doc.internal.pageSize.width / 2, 20, { align: 'center' });
-    doc.setFontSize(12);
-    const lines = [
-      `Order ID: ${booking.order_id || 'N/A'}`,
-      `Customer Name: ${booking.customer_name || 'N/A'}`,
-      `Contact Number: ${booking.mobile_number || 'N/A'}`,
-      `District: ${booking.district || 'N/A'}`,
-      `State: ${booking.state || 'N/A'}`,
-      `Address: ${booking.address || 'N/A'}`,
-      ...(booking.status === 'dispatched' ? [
-        `Transport Name: ${booking.transport_name || 'N/A'}`,
-        `LR Number: ${booking.lr_number || 'N/A'}`,
-        `Transport Contact: ${booking.transport_contact || 'N/A'}`
-      ] : [])
-    ];
-    let yOffset = 40;
-    lines.forEach(line => {
-      doc.text(line, 20, yOffset);
-      yOffset += 10;
-    });
-    autoTable(doc, {
-      startY: yOffset + 10,
-      head: [['Sl. No', 'Serial No', 'Product Type', 'Product Name', 'Price', 'Quantity', 'Per']],
-      body: (booking.products || []).map((product, index) => [
-        index + 1,
-        product.id || 'N/A',
-        product.product_type || 'N/A',
-        product.productname || 'N/A',
-        `Rs.${product.price || '0.00'}`,
-        product.quantity || 0,
-        product.per || 'N/A'
-      ])
-    });
-    const finalY = doc.lastAutoTable.finalY + 10;
-    doc.text(`Total: Rs.${booking.total || '0.00'}`, 150, finalY, { align: 'right' });
-    const sanitizedCustomerName = (booking.customer_name || 'order').replace(/[^a-zA-Z0-9]/g, '_');
-    doc.output('dataurlnewwindow');
-    doc.save(`${sanitizedCustomerName}_crackers_order.pdf`);
+  const generatePDF = async (booking) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/direct/invoice/${booking.order_id}`, {
+        responseType: 'blob'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch PDF');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const safeCustomerName = (booking.customer_name || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      link.setAttribute('download', `${safeCustomerName}-${booking.order_id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success("Downloaded estimate bill, check downloads", {
+        position: "top-center",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+    } catch (err) {
+      console.error("PDF download error:", err);
+      toast.error("Failed to download PDF. Please try again.", {
+        position: "top-center",
+        autoClose: 5000,
+      });
+    }
   };
 
   const filteredBookings = bookings.filter(booking =>
@@ -239,6 +207,12 @@ export default function Dispatch() {
                 <div key={booking.id} className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 mobile:p-4">
                   <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">#{indexOfFirstOrder + index + 1}</div>
                   <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">{booking.customer_name || 'N/A'}</h3>
+                  <p className="text-gray-700 dark:text-gray-300">
+                    <strong>Contact:</strong>{" "}
+                    <a href={`tel:${booking.mobile_number}`} className="text-blue-600 hover:underline">
+                      {booking.mobile_number}
+                    </a>
+                  </p>
                   <p className="text-gray-700 dark:text-gray-300"><strong>Order ID:</strong> {booking.order_id || 'N/A'}</p>
                   <p className="text-gray-700 dark:text-gray-300"><strong>District:</strong> {booking.district || 'N/A'}</p>
                   <p className="text-gray-700 dark:text-gray-300"><strong>State:</strong> {booking.state || 'N/A'}</p>
