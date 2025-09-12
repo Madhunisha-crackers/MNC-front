@@ -107,6 +107,8 @@ const QuotationTable = ({
   openNewProductModal,
   lastAddedProduct,
   setLastAddedProduct,
+  setCart, // Added prop
+  setModalCart, // Added prop
 }) => {
   const quantityInputRefs = useRef({});
 
@@ -127,9 +129,13 @@ const QuotationTable = ({
     setChangeDiscount(newDiscount);
     const updatedCart = cart.map(item => ({
       ...item,
-      discount: item.product_type !== 'net_rate_products' ? newDiscount : item.discount,
+      discount: item.initialDiscount === 0 ? 0 : newDiscount, // Use initialDiscount to determine if discount stays 0
     }));
-    isModal ? setModalCart(updatedCart) : setCart(updatedCart);
+    if (isModal) {
+      setModalCart(updatedCart);
+    } else {
+      setCart(updatedCart);
+    }
   };
 
   return (
@@ -329,6 +335,7 @@ const FormFields = ({
   modalSelectedCustomer,
   setModalSelectedCustomer,
   modalCart,
+  setModalCart, // Added prop
   products,
   modalSelectedProduct,
   setModalSelectedProduct,
@@ -379,6 +386,8 @@ const FormFields = ({
     <QuotationTableErrorBoundary>
       <QuotationTable
         cart={modalCart}
+        setCart={setModalCart} // Pass setModalCart as setCart for modal context
+        setModalCart={setModalCart} // Pass setModalCart explicitly
         products={products}
         selectedProduct={modalSelectedProduct}
         setSelectedProduct={setModalSelectedProduct}
@@ -602,6 +611,7 @@ export default function Direct() {
         price: Math.round(Number(customProduct.price) || 0),
         quantity: Number.parseInt(customProduct.quantity) || 1,
         discount: Number.parseFloat(customProduct.discount) || targetDiscount,
+        initialDiscount: Number.parseFloat(customProduct.discount) || targetDiscount, // Store initial discount
         per: customProduct.per || 'Unit',
       };
     } else {
@@ -616,6 +626,7 @@ export default function Direct() {
         price: Math.round(Number(product.price) || 0),
         quantity: 1,
         discount: Number.parseFloat(product.discount) || targetDiscount,
+        initialDiscount: Number.parseFloat(product.discount) || 0, // Store initial discount from product data
         per: product.per || 'Unit',
       };
     }
@@ -810,6 +821,7 @@ export default function Direct() {
                 ...p,
                 price: Number.parseFloat(p.price) || 0,
                 discount: Number.parseFloat(p.discount) || 0,
+                initialDiscount: Number.parseFloat(p.discount) || 0, // Preserve initial discount
                 quantity: Number.parseInt(p.quantity) || 0,
                 per: p.per || 'Unit',
               }))
@@ -930,6 +942,7 @@ export default function Direct() {
                 ...p,
                 price: Number.parseFloat(p.price) || 0,
                 discount: Number.parseFloat(p.discount) || 0,
+                initialDiscount: Number.parseFloat(p.discount) || 0, // Preserve initial discount
                 quantity: Number.parseInt(p.quantity) || 0,
                 per: p.per || 'Unit',
               }))
@@ -1147,6 +1160,8 @@ export default function Direct() {
             <QuotationTableErrorBoundary>
               <QuotationTable
                 cart={cart}
+                setCart={setCart} // Pass setCart for main table
+                setModalCart={setModalCart} // Pass setModalCart (not used in main table but included for consistency)
                 products={products}
                 selectedProduct={selectedProduct}
                 setSelectedProduct={setSelectedProduct}
@@ -1280,6 +1295,7 @@ export default function Direct() {
                 modalSelectedCustomer={modalSelectedCustomer}
                 setModalSelectedCustomer={setModalSelectedCustomer}
                 modalCart={modalCart}
+                setModalCart={setModalCart} // Pass setModalCart to FormFields
                 products={products}
                 modalSelectedProduct={modalSelectedProduct}
                 setModalSelectedProduct={setModalSelectedProduct}
