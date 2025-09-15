@@ -821,7 +821,7 @@ export default function Direct() {
                 ...p,
                 price: Number.parseFloat(p.price) || 0,
                 discount: Number.parseFloat(p.discount) || 0,
-                initialDiscount: Number.parseFloat(p.discount) || 0, // Preserve initial discount
+                initialDiscount: Number.parseFloat(p.discount) || 0,
                 quantity: Number.parseInt(p.quantity) || 0,
                 per: p.per || 'Unit',
               }))
@@ -857,25 +857,23 @@ export default function Direct() {
           id: item.id,
           product_type: item.product_type,
           productname: item.productname,
-          price: getEffectivePrice(item),
+          price: Number.parseFloat(item.price) || 0,
           discount: Number.parseFloat(item.discount) || 0,
           quantity: Number.parseInt(item.quantity) || 0,
           per: item.per || 'Unit',
         })),
-        net_rate: Number.parseFloat(calculateNetRate(modalCart)),
-        you_save: Number.parseFloat(calculateYouSave(modalCart)),
-        processing_fee: processingFee,
-        total: Number.parseFloat(calculateTotal(modalCart, modalAdditionalDiscount)),
+        net_rate: Number.parseFloat(calculateNetRate(modalCart)) || 0,
+        you_save: Number.parseFloat(calculateYouSave(modalCart)) || 0,
+        processing_fee: Number.parseFloat(processingFee) || 0,
+        total: Number.parseFloat(calculateTotal(modalCart, modalAdditionalDiscount)) || 0,
         promo_discount: 0,
-        additional_discount: Number.parseFloat(modalAdditionalDiscount.toFixed(2)),
+        additional_discount: Number.parseFloat(modalAdditionalDiscount.toFixed(2)) || 0,
         status: "pending",
       };
-
       const response = await axios.put(`${API_BASE_URL}/api/direct/quotations/${quotationId}`, payload);
-      const updatedQuotationId = response.data.quotation_id;
-      console.log("Updated quotation with ID:", updatedQuotationId); // Debug log
-      if (!updatedQuotationId || updatedQuotationId === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(updatedQuotationId)) {
-        throw new Error("Invalid quotation ID returned from server");
+      const updatedQuotationId = response.data.quotation_id || quotationId; // Fallback to input quotationId
+      if (!updatedQuotationId) {
+        throw new Error("Invalid or missing quotation ID returned from server");
       }
 
       setSuccessMessage("Quotation updated successfully! Check downloads for PDF.");
@@ -894,8 +892,6 @@ export default function Direct() {
             : q,
         ),
       );
-
-      console.log("Fetching PDF for quotation_id:", updatedQuotationId); // Debug log
       const pdfResponse = await axios.get(`${API_BASE_URL}/api/direct/quotation/${updatedQuotationId}`, {
         responseType: "blob",
       });
@@ -912,10 +908,9 @@ export default function Direct() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      // Reset modal state after successful PDF download
       closeModal();
     } catch (err) {
-      console.error("Edit quotation error:", err); // Debug log
+      console.error("Edit quotation error:", err);
       setError(`Failed to update quotation: ${err.response?.data?.message || err.message}`);
     }
   };
@@ -1001,14 +996,11 @@ export default function Direct() {
       };
 
       const response = await axios.post(`${API_BASE_URL}/api/direct/bookings`, payload);
-      console.log("Created booking with order_id:", response.data.order_id); // Debug log
       setSuccessMessage("Booking created successfully! Check downloads for PDF.");
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
 
       setQuotations((prev) => prev.map((q) => (q.quotation_id === quotationId ? { ...q, status: "booked" } : q)));
-
-      console.log("Fetching invoice for order_id:", response.data.order_id); // Debug log
       const pdfResponse = await axios.get(`${API_BASE_URL}/api/direct/invoice/${response.data.order_id}`, {
         responseType: "blob",
       });
