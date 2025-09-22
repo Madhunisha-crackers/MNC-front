@@ -29,7 +29,7 @@ export default function Report() {
   useEffect(() => {
     const fetchBookings = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/tracking/filtered-bookings`, {
+        const response = await axios.get(`${API_BASE_URL}/api/tracking/report-bookings`, {
           params: { status: '' }
         });
         setBookings(response.data);
@@ -53,31 +53,22 @@ export default function Report() {
   const generatePDF = (booking) => {
     const doc = new jsPDF();
     doc.setFontSize(22);
-    doc.text('Madhu Nisha Crackers', doc.internal.pageSize.width / 2, 20, { align: 'center' });
+    doc.text('Fun with Crackers', doc.internal.pageSize.width / 2, 20, { align: 'center' });
     doc.setFontSize(12);
     const orderDetails = [
       ['Order ID', booking.order_id || 'N/A', 'Customer Name', booking.customer_name || 'N/A'],
       ['Phone', booking.mobile_number || 'N/A', 'District', booking.district || 'N/A'],
-      ['State', booking.state || 'N/A', 'Date', formatDate(booking.created_at)]
+      ['State', booking.state || 'N/A', 'Date', formatDate(booking.created_at)],
+      ['Payment Method', booking.payment_method || 'N/A', 'Amount Paid', booking.amount_paid ? `Rs.${booking.amount_paid}` : 'N/A'],
+      ['Transaction ID', booking.transaction_id || 'N/A', '', ''],
+      ['Promocode', booking.promocode || 'N/A', 'Discount', booking.discount ? `Rs.${booking.discount}` : 'N/A'],
+      ['Subtotal', booking.subtotal ? `Rs.${booking.subtotal}` : 'N/A', 'Total', booking.total ? `Rs.${booking.total}` : 'N/A']
     ];
     autoTable(doc, {
       startY: 40,
       body: orderDetails,
       columnStyles: { 0: { cellWidth: 50 }, 1: { cellWidth: 50 }, 2: { cellWidth: 50 }, 3: { cellWidth: 50 } },
       styles: { fontSize: 12 }
-    });
-    autoTable(doc, {
-      startY: doc.lastAutoTable.finalY + 10,
-      head: [['Sl. No', 'Serial No', 'Product Type', 'Product Name', 'Price', 'Quantity', 'Per']],
-      body: (booking.products || []).map((product, index) => [
-        index + 1,
-        product.id || 'N/A',
-        product.product_type || 'N/A',
-        product.productname || 'N/A',
-        `Rs.${product.price || '0.00'}`,
-        product.quantity || 0,
-        product.per || 'N/A'
-      ])
     });
     const finalY = doc.lastAutoTable.finalY + 10;
     doc.text(`Total: Rs.${booking.total || '0.00'}`, 150, finalY, { align: 'right' });
@@ -86,8 +77,24 @@ export default function Report() {
   };
 
   const exportToExcel = () => {
-    const data = currentOrders.map((b, i) => ({
-      'Sl. No': indexOfFirstOrder + i + 1,
+  // Sort bookings by month ascending
+  const sortedBookings = [...bookings].sort((a, b) => {
+    const dateA = new Date(a.created_at);
+    const dateB = new Date(b.created_at);
+    const monthA = dateA.getMonth();
+    const monthB = dateB.getMonth();
+    return monthA - monthB;
+  });
+
+  const data = sortedBookings.map((b, i) => {
+    // Calculate total if not provided: subtotal - discount (assume subtotal is base amount before discount)
+    const subtotal = b.subtotal || (b.total ? parseFloat(b.total) + (b.discount || 0) : 0);
+    const discount = parseFloat(b.discount) || 0;
+    const calculatedTotal = subtotal - discount;
+    const totalAmount = b.total ? parseFloat(b.total).toFixed(2) : calculatedTotal.toFixed(2);
+
+    return {
+      'Sl. No': i + 1,
       'Order ID': b.order_id || '',
       'Customer Name': b.customer_name || '',
       'Mobile Number': b.mobile_number || '',
@@ -96,13 +103,20 @@ export default function Report() {
       'Status': b.status || '',
       'Date': new Date(b.created_at).toLocaleDateString('en-GB'),
       'Address': b.address || '',
-      'Total Amount': b.total || '',
-    }));
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Bookings');
-    XLSX.writeFile(workbook, `Bookings_Report_Page_${currentPage}.xlsx`);
-  };
+      'Subtotal': subtotal.toFixed(2),
+      'Discount': discount.toFixed(2),
+      'Promocode': b.promocode || '',
+      'Total Amount': `Rs.${totalAmount}`,
+      'Payment Method': b.payment_method || '',
+      'Amount Paid': b.amount_paid ? `Rs.${b.amount_paid}` : '',
+      'Transaction ID': b.transaction_id || ''
+    };
+  });
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Bookings');
+  XLSX.writeFile(workbook, `Bookings_Report_All.xlsx`);
+};
 
   const indexOfLastOrder = currentPage * ordersPerPage;
   const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
@@ -139,33 +153,47 @@ export default function Report() {
           </div>
           <div className="grid mobile:grid-cols-1 onefifty:grid-cols-2 hundred:grid-cols-3 gap-6 mobile:gap-4">
             {currentOrders.length > 0 ? (
-              currentOrders.map((booking, index) => (
-                <div
-                  key={booking.id}
-                  className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 mobile:p-4"
-                >
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Booking #{indexOfFirstOrder + index + 1}</h2>
-                    <button
-                      onClick={() => generatePDF(booking)}
-                      className="flex items-center px-3 py-2 text-sm text-white rounded-md hover:bg-indigo-700 dark:hover:bg-blue-600 mobile:text-sm"
-                      style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
-                    >
-                      <FaDownload className="mr-2" />
-                      Download PDF
-                    </button>
+              currentOrders.map((booking, index) => {
+                // Calculate total for display if needed
+                const subtotal = booking.subtotal || (booking.total ? parseFloat(booking.total) + (booking.discount || 0) : 0);
+                const discount = parseFloat(booking.discount) || 0;
+                const calculatedTotal = subtotal - discount;
+                const totalAmount = booking.total ? parseFloat(booking.total).toFixed(2) : calculatedTotal.toFixed(2);
+
+                return (
+                  <div
+                    key={booking.id}
+                    className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 mobile:p-4"
+                  >
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Booking #{indexOfFirstOrder + index + 1}</h2>
+                      <button
+                        onClick={() => generatePDF(booking)}
+                        className="flex items-center px-3 py-2 text-sm text-white rounded-md hover:bg-indigo-700 dark:hover:bg-blue-600 mobile:text-sm"
+                        style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
+                      >
+                        <FaDownload className="mr-2" />
+                        Download PDF
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Order ID:</span> {booking.order_id || 'N/A'}</p>
+                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Customer Name:</span> {booking.customer_name || 'N/A'}</p>
+                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Phone:</span> {booking.mobile_number || 'N/A'}</p>
+                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">District:</span> {booking.district || 'N/A'}</p>
+                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">State:</span> {booking.state || 'N/A'}</p>
+                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Status:</span> {booking.status || 'N/A'}</p>
+                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Date:</span> {formatDate(booking.created_at)}</p>
+                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Total Amount:</span> Rs.{booking.total}</p>
+                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Payment Method:</span> {booking.payment_method || 'N/A'}</p>
+                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Amount Paid:</span> {booking.amount_paid ? `Rs.${booking.amount_paid}` : 'N/A'}</p>
+                      {booking.transaction_id && (
+                        <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Transaction ID:</span> {booking.transaction_id}</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Order ID:</span> {booking.order_id || 'N/A'}</p>
-                    <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Customer Name:</span> {booking.customer_name || 'N/A'}</p>
-                    <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Phone:</span> {booking.mobile_number || 'N/A'}</p>
-                    <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">District:</span> {booking.district || 'N/A'}</p>
-                    <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">State:</span> {booking.state || 'N/A'}</p>
-                    <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Status:</span> {booking.status || 'N/A'}</p>
-                    <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Date:</span> {formatDate(booking.created_at)}</p>
-                  </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="col-span-full text-center text-gray-600 dark:text-gray-400 p-4 bg-white dark:bg-gray-900 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 mobile:text-sm">
                 No bookings found

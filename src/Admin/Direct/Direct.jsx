@@ -1,17 +1,43 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import Select from 'react-select';
 import Modal from 'react-modal';
+import { debounce } from 'lodash';
+import * as XLSX from 'xlsx';
 import '../../App.css';
 import { API_BASE_URL } from '../../../Config';
 import Sidebar from '../Sidebar/Sidebar';
 import Logout from '../Logout';
-import { FaEdit, FaArrowRight, FaTrash } from 'react-icons/fa';
+import { FaEdit, FaArrowRight, FaTrash, FaDownload, FaSearch } from 'react-icons/fa';
 
 // Set app element for accessibility
 Modal.setAppElement("#root");
 
-// Error Boundary Component
+// Error Boundary for Direct component
+class DirectErrorBoundary extends React.Component {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Error caught by DirectErrorBoundary:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-3 rounded-lg text-center shadow-md">
+          An error occurred in the Direct Booking component: {this.state.error?.message || 'Unknown error'}. Please refresh the page or contact support.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Error Boundary for QuotationTable
 class QuotationTableErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
 
@@ -107,8 +133,8 @@ const QuotationTable = ({
   openNewProductModal,
   lastAddedProduct,
   setLastAddedProduct,
-  setCart, // Added prop
-  setModalCart, // Added prop
+  setCart,
+  setModalCart,
 }) => {
   const quantityInputRefs = useRef({});
 
@@ -129,7 +155,7 @@ const QuotationTable = ({
     setChangeDiscount(newDiscount);
     const updatedCart = cart.map(item => ({
       ...item,
-      discount: item.initialDiscount === 0 ? 0 : newDiscount, // Use initialDiscount to determine if discount stays 0
+      discount: item.initialDiscount === 0 ? 0 : newDiscount,
     }));
     if (isModal) {
       setModalCart(updatedCart);
@@ -302,12 +328,12 @@ const QuotationTable = ({
               {[
                 { label: 'Net Rate', value: `₹${calculateNetRate(cart)}` },
                 { label: 'You Save', value: `₹${calculateYouSave(cart)}` },
-                { label: 'Processing Fee (3%)', value: `₹${calculateProcessingFee(cart)}` },
+                { label: 'Processing Fee (3%)', value: `₹${calculateProcessingFee(cart, additionalDiscount)}` },
                 additionalDiscount > 0 && {
                   label: 'Additional Discount',
                   value: `${additionalDiscount.toFixed(2)}%`,
                 },
-                { label: 'Total', value: `₹${calculateTotal(cart)}` },
+                { label: 'Total', value: `₹${calculateTotal(cart, additionalDiscount)}` },
               ]
                 .filter(Boolean)
                 .map(({ label, value }) => (
@@ -328,14 +354,14 @@ const QuotationTable = ({
   );
 };
 
-// FormFields component for modal
+// FormFields component
 const FormFields = ({
   isEdit,
   customers,
   modalSelectedCustomer,
   setModalSelectedCustomer,
   modalCart,
-  setModalCart, // Added prop
+  setModalCart,
   products,
   modalSelectedProduct,
   setModalSelectedProduct,
@@ -386,8 +412,8 @@ const FormFields = ({
     <QuotationTableErrorBoundary>
       <QuotationTable
         cart={modalCart}
-        setCart={setModalCart} // Pass setModalCart as setCart for modal context
-        setModalCart={setModalCart} // Pass setModalCart explicitly
+        setCart={setModalCart}
+        setModalCart={setModalCart}
         products={products}
         selectedProduct={modalSelectedProduct}
         setSelectedProduct={setModalSelectedProduct}
@@ -521,6 +547,10 @@ export default function Direct() {
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [quotations, setQuotations] = useState([]);
+  const [filteredQuotations, setFilteredQuotations] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(6);
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [cart, setCart] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -538,7 +568,6 @@ export default function Direct() {
   const [orderId, setOrderId] = useState("");
   const [additionalDiscount, setAdditionalDiscount] = useState(0);
   const [modalAdditionalDiscount, setModalAdditionalDiscount] = useState(0);
-  const [changeDiscount, setChangeDiscount] = useState(0);
   const [modalChangeDiscount, setModalChangeDiscount] = useState(0);
   const [newProductModalIsOpen, setNewProductModalIsOpen] = useState(false);
   const [newProductData, setNewProductData] = useState({
@@ -551,13 +580,16 @@ export default function Direct() {
   const [newProductIsForModal, setNewProductIsForModal] = useState(false);
   const [lastAddedProduct, setLastAddedProduct] = useState(null);
   const [modalLastAddedProduct, setModalLastAddedProduct] = useState(null);
+  const [changeDiscount, setChangeDiscount] = useState(0);
 
   // Function to fetch quotations
   const fetchQuotations = async () => {
     try {
       const quotationsResponse = await axios.get(`${API_BASE_URL}/api/direct/quotations`);
       const data = Array.isArray(quotationsResponse.data) ? quotationsResponse.data : [];
-      setQuotations(data.filter(q => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id)));
+      const validQuotations = data.filter(q => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id));
+      setQuotations(validQuotations);
+      setFilteredQuotations(validQuotations);
     } catch (err) {
       console.error("Failed to fetch quotations:", err.message);
       setError(`Failed to fetch quotations: ${err.message}`);
@@ -577,7 +609,9 @@ export default function Direct() {
         setCustomers(Array.isArray(customersResponse.data) ? customersResponse.data : []);
         setProducts(Array.isArray(productsResponse.data) ? productsResponse.data : []);
         const data = Array.isArray(quotationsResponse.data) ? quotationsResponse.data : [];
-        setQuotations(data.filter(q => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id)));
+        const validQuotations = data.filter(q => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id));
+        setQuotations(validQuotations);
+        setFilteredQuotations(validQuotations);
       } catch (err) {
         setError(`Failed to fetch data: ${err.message}`);
       } finally {
@@ -589,6 +623,78 @@ export default function Direct() {
     return () => clearInterval(intervalId);
   }, []);
 
+  // Debounced search function
+  const handleSearch = useCallback(
+    debounce((query) => {
+      const lowerQuery = query.toLowerCase();
+      const filtered = quotations.filter(
+        (q) =>
+          q.quotation_id.toLowerCase().includes(lowerQuery) ||
+          (q.customer_name || '').toLowerCase().includes(lowerQuery) ||
+          q.status.toLowerCase().includes(lowerQuery)
+      );
+      setFilteredQuotations(filtered);
+      setCurrentPage(1);
+    }, 300),
+    [quotations]
+  );
+
+  // Handle search input change
+  const handleSearchChange = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    handleSearch(query);
+  };
+
+  // Download customers as Excel with separate sheets for each customer type
+  const downloadCustomersExcel = () => {
+    try {
+      const workbook = XLSX.utils.book_new();
+      
+      const customerGroups = {
+        Customer: customers.filter(c => c.customer_type === 'Customer'),
+        Agent: customers.filter(c => c.customer_type === 'Agent'),
+        'Customer of Agent': customers.filter(c => c.customer_type === 'Customer of Selected Agent'),
+      };
+
+      Object.entries(customerGroups).forEach(([type, group]) => {
+        if (group.length === 0) return;
+
+        const data = group.map(customer => ({
+          ID: customer.id || 'N/A',
+          Name: customer.name || 'N/A',
+          'Customer Type': customer.customer_type || 'User',
+          'Mobile Number': customer.mobile_number || 'N/A',
+          Email: customer.email || 'N/A',
+          Address: customer.address || 'N/A',
+          District: customer.district || 'N/A',
+          State: customer.state || 'N/A',
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(workbook, worksheet, type);
+      });
+
+      XLSX.writeFile(workbook, 'customers_export.xlsx');
+    } catch (err) {
+      console.error('Failed to download customers Excel:', err);
+      setError(`Failed to download customers Excel: ${err.message}`);
+    }
+  };
+
+  // Pagination logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentQuotations = filteredQuotations.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredQuotations.length / itemsPerPage);
+
+  const paginate = (pageNumber) => {
+    if (pageNumber >= 1 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+    }
+  };
+
+  // Other functions
   const addToCart = (isModal = false, customProduct = null) => {
     const targetCart = isModal ? modalCart : cart;
     const setTargetCart = isModal ? setModalCart : setCart;
@@ -611,7 +717,7 @@ export default function Direct() {
         price: Math.round(Number(customProduct.price) || 0),
         quantity: Number.parseInt(customProduct.quantity) || 1,
         discount: Number.parseFloat(customProduct.discount) || targetDiscount,
-        initialDiscount: Number.parseFloat(customProduct.discount) || targetDiscount, // Store initial discount
+        initialDiscount: Number.parseFloat(customProduct.discount) || targetDiscount,
         per: customProduct.per || 'Unit',
       };
     } else {
@@ -626,7 +732,7 @@ export default function Direct() {
         price: Math.round(Number(product.price) || 0),
         quantity: 1,
         discount: Number.parseFloat(product.discount) || targetDiscount,
-        initialDiscount: Number.parseFloat(product.discount) || 0, // Store initial discount from product data
+        initialDiscount: Number.parseFloat(product.discount) || 0,
         per: product.per || 'Unit',
       };
     }
@@ -692,7 +798,7 @@ export default function Direct() {
       0,
     );
     const discountedSubtotal = subtotal * (1 - additionalDiscount / 100);
-    return (discountedSubtotal * 0.03).toFixed(2); // 3% processing fee
+    return (discountedSubtotal * 0.03).toFixed(2);
   };
 
   const calculateTotal = (targetCart = [], additionalDiscount = 0) => {
@@ -747,7 +853,7 @@ export default function Direct() {
 
       const response = await axios.post(`${API_BASE_URL}/api/direct/quotations`, payload);
       const newQuotationId = response.data.quotation_id;
-      console.log("Created quotation with ID:", newQuotationId); // Debug log
+      console.log("Created quotation with ID:", newQuotationId);
       if (!newQuotationId || newQuotationId === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(newQuotationId)) {
         throw new Error("Invalid quotation ID returned from server");
       }
@@ -767,8 +873,17 @@ export default function Direct() {
         },
         ...prev,
       ]);
+      setFilteredQuotations((prev) => [
+        {
+          ...payload,
+          created_at: new Date().toISOString(),
+          customer_name: customer.name || "N/A",
+          total: payload.total,
+        },
+        ...prev,
+      ]);
 
-      console.log("Fetching PDF for quotation_id:", newQuotationId); // Debug log
+      console.log("Fetching PDF for quotation_id:", newQuotationId);
       const pdfResponse = await axios.get(`${API_BASE_URL}/api/direct/quotation/${newQuotationId}`, {
         responseType: "blob",
       });
@@ -785,7 +900,6 @@ export default function Direct() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      // Reset state after successful PDF download
       setCart([]);
       setSelectedCustomer("");
       setSelectedProduct(null);
@@ -795,14 +909,13 @@ export default function Direct() {
       setQuotationId(null);
       setIsQuotationCreated(false);
     } catch (err) {
-      console.error("Create quotation error:", err); // Debug log
+      console.error("Create quotation error:", err);
       setError(`Failed to create quotation: ${err.response?.data?.message || err.message}`);
     }
   };
 
   const editQuotation = async (quotation = null) => {
     if (quotation) {
-      // Validate quotation_id before proceeding
       if (!quotation.quotation_id || quotation.quotation_id === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotation.quotation_id)) {
         setError("Invalid or missing quotation ID");
         return;
@@ -871,7 +984,7 @@ export default function Direct() {
         status: "pending",
       };
       const response = await axios.put(`${API_BASE_URL}/api/direct/quotations/${quotationId}`, payload);
-      const updatedQuotationId = response.data.quotation_id || quotationId; // Fallback to input quotationId
+      const updatedQuotationId = response.data.quotation_id || quotationId;
       if (!updatedQuotationId) {
         throw new Error("Invalid or missing quotation ID returned from server");
       }
@@ -881,6 +994,18 @@ export default function Direct() {
       setTimeout(() => setShowSuccess(false), 3000);
 
       setQuotations((prev) =>
+        prev.map((q) =>
+          q.quotation_id === quotationId
+            ? {
+                ...q,
+                ...payload,
+                customer_name: customer.name || "N/A",
+                total: payload.total,
+              }
+            : q,
+        ),
+      );
+      setFilteredQuotations((prev) =>
         prev.map((q) =>
           q.quotation_id === quotationId
             ? {
@@ -917,7 +1042,6 @@ export default function Direct() {
 
   const convertToBooking = async (quotation = null) => {
     if (quotation) {
-      // Validate quotation_id before proceeding
       if (!quotation.quotation_id || quotation.quotation_id === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotation.quotation_id)) {
         setError("Invalid or missing quotation ID");
         return;
@@ -937,7 +1061,7 @@ export default function Direct() {
                 ...p,
                 price: Number.parseFloat(p.price) || 0,
                 discount: Number.parseFloat(p.discount) || 0,
-                initialDiscount: Number.parseFloat(p.discount) || 0, // Preserve initial discount
+                initialDiscount: Number.parseFloat(p.discount) || 0,
                 quantity: Number.parseInt(p.quantity) || 0,
                 per: p.per || 'Unit',
               }))
@@ -960,10 +1084,10 @@ export default function Direct() {
       return;
     }
 
-    const customer = customers.find((c) => c.id.toString() === modalSelectedCustomer);
-    if (!customer) return setError("Invalid customer");
-
     try {
+      const customer = customers.find((c) => c.id.toString() === modalSelectedCustomer);
+      if (!customer) return setError("Invalid customer");
+
       const subtotal = Number.parseFloat(calculateNetRate(modalCart)) - Number.parseFloat(calculateYouSave(modalCart));
       const discountedSubtotal = subtotal * (1 - modalAdditionalDiscount / 100);
       const processingFee = discountedSubtotal * 0.03;
@@ -1001,6 +1125,7 @@ export default function Direct() {
       setTimeout(() => setShowSuccess(false), 3000);
 
       setQuotations((prev) => prev.map((q) => (q.quotation_id === quotationId ? { ...q, status: "booked" } : q)));
+      setFilteredQuotations((prev) => prev.map((q) => (q.quotation_id === quotationId ? { ...q, status: "booked" } : q)));
       const pdfResponse = await axios.get(`${API_BASE_URL}/api/direct/invoice/${response.data.order_id}`, {
         responseType: "blob",
       });
@@ -1017,10 +1142,9 @@ export default function Direct() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      // Reset modal state after successful PDF download
       closeModal();
     } catch (err) {
-      console.error("Convert to booking error:", err); // Debug log
+      console.error("Convert to booking error:", err);
       setError(`Failed to create booking: ${err.response?.data?.message || err.message}`);
     }
   };
@@ -1049,6 +1173,9 @@ export default function Direct() {
       setQuotations((prev) =>
         prev.map((q) => (q.quotation_id === targetQuotationId ? { ...q, status: "cancelled" } : q)),
       );
+      setFilteredQuotations((prev) =>
+        prev.map((q) => (q.quotation_id === targetQuotationId ? { ...q, status: "cancelled" } : q)),
+      );
     } catch (err) {
       console.error("Failed to cancel quotation:", err.response?.data || err.message);
       setError(`Failed to cancel quotation: ${err.response?.data?.message || err.message}`);
@@ -1056,6 +1183,11 @@ export default function Direct() {
   };
 
   const openNewProductModal = (isModal = false) => {
+    if (typeof changeDiscount === 'undefined') {
+      console.error('changeDiscount is undefined');
+      setError('Internal error: Discount state is not initialized');
+      return;
+    }
     setNewProductIsForModal(isModal);
     setNewProductModalIsOpen(true);
     setNewProductData({ productname: '', price: '', discount: isModal ? modalChangeDiscount : changeDiscount, quantity: 1, per: '' });
@@ -1117,211 +1249,266 @@ export default function Direct() {
     setModalLastAddedProduct(null);
     setError("");
     setSuccessMessage("");
-    // Note: Do not reset quotationId here to avoid race condition with PDF fetch
   };
 
   return (
-    <div className="flex min-h-screen dark:bg-gray-800 bg-gray-50 mobile:flex-col">
-      <Sidebar />
-      <Logout />
-      <div className="flex-1 hundred:ml-64 p-6 pt-16 mobile:p-2">
-        <div className="w-full max-w-5xl mx-auto">
-          <h1 className="text-4xl font-bold mb-8 text-center text-gray-800 mobile:text-2xl dark:text-gray-100">
-            Direct Booking
-          </h1>
-          {loading && <div className="text-center text-gray-500">Loading...</div>}
-          {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
-              {error}
-            </div>
-          )}
-          {showSuccess && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
-              {successMessage}
-            </div>
-          )}
-          <div className="flex flex-wrap gap-6 justify-center mb-8 mobile:flex-col mobile:gap-3">
-            {renderSelect(
-              selectedCustomer,
-              (e) => setSelectedCustomer(e.target.value),
-              customers,
-              "Select Customer",
-              "Select a customer",
-              "main-customer-select",
-            )}
-            <QuotationTableErrorBoundary>
-              <QuotationTable
-                cart={cart}
-                setCart={setCart} // Pass setCart for main table
-                setModalCart={setModalCart} // Pass setModalCart (not used in main table but included for consistency)
-                products={products}
-                selectedProduct={selectedProduct}
-                setSelectedProduct={setSelectedProduct}
-                addToCart={addToCart}
-                updateQuantity={updateQuantity}
-                updateDiscount={updateDiscount}
-                updatePrice={updatePrice}
-                removeFromCart={removeFromCart}
-                calculateNetRate={calculateNetRate}
-                calculateYouSave={calculateYouSave}
-                calculateProcessingFee={calculateProcessingFee}
-                calculateTotal={calculateTotal}
-                styles={styles}
-                additionalDiscount={additionalDiscount}
-                setAdditionalDiscount={setAdditionalDiscount}
-                changeDiscount={changeDiscount}
-                setChangeDiscount={setChangeDiscount}
-                openNewProductModal={openNewProductModal}
-                lastAddedProduct={lastAddedProduct}
-                setLastAddedProduct={setLastAddedProduct}
-              />
-            </QuotationTableErrorBoundary>
-          </div>
-          <div className="flex justify-center gap-4 mt-8 mobile:mt-4 mobile:flex-col">
-            <button
-              onClick={createQuotation}
-              disabled={!selectedCustomer || !cart.length}
-              className={`onefifty:w-50 hundred:w-50 h-10 text-white px-8 rounded-lg font-bold shadow ${!selectedCustomer || !cart.length ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`}
-              style={styles.button}
-            >
-              Create Quotation
-            </button>
-          </div>
-          <div className="mt-12">
-            <h2 className="text-2xl font-semibold mb-4 text-center text-gray-800 mobile:text-xl">All Quotations</h2>
-            {quotations.length ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mobile:gap-4">
-                {quotations.map((quotation) => (
-                  <div key={quotation.quotation_id} className="p-6 rounded-lg shadow-lg" style={styles.card}>
-                    <h3 className="text-lg font-bold mb-2 mobile:text-base text-gray-900">{quotation.quotation_id}</h3>
-                    <p className="text-sm mb-1 mobile:text-xs text-gray-900">
-                      <span className="font-semibold">Customer:</span> {quotation.customer_name || "N/A"}
-                    </p>
-                    <p className="text-sm mb-1 mobile:text-xs text-gray-900">
-                      <span className="font-semibold">Total:</span> ₹{Number.parseFloat(quotation.total).toFixed(2)}
-                    </p>
-                    <p className="text-sm mb-1 mobile:text-xs text-gray-900">
-                      <span className="font-semibold">Status:</span>
-                      <span
-                        className={`capitalize ${quotation.status === "pending" ? "text-yellow-600" : quotation.status === "booked" ? "text-green-600" : "text-red-600"}`}
-                      >
-                        {quotation.status}
-                      </span>
-                    </p>
-                    <p className="text-sm mb-4 mobile:text-xs text-gray-900">
-                      <span className="font-semibold">Created At:</span>
-                      {new Date(quotation.created_at).toLocaleDateString("en-GB", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                      })}
-                    </p>
-                    <div className="flex gap-2 mobile:flex-col">
-                      <button
-                        onClick={() => editQuotation(quotation)}
-                        disabled={quotation.status !== "pending"}
-                        className={`flex-1 text-white px-4 py-2 rounded-lg font-bold text-sm ${quotation.status !== "pending" ? "bg-gray-400 cursor-not-allowed" : "bg-yellow-600 hover:bg-yellow-700"}`}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => convertToBooking(quotation)}
-                        disabled={quotation.status !== "pending"}
-                        className={`flex-1 text-white px-4 py-2 rounded-lg font-bold text-sm ${quotation.status !== "pending" ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`}
-                      >
-                        Convert to Booking
-                      </button>
-                      <button
-                        onClick={() => cancelQuotation(quotation.quotation_id)}
-                        disabled={quotation.status !== "pending"}
-                        className={`flex-1 text-white px-4 py-2 rounded-lg font-bold text-sm ${quotation.status !== "pending" ? "bg-gray-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"}`}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ))}
+    <DirectErrorBoundary>
+      <div className="flex min-h-screen dark:bg-gray-800 bg-gray-50 mobile:flex-col">
+        <Sidebar />
+        <Logout />
+        <div className="flex-1 hundred:ml-64 p-6 pt-16 mobile:p-2">
+          <div className="w-full max-w-5xl mx-auto">
+            <h1 className="text-4xl font-bold mb-8 text-center text-gray-800 mobile:text-2xl dark:text-gray-100">
+              Direct Booking
+            </h1>
+            {loading && <div className="text-center text-gray-500">Loading...</div>}
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
+                {error}
               </div>
-            ) : (
-              <div className="p-4 text-center text-gray-500 mobile:p-2 mobile:text-xs">No quotations available</div>
             )}
-          </div>
-          <Modal
-            isOpen={modalIsOpen}
-            onRequestClose={closeModal}
-            className="fixed inset-0 flex items-center justify-center p-4"
-            overlayClassName="fixed inset-0 bg-black/50"
-            key="quotation-modal"
-          >
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full mobile:p-4 max-h-[90vh] overflow-y-auto">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6 text-center">
-                {modalMode === "edit" ? "Edit Quotation" : "Convert to Booking"}
-              </h2>
-              {error && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
-                  {error}
-                </div>
+            {showSuccess && (
+              <div className="bg-green-100 border border-green-400 text-green-700 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
+                {successMessage}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-6 justify-center mb-8 mobile:flex-col mobile:gap-3">
+              {renderSelect(
+                selectedCustomer,
+                (e) => setSelectedCustomer(e.target.value),
+                customers,
+                "Select Customer",
+                "Select a customer",
+                "main-customer-select",
               )}
-              {modalMode === "book" && (
-                <div className="flex flex-col items-center mobile:w-full mb-6">
-                  <label
-                    htmlFor="order-id"
-                    className="text-lg font-semibold dark:text-gray-100 text-gray-700 mb-2 mobile:text-base"
-                  >
-                    Order ID
-                  </label>
+              <div className="flex justify-center">
+                <button
+                  onClick={downloadCustomersExcel}
+                  className="h-10 text-white px-6 rounded-lg font-bold shadow bg-blue-600 hover:bg-blue-700 flex items-center gap-2"
+                  style={styles.button}
+                >
+                  <FaDownload /> Download Customers Excel
+                </button>
+              </div>
+              <QuotationTableErrorBoundary>
+                <QuotationTable
+                  cart={cart}
+                  setCart={setCart}
+                  setModalCart={setModalCart}
+                  products={products}
+                  selectedProduct={selectedProduct}
+                  setSelectedProduct={setSelectedProduct}
+                  addToCart={addToCart}
+                  updateQuantity={updateQuantity}
+                  updateDiscount={updateDiscount}
+                  updatePrice={updatePrice}
+                  removeFromCart={removeFromCart}
+                  calculateNetRate={calculateNetRate}
+                  calculateYouSave={calculateYouSave}
+                  calculateProcessingFee={calculateProcessingFee}
+                  calculateTotal={calculateTotal}
+                  styles={styles}
+                  additionalDiscount={additionalDiscount}
+                  setAdditionalDiscount={setAdditionalDiscount}
+                  changeDiscount={changeDiscount}
+                  setChangeDiscount={setChangeDiscount}
+                  openNewProductModal={openNewProductModal}
+                  lastAddedProduct={lastAddedProduct}
+                  setLastAddedProduct={setLastAddedProduct}
+                />
+              </QuotationTableErrorBoundary>
+            </div>
+            <div className="flex justify-center gap-4 mt-8 mobile:mt-4 mobile:flex-col">
+              <button
+                onClick={createQuotation}
+                disabled={!selectedCustomer || !cart.length}
+                className={`onefifty:w-50 hundred:w-50 h-10 text-white px-8 rounded-lg font-bold shadow ${!selectedCustomer || !cart.length ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`}
+                style={styles.button}
+              >
+                Create Quotation
+              </button>
+            </div>
+            <div className="mt-12">
+              <h2 className="text-2xl font-semibold mb-4 text-center text-gray-800 mobile:text-xl">All Quotations</h2>
+              <div className="flex justify-center mb-6">
+                <div className="flex items-center gap-2 mobile:w-full onefifty:w-96">
+                  <FaSearch className="text-gray-500" />
                   <input
-                    id="order-id"
                     type="text"
-                    value={orderId}
-                    onChange={(e) => setOrderId(e.target.value)}
-                    className="onefifty:w-96 hundred:w-96 p-3 rounded-lg bg-white text-gray-900 border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 mobile:w-full mobile:p-2 mobile:text-sm"
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    placeholder="Search by Quotation ID, Customer, or Status"
+                    className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     style={styles.input}
-                    placeholder="Enter Order ID"
                   />
                 </div>
+              </div>
+              {currentQuotations.length ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mobile:gap-4">
+                    {currentQuotations.map((quotation) => (
+                      <div key={quotation.quotation_id} className="p-6 rounded-lg shadow-lg" style={styles.card}>
+                        <h3 className="text-lg font-bold mb-2 mobile:text-base text-gray-900">{quotation.quotation_id}</h3>
+                        <p className="text-sm mb-1 mobile:text-xs text-gray-900">
+                          <span className="font-semibold">Customer:</span> {quotation.customer_name || "N/A"}
+                        </p>
+                        <p className="text-sm mb-1 mobile:text-xs text-gray-900">
+                          <span className="font-semibold">Total:</span> ₹{Number.parseFloat(quotation.total).toFixed(2)}
+                        </p>
+                        <p className="text-sm mb-1 mobile:text-xs text-gray-900">
+                          <span className="font-semibold">Status:</span>
+                          <span
+                            className={`capitalize ${quotation.status === "pending" ? "text-yellow-600" : quotation.status === "booked" ? "text-green-600" : "text-red-600"}`}
+                          >
+                            {quotation.status}
+                          </span>
+                        </p>
+                        <p className="text-sm mb-4 mobile:text-xs text-gray-900">
+                          <span className="font-semibold">Created At:</span>
+                          {new Date(quotation.created_at).toLocaleDateString("en-GB", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          })}
+                        </p>
+                        <div className="flex gap-2 mobile:flex-col">
+                          <button
+                            onClick={() => editQuotation(quotation)}
+                            disabled={quotation.status !== "pending"}
+                            className={`flex-1 text-white px-4 py-2 rounded-lg font-bold text-sm ${quotation.status !== "pending" ? "bg-gray-400 cursor-not-allowed" : "bg-yellow-600 hover:bg-yellow-700"}`}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => convertToBooking(quotation)}
+                            disabled={quotation.status !== "pending"}
+                            className={`flex-1 text-white px-4 py-2 rounded-lg font-bold text-sm ${quotation.status !== "pending" ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`}
+                          >
+                            Convert to Booking
+                          </button>
+                          <button
+                            onClick={() => cancelQuotation(quotation.quotation_id)}
+                            disabled={quotation.status !== "pending"}
+                            className={`flex-1 text-white px-4 py-2 rounded-lg font-bold text-sm ${quotation.status !== "pending" ? "bg-gray-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"}`}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-center mt-6 space-x-2">
+                    <button
+                      onClick={() => paginate(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className={`px-4 py-2 rounded-lg text-sm ${currentPage === 1 ? "bg-gray-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white"}`}
+                      style={styles.button}
+                    >
+                      Previous
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => paginate(page)}
+                        className={`px-4 py-2 rounded-lg text-sm ${currentPage === page ? "bg-blue-800 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"}`}
+                        style={styles.button}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => paginate(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className={`px-4 py-2 rounded-lg text-sm ${currentPage === totalPages ? "bg-gray-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white"}`}
+                      style={styles.button}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="p-4 text-center text-gray-500 mobile:p-2 mobile:text-xs">
+                  {searchQuery ? "No quotations match your search" : "No quotations available"}
+                </div>
               )}
-              <FormFields
-                isEdit={modalMode === "edit"}
-                customers={customers}
-                modalSelectedCustomer={modalSelectedCustomer}
-                setModalSelectedCustomer={setModalSelectedCustomer}
-                modalCart={modalCart}
-                setModalCart={setModalCart} // Pass setModalCart to FormFields
-                products={products}
-                modalSelectedProduct={modalSelectedProduct}
-                setModalSelectedProduct={setModalSelectedProduct}
-                addToCart={addToCart}
-                updateQuantity={updateQuantity}
-                updateDiscount={updateDiscount}
-                updatePrice={updatePrice}
-                removeFromCart={removeFromCart}
-                calculateNetRate={calculateNetRate}
-                calculateYouSave={calculateYouSave}
-                calculateProcessingFee={calculateProcessingFee}
-                calculateTotal={calculateTotal}
-                handleSubmit={modalMode === "edit" ? () => editQuotation() : () => convertToBooking()}
-                closeModal={closeModal}
-                styles={styles}
-                modalAdditionalDiscount={modalAdditionalDiscount}
-                setModalAdditionalDiscount={setModalAdditionalDiscount}
-                modalChangeDiscount={modalChangeDiscount}
-                setModalChangeDiscount={setModalChangeDiscount}
-                openNewProductModal={openNewProductModal}
-                modalLastAddedProduct={modalLastAddedProduct}
-                setModalLastAddedProduct={setModalLastAddedProduct}
-              />
             </div>
-          </Modal>
-          <NewProductModal
-            isOpen={newProductModalIsOpen}
-            onClose={closeNewProductModal}
-            onSubmit={handleAddNewProduct}
-            newProductData={newProductData}
-            setNewProductData={setNewProductData}
-          />
+            <Modal
+              isOpen={modalIsOpen}
+              onRequestClose={closeModal}
+              className="fixed inset-0 flex items-center justify-center p-4"
+              overlayClassName="fixed inset-0 bg-black/50"
+              key="quotation-modal"
+            >
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full mobile:p-4 max-h-[90vh] overflow-y-auto">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6 text-center">
+                  {modalMode === "edit" ? "Edit Quotation" : "Convert to Booking"}
+                </h2>
+                {error && (
+                  <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
+                    {error}
+                  </div>
+                )}
+                {modalMode === "book" && (
+                  <div className="flex flex-col items-center mobile:w-full mb-6">
+                    <label
+                      htmlFor="order-id"
+                      className="text-lg font-semibold dark:text-gray-100 text-gray-700 mb-2 mobile:text-base"
+                    >
+                      Order ID
+                    </label>
+                    <input
+                      id="order-id"
+                      type="text"
+                      value={orderId}
+                      onChange={(e) => setOrderId(e.target.value)}
+                      className="onefifty:w-96 hundred:w-96 p-3 rounded-lg bg-white text-gray-900 border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 mobile:w-full mobile:p-2 mobile:text-sm"
+                      style={styles.input}
+                      placeholder="Enter Order ID"
+                    />
+                  </div>
+                )}
+                <FormFields
+                  isEdit={modalMode === "edit"}
+                  customers={customers}
+                  modalSelectedCustomer={modalSelectedCustomer}
+                  setModalSelectedCustomer={setModalSelectedCustomer}
+                  modalCart={modalCart}
+                  setModalCart={setModalCart}
+                  products={products}
+                  modalSelectedProduct={modalSelectedProduct}
+                  setModalSelectedProduct={setModalSelectedProduct}
+                  addToCart={addToCart}
+                  updateQuantity={updateQuantity}
+                  updateDiscount={updateDiscount}
+                  updatePrice={updatePrice}
+                  removeFromCart={removeFromCart}
+                  calculateNetRate={calculateNetRate}
+                  calculateYouSave={calculateYouSave}
+                  calculateProcessingFee={calculateProcessingFee}
+                  calculateTotal={calculateTotal}
+                  handleSubmit={modalMode === "edit" ? () => editQuotation() : () => convertToBooking()}
+                  closeModal={closeModal}
+                  styles={styles}
+                  modalAdditionalDiscount={modalAdditionalDiscount}
+                  setModalAdditionalDiscount={setModalAdditionalDiscount}
+                  modalChangeDiscount={modalChangeDiscount}
+                  setModalChangeDiscount={setModalChangeDiscount}
+                  openNewProductModal={openNewProductModal}
+                  modalLastAddedProduct={modalLastAddedProduct}
+                  setModalLastAddedProduct={setModalLastAddedProduct}
+                />
+              </div>
+            </Modal>
+            <NewProductModal
+              isOpen={newProductModalIsOpen}
+              onClose={closeNewProductModal}
+              onSubmit={handleAddNewProduct}
+              newProductData={newProductData}
+              setNewProductData={setNewProductData}
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </DirectErrorBoundary>
   );
 }
