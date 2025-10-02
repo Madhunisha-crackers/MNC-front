@@ -696,61 +696,61 @@ export default function Direct() {
 
   // Other functions
   const addToCart = (isModal = false, customProduct = null) => {
-    const targetCart = isModal ? modalCart : cart;
-    const setTargetCart = isModal ? setModalCart : setCart;
-    const targetSelectedProduct = isModal ? modalSelectedProduct : selectedProduct;
-    const setTargetSelectedProduct = isModal ? setModalSelectedProduct : setSelectedProduct;
-    const targetDiscount = isModal ? modalChangeDiscount : changeDiscount;
-    const setTargetLastAddedProduct = isModal ? setModalLastAddedProduct : setLastAddedProduct;
+  const targetCart = isModal ? modalCart : cart;
+  const setTargetCart = isModal ? setModalCart : setCart;
+  const targetSelectedProduct = isModal ? modalSelectedProduct : selectedProduct;
+  const setTargetSelectedProduct = isModal ? setModalSelectedProduct : setSelectedProduct;
+  const targetDiscount = isModal ? modalChangeDiscount : changeDiscount;
+  const setTargetLastAddedProduct = isModal ? setModalLastAddedProduct : setLastAddedProduct;
 
-    if (!customProduct && !targetSelectedProduct) {
-      setError("Please select a product");
+  if (!customProduct && !targetSelectedProduct) {
+    setError("Please select a product");
+    return;
+  }
+
+  let product;
+  if (customProduct) {
+    product = {
+      ...customProduct,
+      id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      product_type: 'custom',
+      price: Math.round(Number(customProduct.price) || 0),
+      quantity: Number.parseInt(customProduct.quantity) || 1,
+      discount: Number.parseFloat(customProduct.discount) || targetDiscount,
+      initialDiscount: Number.parseFloat(customProduct.discount) || targetDiscount,
+      per: customProduct.per || 'Unit',
+    };
+  } else {
+    const [id, type] = targetSelectedProduct.value.split("-");
+    product = products.find((p) => p.id.toString() === id && p.product_type === type);
+    if (!product) {
+      setError("Product not found");
       return;
     }
+    product = {
+      ...product,
+      price: Math.round(Number(product.price) || 0),
+      quantity: 1,
+      discount: Number.parseFloat(product.discount) || targetDiscount,
+      initialDiscount: Number.parseFloat(product.discount) || 0,
+      per: product.per || 'Unit',
+    };
+  }
 
-    let product;
-    if (customProduct) {
-      product = {
-        ...customProduct,
-        id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        product_type: 'custom',
-        price: Math.round(Number(customProduct.price) || 0),
-        quantity: Number.parseInt(customProduct.quantity) || 1,
-        discount: Number.parseFloat(customProduct.discount) || targetDiscount,
-        initialDiscount: Number.parseFloat(customProduct.discount) || targetDiscount,
-        per: customProduct.per || 'Unit',
-      };
-    } else {
-      const [id, type] = targetSelectedProduct.value.split("-");
-      product = products.find((p) => p.id.toString() === id && p.product_type === type);
-      if (!product) {
-        setError("Product not found");
-        return;
-      }
-      product = {
-        ...product,
-        price: Math.round(Number(product.price) || 0),
-        quantity: 1,
-        discount: Number.parseFloat(product.discount) || targetDiscount,
-        initialDiscount: Number.parseFloat(product.discount) || 0,
-        per: product.per || 'Unit',
-      };
-    }
-
-    setTargetCart((prev) => {
-      const exists = prev.find((item) => item.id === product.id && item.product_type === product.product_type);
-      return exists
-        ? prev.map((item) =>
-            item.id === product.id && item.product_type === product.product_type
-              ? { ...item, quantity: item.quantity + 1 }
-              : item,
-          )
-        : [...prev, product];
-    });
-    setTargetSelectedProduct(null);
-    setTargetLastAddedProduct({ id: product.id, product_type: product.product_type });
-    setError("");
-  };
+  setTargetCart((prev) => {
+    const exists = prev.find((item) => item.id === product.id && item.product_type === product.product_type);
+    return exists
+      ? prev.map((item) =>
+          item.id === product.id && item.product_type === product.product_type
+            ? { ...item, quantity: item.quantity + 1 }
+            : item,
+        )
+      : [product, ...prev];  // Changed: Unshift to top for new products
+  });
+  setTargetSelectedProduct(null);
+  setTargetLastAddedProduct({ id: product.id, product_type: product.product_type });
+  setError("");
+};
 
   const updateQuantity = (id, type, quantity, isModal = false) => {
     const setTargetCart = isModal ? setModalCart : setCart;
@@ -1281,15 +1281,6 @@ export default function Direct() {
                 "Select a customer",
                 "main-customer-select",
               )}
-              <div className="flex justify-center">
-                <button
-                  onClick={downloadCustomersExcel}
-                  className="h-10 text-white px-6 rounded-lg font-bold shadow bg-blue-600 hover:bg-blue-700 flex items-center gap-2"
-                  style={styles.button}
-                >
-                  <FaDownload /> Download Customers Excel
-                </button>
-              </div>
               <QuotationTableErrorBoundary>
                 <QuotationTable
                   cart={cart}
@@ -1351,6 +1342,9 @@ export default function Direct() {
                         <h3 className="text-lg font-bold mb-2 mobile:text-base text-gray-900">{quotation.quotation_id}</h3>
                         <p className="text-sm mb-1 mobile:text-xs text-gray-900">
                           <span className="font-semibold">Customer:</span> {quotation.customer_name || "N/A"}
+                        </p>
+                        <p className="text-sm mb-1 mobile:text-xs text-gray-900">
+                          <span className="font-semibold">Location:</span> {quotation.district || "N/A"}
                         </p>
                         <p className="text-sm mb-1 mobile:text-xs text-gray-900">
                           <span className="font-semibold">Total:</span> ₹{Number.parseFloat(quotation.total).toFixed(2)}
@@ -1432,6 +1426,15 @@ export default function Direct() {
                 </div>
               )}
             </div>
+            <div className="flex justify-center mt-5 mb-20">
+                <button
+                  onClick={downloadCustomersExcel}
+                  className="h-10 text-white px-6 rounded-lg font-bold shadow bg-blue-600 hover:bg-blue-700 flex items-center gap-2"
+                  style={styles.button}
+                >
+                  <FaDownload /> Download Customers Excel
+                </button>
+              </div>
             <Modal
               isOpen={modalIsOpen}
               onRequestClose={closeModal}
