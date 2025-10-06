@@ -234,7 +234,7 @@ const contactCards = [
     icon: Phone,
     title: "Call Information",
     content: [
-      { text: "Online Enquiry: 9600608504", href: "tel:9600608504" },
+      { text: "Online Enquiry: 9487524689", href: "tel:9487524689" },
       { text: "Whole Sale Enquiry: 9487524689", href: "tel:9487524689" },
       { text: "Dispatch: 9487594689", href: "tel:9487594689" },
     ],
@@ -243,7 +243,7 @@ const contactCards = [
   {
     icon: Mail,
     title: "Email Address",
-    content: [{ text: "madhunishapyrotechsivakasi@gmail.com", href: "mailto:madhunishapyrotechsivakasi@gmail.com" }],
+    content: [{ text: "madhunishacrackers@gmail.com", href: "mailtomadhunishacrackers@gmail.com" }],
     gradient: "bg-gradient-to-br from-blue-400 to-blue-600",
   },
 ]
