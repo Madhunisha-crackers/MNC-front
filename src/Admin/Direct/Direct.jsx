@@ -137,6 +137,7 @@ const QuotationTable = ({
   setModalCart,
 }) => {
   const quantityInputRefs = useRef({});
+  const productSelectRef = useRef(null); // Ref for the product select input
 
   useEffect(() => {
     if (lastAddedProduct) {
@@ -149,6 +150,16 @@ const QuotationTable = ({
       }
     }
   }, [lastAddedProduct, setLastAddedProduct]);
+
+  // Handle Enter key press in quantity input
+  const handleQuantityKeyDown = (e, id, product_type) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // Prevent form submission or other default behavior
+      if (productSelectRef.current) {
+        productSelectRef.current.focus(); // Focus the product select input
+      }
+    }
+  };
 
   const handleChangeDiscount = (value) => {
     const newDiscount = Math.max(0, Math.min(100, parseFloat(value) || 0));
@@ -186,6 +197,7 @@ const QuotationTable = ({
           className="mobile:w-full onefifty:w-96 hundred:w-96"
           classNamePrefix="react-select"
           styles={selectStyles}
+          ref={productSelectRef} // Attach ref to Select component
         />
         <button
           onClick={() => addToCart(isModal)}
@@ -297,6 +309,7 @@ const QuotationTable = ({
                       onChange={(e) =>
                         updateQuantity(item.id, item.product_type, Number.parseInt(e.target.value) || 0, isModal)
                       }
+                      onKeyDown={(e) => handleQuantityKeyDown(e, item.id, item.product_type)} // Add keydown handler
                       min="0"
                       ref={(el) => (quantityInputRefs.current[`${item.id}-${item.product_type}`] = el)}
                       className="w-16 text-center border border-gray-300 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-600"
