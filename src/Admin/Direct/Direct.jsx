@@ -658,41 +658,41 @@ export default function Direct() {
     handleSearch(query);
   };
 
-const downloadCustomersExcel = () => {
-  try {
-    const workbook = XLSX.utils.book_new();
-    
-    const customerGroups = {
-      Customer: customers.filter(c => c.customer_type === 'Customer'),
-      Agent: customers.filter(c => c.customer_type === 'Agent'),
-      'Customer of Agent': customers.filter(c => c.customer_type === 'Customer of Selected Agent'),
-    };
+  const downloadCustomersExcel = () => {
+    try {
+      const workbook = XLSX.utils.book_new();
+      
+      const customerGroups = {
+        Customer: customers.filter(c => c.customer_type === 'Customer'),
+        Agent: customers.filter(c => c.customer_type === 'Agent'),
+        'Customer of Agent': customers.filter(c => c.customer_type === 'Customer of Selected Agent'),
+      };
 
-    for (const [type, group] of Object.entries(customerGroups)) {
-      if (group.length === 0) continue;
+      for (const [type, group] of Object.entries(customerGroups)) {
+        if (group.length === 0) continue;
 
-      const data = group.map(customer => ({
-        ID: customer.id || 'N/A',
-        Name: customer.name || 'N/A',
-        'Customer Type': customer.customer_type || 'User',
-        ...(type === 'Customer of Agent' ? { 'Agent Name': customer.agent_name || 'N/A' } : {}),
-        'Mobile Number': customer.mobile_number || 'N/A',
-        Email: customer.email || 'N/A',
-        Address: customer.address || 'N/A',
-        District: customer.district || 'N/A',
-        State: customer.state || 'N/A',
-      }));
+        const data = group.map(customer => ({
+          ID: customer.id || 'N/A',
+          Name: customer.name || 'N/A',
+          'Customer Type': customer.customer_type || 'User',
+          ...(type === 'Customer of Agent' ? { 'Agent Name': customer.agent_name || 'N/A' } : {}),
+          'Mobile Number': customer.mobile_number || 'N/A',
+          Email: customer.email || 'N/A',
+          Address: customer.address || 'N/A',
+          District: customer.district || 'N/A',
+          State: customer.state || 'N/A',
+        }));
 
-      const worksheet = XLSX.utils.json_to_sheet(data);
-      XLSX.utils.book_append_sheet(workbook, worksheet, type);
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(workbook, worksheet, type);
+      }
+
+      XLSX.writeFile(workbook, 'customers_export.xlsx');
+    } catch (err) {
+      console.error('Failed to download customers Excel:', err);
+      setError(`Failed to download customers Excel: ${err.message}`);
     }
-
-    XLSX.writeFile(workbook, 'customers_export.xlsx');
-  } catch (err) {
-    console.error('Failed to download customers Excel:', err);
-    setError(`Failed to download customers Excel: ${err.message}`);
-  }
-};
+  };
 
   // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
