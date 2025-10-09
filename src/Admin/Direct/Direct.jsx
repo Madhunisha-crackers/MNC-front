@@ -341,7 +341,7 @@ const QuotationTable = ({
               {[
                 { label: 'Net Rate', value: `₹${calculateNetRate(cart)}` },
                 { label: 'You Save', value: `₹${calculateYouSave(cart)}` },
-                { label: 'Processing Fee (3%)', value: `₹${calculateProcessingFee(cart, additionalDiscount)}` },
+                { label: 'Processing Fee (1%)', value: `₹${calculateProcessingFee(cart, additionalDiscount)}` },
                 additionalDiscount > 0 && {
                   label: 'Additional Discount',
                   value: `${additionalDiscount.toFixed(2)}%`,
@@ -819,7 +819,7 @@ export default function Direct() {
       0,
     );
     const discountedSubtotal = subtotal * (1 - additionalDiscount / 100);
-    const processingFee = discountedSubtotal * 0.03;
+    const processingFee = discountedSubtotal * 0.01;
     return (discountedSubtotal + processingFee).toFixed(2);
   };
 
@@ -975,7 +975,7 @@ export default function Direct() {
 
       const subtotal = Number.parseFloat(calculateNetRate(modalCart)) - Number.parseFloat(calculateYouSave(modalCart));
       const discountedSubtotal = subtotal * (1 - modalAdditionalDiscount / 100);
-      const processingFee = discountedSubtotal * 0.03;
+      const processingFee = discountedSubtotal * 0.01;
       const payload = {
         customer_id: Number(modalSelectedCustomer),
         products: modalCart.map((item) => ({

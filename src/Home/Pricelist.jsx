@@ -548,7 +548,7 @@ const Pricelist = () => {
     setTotalDiscount(productDiscount);
     
     total -= promoDiscount;
-    const processingFee = total * 0.03;
+    const processingFee = total * 0.01;
     total += processingFee;
     save = productDiscount + promoDiscount;
     
