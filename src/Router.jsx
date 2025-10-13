@@ -15,10 +15,11 @@ import Safety from './Home/Safety';
 import About from './Home/About';
 import Contact from './Home/Contact';
 import Booking from './Home/Booking';
-import Pricelist from './Home/Pricelist';
+// import Pricelist from './Home/Pricelist';
 import Promocode from './Admin/Promo/Promocode'
 import SalesAnalysis from './Admin/SalesAnalysis';
 import Status from './Home/Status';
+import Homey from './Home/Homey';
 
 const AllRoutes = () => {
   return (
@@ -29,7 +30,7 @@ const AllRoutes = () => {
       <Route path="/booking" element={<Booking />} />
       <Route path="/about-us" element={<About />} />
       <Route path="/contact-us" element={<Contact />} />
-      <Route path="/price-list" element={<Pricelist />} />
+      <Route path="/price-list" element={<Homey />} />
       <Route path="/status" element={<Status />} />
       
       <Route element={<ProtectedRoute />}>
