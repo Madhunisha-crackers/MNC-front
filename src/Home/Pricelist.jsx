@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaPlus, FaMinus, FaArrowLeft, FaArrowRight, FaInfoCircle } from "react-icons/fa";
+import { FaPlus, FaMinus, FaArrowLeft, FaArrowRight, FaInfoCircle, FaExpand, FaCompress } from "react-icons/fa";
 import { ShoppingCart, Search, Filter, X } from "lucide-react";
 import Navbar from "../Component/Navbar";
 import { API_BASE_URL } from "../../Config";
@@ -18,6 +18,7 @@ const Pricelist = () => {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState({});
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isExpandedCart, setIsExpandedCart] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showMinOrderModal, setShowMinOrderModal] = useState(false);
@@ -755,30 +756,42 @@ const Pricelist = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm"
-            onClick={() => setIsCartOpen(false)}
+            onClick={() => { setIsCartOpen(false); setIsExpandedCart(false); }}
           >
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.8, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl mobile:max-w-md mobile:w-[90%] onefifty:max-w-[40%] mx-4 max-h-[90vh] flex flex-col"
+              className={`${isExpandedCart ? 'w-full max-w-4xl h-[90vh] flex flex-col' : 'w-full max-w-2xl mobile:max-w-md mobile:w-[90%] onefifty:max-w-[40%] mx-4 max-h-[90vh] flex flex-col'} bg-white rounded-3xl shadow-2xl`}
             >
               <div className="flex justify-between items-center p-6 border-b border-orange-100">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                   <ShoppingCart className="w-5 h-5 text-orange-600" />
                   Your Cart
                 </h3>
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setIsCartOpen(false)}
-                  className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center"
-                >
-                  <X className="w-5 h-5 text-gray-600" />
-                </motion.button>
+                <div className="flex items-center gap-2">
+                  {!isExpandedCart && Object.keys(cart).length > 0 && (
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setIsExpandedCart(true)}
+                      className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center"
+                    >
+                      <FaExpand className="w-5 h-5 text-gray-600" />
+                    </motion.button>
+                  )}
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => { setIsCartOpen(false); setIsExpandedCart(false); }}
+                    className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center"
+                  >
+                    <X className="w-5 h-5 text-gray-600" />
+                  </motion.button>
+                </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className={`flex-1 overflow-y-auto p-6 space-y-4 ${isExpandedCart ? '' : 'max-h-[40vh]'}`}>
                 {Object.keys(cart).length === 0 ? (
                   <div className="text-center py-12">
                     <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -845,102 +858,146 @@ const Pricelist = () => {
                   })
                 )}
               </div>
-              {/* Rest of the cart footer remains unchanged */}
-              <div className="p-6 border-t border-orange-100 bg-white rounded-b-3xl">
-                <div className="mb-4 p-3 bg-orange-50 rounded-2xl border border-orange-200">
-                  <p className="text-xs font-medium text-orange-800 mb-2 text-center">Minimum Purchase Rates</p>
-                  <div className="text-xs text-orange-700 overflow-hidden">
-                    <div className="animate-marquee whitespace-nowrap">
-                      {states.map((s) => `${s.name}: ₹${s.min_rate}`).join(" • ")}
+              {isExpandedCart ? (
+                <div className="p-6 border-t border-orange-100 bg-white rounded-b-3xl">
+                  <div className="text-sm text-gray-700 space-y-2 mb-4">
+                    <div className="flex justify-between">
+                      <span>Net Total:</span>
+                      <span>₹{totals.net}</span>
                     </div>
-                  </div>
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Promocode</label>
-                  <select
-                    value={promocode}
-                    onChange={(e) => setPromocode(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400 transition-all duration-300"
-                  >
-                    <option value="">Select Promocode</option>
-                    {promocodes.map((promo) => (
-                      <option key={promo.id} value={promo.code}>
-                        {promo.code} ({formatPercentage(promo.discount)}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}
-                        {promo.product_type ? `, Type: ${promo.product_type.replace(/_/g, " ")}` : ""}
-                        {promo.end_date ? `, Exp: ${new Date(promo.end_date).toLocaleDateString()}` : ""})
-                      </option>
-                    ))}
-                    <option value="custom">Enter custom code</option>
-                  </select>
-                  {promocode === "custom" && (
-                    <input
-                      type="text"
-                      value={promocode === "custom" ? "" : promocode}
-                      onChange={(e) => setPromocode(e.target.value)}
-                      placeholder="Enter custom code"
-                      className="w-full px-3 py-2 mt-2 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400 transition-all duration-300"
-                    />
-                  )}
-                  {appliedPromo && (
-                    <p className="text-green-600 text-xs mt-1">
-                      Applied: {appliedPromo.code} ({formatPercentage(appliedPromo.discount)}% OFF)
-                      {appliedPromo.min_amount && `, Min: ₹${appliedPromo.min_amount}`}
-                      {appliedPromo.product_type && `, Type: ${appliedPromo.product_type.replace(/_/g, " ")}`}
-                      {appliedPromo.end_date && `, Expires: ${new Date(appliedPromo.end_date).toLocaleDateString()}`}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-red-500 font-semibold text-sm">T&C - The images given for crackers are provides for your references the products may vary according to avilability</p>
-                  <p className="text-red-500 font-semibold text-sm">Dear customers, delivery charges are payable to the transport service and pickup is at your own cost.</p>
-                </div>
-                <div className="text-sm text-gray-700 space-y-2 mb-4">
-                  <div className="flex justify-between">
-                    <span>Net Total:</span>
-                    <span>₹{totals.net}</span>
-                  </div>
-                  <div className="flex justify-between text-green-600">
-                    <span>Product Discount:</span>
-                    <span>-₹{totals.product_discount}</span>
-                  </div>
-                  {appliedPromo && (
                     <div className="flex justify-between text-green-600">
-                      <span>Promocode ({appliedPromo.code}):</span>
-                      <span>-₹{totals.promo_discount}</span>
+                      <span>Product Discount:</span>
+                      <span>-₹{totals.product_discount}</span>
                     </div>
-                  )}
-                  <div className="flex justify-between text-green-600">
-                    <span>Total Discount:</span>
-                    <span>-₹{totals.save}</span>
+                    {appliedPromo && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Promocode ({appliedPromo.code}):</span>
+                        <span>-₹{totals.promo_discount}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-green-600">
+                      <span>Total Discount:</span>
+                      <span>-₹{totals.save}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                      <span>Processing Fee:</span>
+                      <span>₹{totals.processing_fee}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-lg text-orange-600 pt-2 border-t border-orange-200">
+                      <span>Total:</span>
+                      <span>₹{totals.total}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-gray-600">
-                    <span>Processing Fee:</span>
-                    <span>₹{totals.processing_fee}</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-lg text-orange-600 pt-2 border-t border-orange-200">
-                    <span>Total:</span>
-                    <span>₹{totals.total}</span>
+                  <div className="flex gap-3">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setIsExpandedCart(false)}
+                      className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl flex items-center justify-center gap-2"
+                    >
+                      <FaCompress className="w-4 h-4" />
+                      Collapse
+                    </motion.button>
                   </div>
                 </div>
-                <div className="flex gap-3">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setCart({})}
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl"
-                  >
-                    Clear Cart
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleCheckoutClick}
-                    className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg"
-                  >
-                    Checkout
-                  </motion.button>
+              ) : (
+                /* Original cart footer */
+                <div className="p-6 border-t border-orange-100 bg-white rounded-b-3xl">
+                  <div className="mb-4 p-3 bg-orange-50 rounded-2xl border border-orange-200">
+                    <p className="text-xs font-medium text-orange-800 mb-2 text-center">Minimum Purchase Rates</p>
+                    <div className="text-xs text-orange-700 overflow-hidden">
+                      <div className="animate-marquee whitespace-nowrap">
+                        {states.map((s) => `${s.name}: ₹${s.min_rate}`).join(" • ")}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Promocode</label>
+                    <select
+                      value={promocode}
+                      onChange={(e) => setPromocode(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400 transition-all duration-300"
+                    >
+                      <option value="">Select Promocode</option>
+                      {promocodes.map((promo) => (
+                        <option key={promo.id} value={promo.code}>
+                          {promo.code} ({formatPercentage(promo.discount)}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}
+                          {promo.product_type ? `, Type: ${promo.product_type.replace(/_/g, " ")}` : ""}
+                          {promo.end_date ? `, Exp: ${new Date(promo.end_date).toLocaleDateString()}` : ""})
+                        </option>
+                      ))}
+                      <option value="custom">Enter custom code</option>
+                    </select>
+                    {promocode === "custom" && (
+                      <input
+                        type="text"
+                        value={promocode === "custom" ? "" : promocode}
+                        onChange={(e) => setPromocode(e.target.value)}
+                        placeholder="Enter custom code"
+                        className="w-full px-3 py-2 mt-2 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400 transition-all duration-300"
+                      />
+                    )}
+                    {appliedPromo && (
+                      <p className="text-green-600 text-xs mt-1">
+                        Applied: {appliedPromo.code} ({formatPercentage(appliedPromo.discount)}% OFF)
+                        {appliedPromo.min_amount && `, Min: ₹${appliedPromo.min_amount}`}
+                        {appliedPromo.product_type && `, Type: ${appliedPromo.product_type.replace(/_/g, " ")}`}
+                        {appliedPromo.end_date && `, Expires: ${new Date(appliedPromo.end_date).toLocaleDateString()}`}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-red-500 font-semibold text-sm">T&C - The images given for crackers are provides for your references the products may vary according to avilability</p>
+                    <p className="text-red-500 font-semibold text-sm">Dear customers, delivery charges are payable to the transport service and pickup is at your own cost.</p>
+                  </div>
+                  <div className="text-sm text-gray-700 space-y-2 mb-4">
+                    <div className="flex justify-between">
+                      <span>Net Total:</span>
+                      <span>₹{totals.net}</span>
+                    </div>
+                    <div className="flex justify-between text-green-600">
+                      <span>Product Discount:</span>
+                      <span>-₹{totals.product_discount}</span>
+                    </div>
+                    {appliedPromo && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Promocode ({appliedPromo.code}):</span>
+                        <span>-₹{totals.promo_discount}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-green-600">
+                      <span>Total Discount:</span>
+                      <span>-₹{totals.save}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                      <span>Processing Fee:</span>
+                      <span>₹{totals.processing_fee}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-lg text-orange-600 pt-2 border-t border-orange-200">
+                      <span>Total:</span>
+                      <span>₹{totals.total}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setCart({})}
+                      className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl"
+                    >
+                      Clear Cart
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleCheckoutClick}
+                      className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg"
+                    >
+                      Checkout
+                    </motion.button>
+                  </div>
                 </div>
-              </div>
+              )}
             </motion.div>
           </motion.div>
         )}
@@ -1271,7 +1328,7 @@ const Pricelist = () => {
                     </select>
                   )}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Promocode</label>
+                    <label className="block text-sm font-medium text-gray-700">Promocode</label>
                     <select
                       value={promocode}
                       onChange={(e) => setPromocode(e.target.value)}
@@ -1305,7 +1362,7 @@ const Pricelist = () => {
                       </p>
                     )}
                   </div>
-                  <div className="text-sm text-gray-700 space-y-2">
+                  <div className="text-sm text-gray-700 mobile:space-y-1">
                     <div className="flex justify-between">
                       <span>Net Total:</span>
                       <span>₹{totals.net}</span>

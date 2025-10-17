@@ -276,8 +276,23 @@ export default function Tracking() {
               currentOrders.map((booking, index) => (
                 <div
                   key={booking.id}
-                  className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 mobile:p-4"
+                  className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 mobile:p-4 relative overflow-hidden"
                 >
+                  {['dispatched', 'delivered'].includes(booking.status.toLowerCase()) && (
+                    <div className="absolute top-2 right-2 w-8 h-8 bg-green-500 text-black text-md font-bold flex items-center justify-center rounded-full transform opacity-80 pointer-events-none z-10 shadow-md">
+                      D
+                    </div>
+                  )}
+                  {['paid'].includes(booking.status.toLowerCase()) && (
+                    <div className="absolute top-2 right-2 w-8 h-8 bg-orange-500 text-black text-md font-bold flex items-center justify-center rounded-full transform opacity-80 pointer-events-none z-10 shadow-md">
+                      P
+                    </div>
+                  )}
+                  {['booked'].includes(booking.status.toLowerCase()) && (
+                    <div className="absolute top-2 right-2 w-8 h-8 bg-sky-500 text-black text-md font-bold flex items-center justify-center rounded-full transform opacity-80 pointer-events-none z-10 shadow-md">
+                      B
+                    </div>
+                  )}
                   <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">#{indexOfFirstOrder + index + 1}</div>
                   <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">{booking.customer_name}</h3>
                   <p className="text-gray-700 dark:text-gray-300">
@@ -449,7 +464,7 @@ export default function Tracking() {
                     value={amountPaid}
                     onChange={(e) => setAmountPaid(e.target.value)}
                     placeholder="Enter amount paid"
-                    className="w-full p-2 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-900 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:focus:ring-blue-500 mobile:text-sm"
+                    className="w-full p-2 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-900 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:focus:ring-blue-500 mobile:text-xl"
                     style={{
                       background: styles.input.background,
                       backgroundDark: styles.input.backgroundDark,
@@ -467,7 +482,7 @@ export default function Tracking() {
                       value={transactionId}
                       onChange={(e) => setTransactionId(e.target.value)}
                       placeholder="Enter transaction ID"
-                      className="w-full p-2 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-900 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:focus:ring-blue-500 mobile:text-sm"
+                      className="w-full p-2 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-900 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:focus:ring-blue-500 mobile:text-xl"
                       style={{
                         background: styles.input.background,
                         backgroundDark: styles.input.backgroundDark,
