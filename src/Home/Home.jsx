@@ -1248,8 +1248,8 @@ export default function Home() {
                   <a href="tel:+919487524689" className="text-gray-300 hover:text-orange-400 transition-colors block">
                     +91 94875 24689
                   </a>
-                  <a href="tel:+919497594689" className="text-gray-300 hover:text-orange-400 transition-colors block">
-                    +91 94975 94689
+                  <a href="tel:+919487594689" className="text-gray-300 hover:text-orange-400 transition-colors block">
+                    +91 94875 94689
                   </a>
                 </div>
                 <div>
