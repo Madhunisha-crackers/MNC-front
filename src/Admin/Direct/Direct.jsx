@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
-import Select from 'react-select';
 import Modal from 'react-modal';
 import { debounce } from 'lodash';
 import * as XLSX from 'xlsx';
@@ -9,6 +8,7 @@ import { API_BASE_URL } from '../../../Config';
 import Sidebar from '../Sidebar/Sidebar';
 import Logout from '../Logout';
 import { FaEdit, FaArrowRight, FaTrash, FaDownload, FaSearch } from 'react-icons/fa';
+import Select from 'react-select';
 
 // Set app element for accessibility
 Modal.setAppElement("#root");
@@ -66,30 +66,7 @@ const getEffectivePrice = (item) => {
   return Math.round(Number(item.price) || 0);
 };
 
-// Shared select styles
-const selectStyles = {
-  control: (base) => ({
-    ...base,
-    padding: "0.25rem",
-    fontSize: "1rem",
-    borderRadius: "0.5rem",
-    background: "#fff",
-    borderColor: "#d1d5db",
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
-    "&:hover": { borderColor: "#3b82f6" },
-    "@media (max-width: 640px)": { padding: "0.25rem", fontSize: "0.875rem" },
-  }),
-  menu: (base) => ({ ...base, zIndex: 20, background: "#fff" }),
-  singleValue: (base) => ({ ...base, color: "#1f2937" }),
-  option: (base, { isFocused, isSelected }) => ({
-    ...base,
-    background: isSelected ? "#3b82f6" : isFocused ? "#e5e7eb" : "#fff",
-    color: isSelected ? "#fff" : "#1f2937",
-  }),
-  placeholder: (base) => ({ ...base, color: "#9ca3af" }),
-};
-
-// Component styles
+// Shared styles (unchanged)
 const styles = {
   input: {
     background: "linear-gradient(135deg, rgba(255,255,255,0.8), rgba(240,249,255,0.6))",
@@ -109,7 +86,7 @@ const styles = {
   },
 };
 
-// QuotationTable component
+// QuotationTable component with Product Grid
 const QuotationTable = ({
   cart = [],
   products,
@@ -137,7 +114,8 @@ const QuotationTable = ({
   setModalCart,
 }) => {
   const quantityInputRefs = useRef({});
-  const productSelectRef = useRef(null);
+  const [search, setSearch] = useState('');
+  const [selectedType, setSelectedType] = useState('all');
 
   useEffect(() => {
     if (lastAddedProduct) {
@@ -154,9 +132,8 @@ const QuotationTable = ({
   const handleQuantityKeyDown = (e, id, product_type) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (productSelectRef.current) {
-        productSelectRef.current.focus();
-      }
+      // Focus on search input after adding quantity
+      document.getElementById('product-search')?.focus();
     }
   };
 
@@ -174,36 +151,98 @@ const QuotationTable = ({
     }
   };
 
+  // Filter products based on search and selected type
+  const productTypes = ['all', ...new Set(products.map((p) => p.product_type))];
+  const filteredProducts = products.filter(
+    (p) =>
+      (selectedType === 'all' || p.product_type === selectedType) &&
+      (p.productname.toLowerCase().includes(search.toLowerCase()) ||
+       p.serial_number.toLowerCase().includes(search.toLowerCase()))
+  );
+
   return (
     <div className="space-y-4">
+      {/* Product Grid Section */}
       <div className="flex flex-col items-center mobile:w-full">
-        <label htmlFor="product-select" className="text-lg font-semibold text-gray-700 dark:text-gray-100 mb-2 mobile:text-base">
-          Product
+        <label className="text-lg font-semibold text-gray-700 dark:text-gray-100 mb-2 mobile:text-base">
+          Select Product
         </label>
-        <Select
-          id="product-select"
-          value={selectedProduct}
-          onChange={setSelectedProduct}
-          options={products.map((p) => ({
-            value: `${p.id}-${p.product_type}`,
-            label: `${p.serial_number} - ${p.productname} (${p.product_type})`,
-          }))}
-          placeholder="Search for a product..."
-          isClearable
-          className="mobile:w-full onefifty:w-96 hundred:w-96"
-          classNamePrefix="react-select"
-          styles={selectStyles}
-          ref={productSelectRef}
-        />
-        <button
-          onClick={() => addToCart(isModal)}
-          disabled={!selectedProduct}
-          className={`mt-4 onefifty:w-50 hundred:w-50 h-10 text-white px-6 rounded-lg font-bold shadow ${!selectedProduct ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue moindre"}`}
-          style={styles.button}
-        >
-          Add to Cart
-        </button>
+        <div className="flex flex-col gap-4 w-full max-w-3xl">
+          {/* Search Bar */}
+          <div className="flex items-center gap-2 mobile:w-full">
+            <FaSearch className="text-gray-500" />
+            <input
+              id="product-search"
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by product name or serial number..."
+              className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mobile:text-sm"
+              style={styles.input}
+            />
+          </div>
+          {/* Category Tabs */}
+          <div className="flex gap-2 overflow-x-auto">
+            {productTypes.map((type) => (
+              <button
+                key={type}
+                onClick={() => setSelectedType(type)}
+                className={`px-4 py-2 rounded-lg font-medium text-sm ${
+                  selectedType === type
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                style={styles.button}
+              >
+                {type === 'all' ? 'All' : type}
+              </button>
+            ))}
+          </div>
+          {/* Product Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+            {filteredProducts.length > 0 ? (
+              filteredProducts.map((product) => (
+                <div
+                  key={`${product.id}-${product.product_type}`}
+                  className="p-4 rounded-lg shadow cursor-pointer hover:bg-gray-100"
+                  style={styles.card}
+                >
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-800 mobile:text-base">
+                    {product.productname}
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-900 mobile:text-xs">
+                    Serial: {product.serial_number}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-800 mobile:text-xs">
+                    Type: {product.product_type}
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-800 mobile:text-xs">
+                    Price: ₹{getEffectivePrice(product).toFixed(2)}
+                  </p>
+                  <button
+                    onClick={() =>
+                      addToCart(isModal, {
+                        ...product,
+                        value: `${product.id}-${product.product_type}`,
+                      })
+                    }
+                    className="mt-2 w-full text-white px-4 py-2 rounded-lg font-bold text-sm bg-blue-600 hover:bg-blue-700"
+                    style={styles.button}
+                  >
+                    Add to Cart
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-full text-center text-gray-500 mobile:text-xs">
+                No products found
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Additional Discount */}
       <div className="flex flex-col items-center mobile:w-full">
         <label className="text-lg font-semibold text-gray-700 dark:text-gray-100 mb-2 mobile:text-base">
           Additional Discount (%)
@@ -222,6 +261,8 @@ const QuotationTable = ({
           />
         </div>
       </div>
+
+      {/* Change Discount */}
       <div className="flex flex-col items-center mobile:w-full">
         <label className="text-lg font-semibold text-gray-700 dark:text-gray-100 mb-2 mobile:text-base">
           Change Discount (%)
@@ -247,6 +288,8 @@ const QuotationTable = ({
           </button>
         </div>
       </div>
+
+      {/* Cart Table */}
       <div className={`overflow-x-auto ${isModal ? "overflow-y-auto max-h-[60vh] pr-2" : ""}`}>
         <table className="w-full border-collapse dark:bg-gray-800 dark:text-gray-100 bg-white shadow rounded-lg mobile:text-xs">
           <thead className="border">
@@ -359,7 +402,7 @@ const QuotationTable = ({
   );
 };
 
-// FormFields component
+// FormFields component (unchanged)
 const FormFields = ({
   isEdit,
   customers,
@@ -461,7 +504,7 @@ const FormFields = ({
   </div>
 );
 
-// New Product Modal
+// New Product Modal (unchanged)
 const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProductData }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localProductData, setLocalProductData] = useState(newProductData);
@@ -547,7 +590,7 @@ const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProd
   );
 };
 
-// Cancel Confirmation Modal
+// Cancel Confirmation Modal (unchanged)
 const CancelConfirmModal = ({ isOpen, onClose, onConfirm, quotationId }) => (
   <Modal
     isOpen={isOpen}
@@ -581,7 +624,7 @@ const CancelConfirmModal = ({ isOpen, onClose, onConfirm, quotationId }) => (
   </Modal>
 );
 
-// PDF Download Confirm Modal
+// PDF Download Confirm Modal (unchanged)
 const PDFDownloadConfirmModal = ({ isOpen, onClose, onYes, fileName }) => (
   <Modal
     isOpen={isOpen}
@@ -614,6 +657,29 @@ const PDFDownloadConfirmModal = ({ isOpen, onClose, onYes, fileName }) => (
   </Modal>
 );
 
+// Shared select styles (unchanged, kept for FormFields)
+const selectStyles = {
+  control: (base) => ({
+    ...base,
+    padding: "0.25rem",
+    fontSize: "1rem",
+    borderRadius: "0.5rem",
+    background: "#fff",
+    borderColor: "#d1d5db",
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
+    "&:hover": { borderColor: "#3b82f6" },
+    "@media (max-width: 640px)": { padding: "0.25rem", fontSize: "0.875rem" },
+  }),
+  menu: (base) => ({ ...base, zIndex: 20, background: "#fff" }),
+  singleValue: (base) => ({ ...base, color: "#1f2937" }),
+  option: (base, { isFocused, isSelected }) => ({
+    ...base,
+    background: isSelected ? "#3b82f6" : isFocused ? "#e5e7eb" : "#fff",
+    color: isSelected ? "#fff" : "#1f2937",
+  }),
+  placeholder: (base) => ({ ...base, color: "#9ca3af" }),
+};
+
 export default function Direct() {
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -622,7 +688,7 @@ export default function Direct() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(6);
-  const [selectedCustomer, setSelectedCustomer] = useState(null); // react-select format
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [cart, setCart] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [error, setError] = useState("");
@@ -635,7 +701,7 @@ export default function Direct() {
   const [modalMode, setModalMode] = useState(null);
   const [modalCart, setModalCart] = useState([]);
   const [modalSelectedProduct, setModalSelectedProduct] = useState(null);
-  const [modalSelectedCustomer, setModalSelectedCustomer] = useState(null); // react-select format
+  const [modalSelectedCustomer, setModalSelectedCustomer] = useState(null);
   const [orderId, setOrderId] = useState("");
   const [additionalDiscount, setAdditionalDiscount] = useState(0);
   const [modalAdditionalDiscount, setModalAdditionalDiscount] = useState(0);
@@ -652,8 +718,6 @@ export default function Direct() {
   const [lastAddedProduct, setLastAddedProduct] = useState(null);
   const [modalLastAddedProduct, setModalLastAddedProduct] = useState(null);
   const [changeDiscount, setChangeDiscount] = useState(0);
-
-  // NEW STATES
   const [createLoading, setCreateLoading] = useState(false);
   const [modalSubmitLoading, setModalSubmitLoading] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -712,7 +776,6 @@ export default function Direct() {
           axios.get(`${API_BASE_URL}/api/direct/quotations`),
         ]);
 
-        // Sort customers by id DESC
         const sortedCustomers = Array.isArray(customersResponse.data)
           ? customersResponse.data.sort((a, b) => (b.id || 0) - (a.id || 0))
           : [];
@@ -828,7 +891,7 @@ export default function Direct() {
         per: customProduct.per || 'Unit',
       };
     } else {
-      const [id, type] = targetSelectedProduct.value.split("-");
+      const [id, type] = customProduct ? [customProduct.id, customProduct.product_type] : targetSelectedProduct.value.split("-");
       product = products.find((p) => p.id.toString() === id && p.product_type === type);
       if (!product) {
         setError("Product not found");
@@ -1321,7 +1384,7 @@ export default function Direct() {
               </div>
             )}
 
-            {/* CUSTOMER SELECTOR (react-select) */}
+            {/* CUSTOMER SELECTOR */}
             <div className="flex flex-col items-center mb-6 mobile:w-full">
               <label className="text-lg font-semibold text-gray-700 dark:text-gray-100 mb-2 mobile:text-base">
                 Select Customer
@@ -1374,7 +1437,7 @@ export default function Direct() {
             <div className="flex justify-center gap-4 mt-8 mobile:mt-4 mobile:flex-col">
               <button
                 onClick={createQuotation}
-                disabled={!selectedCustomer|| !cart.length || createLoading}
+                disabled={!selectedCustomer || !cart.length || createLoading}
                 className={`onefifty:w-50 hundred:w-50 h-10 text-white px-8 rounded-lg font-bold shadow flex items-center justify-center gap-2
                   ${(!selectedCustomer || !cart.length || createLoading) ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`}
                 style={styles.button}
@@ -1468,25 +1531,50 @@ export default function Direct() {
                     <button
                       onClick={() => paginate(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className={`px-4 py-2 rounded-lg text-sm ${currentPage === 1 ? "bg-gray-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white"}`}
+                      className={`px-4 py-2 rounded-lg text-sm ${
+                        currentPage === 1 ? "bg-gray-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white"
+                      }`}
                       style={styles.button}
                     >
                       Previous
                     </button>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                      <button
-                        key={page}
-                        onClick={() => paginate(page)}
-                        className={`px-4 py-2 rounded-lg text-sm ${currentPage === page ? "bg-blue-800 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"}`}
-                        style={styles.button}
-                      >
-                        {page}
-                      </button>
-                    ))}
+
+                    {(() => {
+                      const maxPagesToShow = 4;
+                      let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+                      let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+                      // Adjust startPage if endPage is at the totalPages limit
+                      if (endPage === totalPages) {
+                        startPage = Math.max(1, totalPages - maxPagesToShow + 1);
+                      }
+
+                      const pageButtons = [];
+
+                      // Generate page buttons
+                      for (let page = startPage; page <= endPage; page++) {
+                        pageButtons.push(
+                          <button
+                            key={page}
+                            onClick={() => paginate(page)}
+                            className={`px-4 py-2 rounded-lg text-sm ${
+                              currentPage === page ? "bg-blue-800 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
+                            }`}
+                            style={styles.button}
+                          >
+                            {page}
+                          </button>
+                        );
+                      }
+                      return pageButtons;
+                    })()}
+
                     <button
                       onClick={() => paginate(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className={`px-4 py-2 rounded-lg text-sm ${currentPage === totalPages ? "bg-gray-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white"}`}
+                      className={`px-4 py-2 rounded-lg text-sm ${
+                        currentPage === totalPages ? "bg-gray-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white"
+                      }`}
                       style={styles.button}
                     >
                       Next
@@ -1516,7 +1604,7 @@ export default function Direct() {
               isOpen={modalIsOpen}
               onRequestClose={closeModal}
               className="fixed inset-0 flex items-center justify-center p-4"
-              overlayClassName="fitted inset-0 bg-black/50"
+              overlayClassName="fixed inset-0 bg-black/50"
               key="quotation-modal"
             >
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full mobile:p-4 max-h-[90vh] overflow-y-auto">
@@ -1596,6 +1684,7 @@ export default function Direct() {
             <NewProductModal
               isOpen={newProductModalIsOpen}
               onClose={closeNewProductModal}
+
               onSubmit={handleAddNewProduct}
               newProductData={newProductData}
               setNewProductData={setNewProductData}
