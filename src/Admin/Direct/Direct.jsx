@@ -194,13 +194,16 @@ const QuotationTable = ({
     }
   }, [lastAddedProduct, setLastAddedProduct]);
 
-  // Handle image capture
+  // Handle image capture with higher quality
   const captureImage = async () => {
     if (!webcamRef.current) return;
 
     try {
       setIsProcessing(true);
-      const imageSrc = webcamRef.current.getScreenshot();
+      const imageSrc = webcamRef.current.getScreenshot({
+        width: 1280, // Higher resolution for better quality
+        height: 720,
+      });
       if (!imageSrc) {
         setScanError('Failed to capture image');
         setIsProcessing(false);
@@ -226,6 +229,7 @@ const QuotationTable = ({
 
       const { data: { text } } = await Tesseract.recognize(imageSrc, 'eng', {
         tessedit_char_whitelist: '0123456789', // Restrict to numbers
+        tessedit_pagesegmode: Tesseract.PSM.SINGLE_BLOCK, // Optimize for single text block
       });
 
       const number = text.trim().match(/^\d+$/); // Match pure numbers
@@ -593,17 +597,20 @@ const QuotationTable = ({
 
           <div className="flex flex-col items-center space-y-4">
             {/* Webcam Component */}
-            <div className="relative">
+            <div className="relative w-full max-w-md aspect-video">
               <Webcam
                 audio={false}
                 ref={webcamRef}
                 screenshotFormat="image/jpeg"
+                screenshotQuality={1} // Highest quality
                 videoConstraints={{
-                  width: 640,
-                  height: 480,
-                  facingMode: 'environment'
+                  width: { ideal: 1280 }, // Higher resolution
+                  height: { ideal: 720 },
+                  facingMode: 'environment',
+                  frameRate: { ideal: 30 }, // Smoother video
                 }}
-                className="w-full h-64 bg-black rounded-lg object-cover mobile:h-48"
+                className="w-full h-full bg-black rounded-lg object-cover"
+                style={{ objectFit: 'cover' }}
               />
               {isProcessing && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 rounded-lg">
@@ -633,7 +640,7 @@ const QuotationTable = ({
             </button>
 
             {/* Manual Input Fallback */}
-            <div className="w-full">
+            <div className="w-full max-w-md">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Or enter number manually:
               </label>
@@ -649,9 +656,14 @@ const QuotationTable = ({
 
             {/* Captured Image Preview (if any) */}
             {capturedImage && (
-              <div className="w-full max-w-xs">
+              <div className="w-full max-w-md">
                 <p className="text-sm text-gray-600 mb-2 text-center">Captured Image:</p>
-                <img src={capturedImage} alt="Captured" className="w-full h-32 object-cover rounded-lg" />
+                <img
+                  src={capturedImage}
+                  alt="Captured"
+                  className="w-full h-32 object-contain rounded-lg"
+                  style={{ maxHeight: '200px', objectFit: 'contain' }}
+                />
               </div>
             )}
           </div>
