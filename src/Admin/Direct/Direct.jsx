@@ -252,23 +252,24 @@ const QuotationTable = ({
           }
 
           setScanError('Product added successfully!');
-          setTimeout(() => {
-            setScanError('');
-            setCameraOpen(false);
-            setCapturedImage(null);
-          }, 2000);
+          setTimeout(() => setScanError(''), 3000);
+          // Clear captured image to prepare for next scan
+          setCapturedImage(null);
         } else {
           setScanError(`No product found for number: ${number[0]}`);
           setTimeout(() => setScanError(''), 3000);
+          setCapturedImage(null);
         }
       } else {
         setScanError('No number detected in the image');
         setTimeout(() => setScanError(''), 3000);
+        setCapturedImage(null);
       }
     } catch (err) {
       console.error('Tesseract error:', err);
       setScanError('Failed to process image. Please try again.');
       setTimeout(() => setScanError(''), 3000);
+      setCapturedImage(null);
     } finally {
       setIsScanning(false);
       setIsProcessing(false);
@@ -287,17 +288,14 @@ const QuotationTable = ({
         if (matchedProduct) {
           addToCart(isModal, matchedProduct, false, 1);
           setScanError('Product added successfully!');
-          setTimeout(() => {
-            setScanError('');
-            setCameraOpen(false);
-            setCapturedImage(null);
-          }, 2000);
+          setTimeout(() => setScanError(''), 3000);
+          e.target.value = '';
         } else {
           setScanError(`No product found for number: ${number}`);
           setTimeout(() => setScanError(''), 3000);
+          e.target.value = '';
         }
       }
-      e.target.value = '';
     }
   };
 
