@@ -7,11 +7,36 @@ import '../../App.css';
 import { API_BASE_URL } from '../../../Config';
 import Sidebar from '../Sidebar/Sidebar';
 import Logout from '../Logout';
-import { FaEdit, FaArrowRight, FaTrash, FaDownload, FaSearch } from 'react-icons/fa';
+import { FaEdit, FaArrowRight, FaTrash, FaDownload, FaSearch, FaCamera } from 'react-icons/fa';
 import Select from 'react-select';
+import Tesseract from 'tesseract.js';
+import Webcam from 'react-webcam'; // Correct import
 
 // Set app element for accessibility
 Modal.setAppElement("#root");
+
+// Shared select styles
+const selectStyles = {
+  control: (base) => ({
+    ...base,
+    padding: "0.25rem",
+    fontSize: "1rem",
+    borderRadius: "0.5rem",
+    background: "#fff",
+    borderColor: "#d1d5db",
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
+    "&:hover": { borderColor: "#3b82f6" },
+    "@media (max-width: 640px)": { padding: "0.25rem", fontSize: "0.875rem" },
+  }),
+  menu: (base) => ({ ...base, zIndex: 20, background: "#fff" }),
+  singleValue: (base) => ({ ...base, color: "#1f2937" }),
+  option: (base, { isFocused, isSelected }) => ({
+    ...base,
+    background: isSelected ? "#3b82f6" : isFocused ? "#e5e7eb" : "#fff",
+    color: isSelected ? "#fff" : "#1f2937",
+  }),
+  placeholder: (base) => ({ ...base, color: "#9ca3af" }),
+};
 
 // Error Boundary for Direct component
 class DirectErrorBoundary extends React.Component {
@@ -23,6 +48,8 @@ class DirectErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error("Error caught by DirectErrorBoundary:", error, errorInfo);
+    console.log("Error stack:", error.stack);
+    console.log("Component stack:", errorInfo.componentStack);
   }
 
   render() {
@@ -47,6 +74,9 @@ class QuotationTableErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error("Error caught by QuotationTableErrorBoundary:", error, errorInfo);
+    console.log("Error stack:", error.stack);
+    console.log("Component stack:", errorInfo.componentStack);
+    console.log("Products prop:", this.props.products);
   }
 
   render() {
@@ -66,7 +96,7 @@ const getEffectivePrice = (item) => {
   return Math.round(Number(item.price) || 0);
 };
 
-// Shared styles (unchanged)
+// Shared styles
 const styles = {
   input: {
     background: "linear-gradient(135deg, rgba(255,255,255,0.8), rgba(240,249,255,0.6))",
@@ -86,10 +116,10 @@ const styles = {
   },
 };
 
-// QuotationTable component with Product Grid
+
 const QuotationTable = ({
   cart = [],
-  products,
+  products = [],
   selectedProduct,
   setSelectedProduct,
   addToCart,
@@ -116,7 +146,42 @@ const QuotationTable = ({
   const quantityInputRefs = useRef({});
   const [search, setSearch] = useState('');
   const [selectedType, setSelectedType] = useState('all');
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [scanError, setScanError] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [capturedImage, setCapturedImage] = useState(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const webcamRef = useRef(null);
 
+  // Filter out invalid products
+  const validProducts = products.filter(
+    (p) =>
+      p != null &&
+      typeof p === 'object' &&
+      typeof p.product_type === 'string' &&
+      typeof p.productname === 'string' &&
+      typeof p.id !== 'undefined'
+  );
+
+  // Define product types
+  const productTypes = [
+    'all',
+    ...new Set(
+      validProducts
+        .map((p) => p.product_type)
+        .filter((type) => typeof type === 'string')
+    ),
+  ];
+
+  // Filter products based on search and selected type
+  const filteredProducts = validProducts.filter(
+    (p) =>
+      (selectedType === 'all' || p.product_type === selectedType) &&
+      (p.productname.toLowerCase().includes(search.toLowerCase()) ||
+        (p.serial_number && typeof p.serial_number === 'string' && p.serial_number.toLowerCase().includes(search.toLowerCase())))
+  );
+
+  // Focus on quantity input after adding product
   useEffect(() => {
     if (lastAddedProduct) {
       const key = `${lastAddedProduct.id}-${lastAddedProduct.product_type}`;
@@ -129,10 +194,116 @@ const QuotationTable = ({
     }
   }, [lastAddedProduct, setLastAddedProduct]);
 
+  // Handle image capture
+  const captureImage = async () => {
+    if (!webcamRef.current) return;
+
+    try {
+      setIsProcessing(true);
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (!imageSrc) {
+        setScanError('Failed to capture image');
+        setIsProcessing(false);
+        return;
+      }
+      setCapturedImage(imageSrc);
+
+      // Process the captured image for OCR
+      await processImageForOCR(imageSrc);
+    } catch (err) {
+      console.error('Capture error:', err);
+      setScanError('Failed to capture image');
+      setIsProcessing(false);
+    }
+  };
+
+  // Process image with Tesseract.js
+  const processImageForOCR = async (imageSrc) => {
+    if (!imageSrc) return;
+
+    try {
+      setIsScanning(true);
+
+      const { data: { text } } = await Tesseract.recognize(imageSrc, 'eng', {
+        tessedit_char_whitelist: '0123456789', // Restrict to numbers
+      });
+
+      const number = text.trim().match(/^\d+$/); // Match pure numbers
+      if (number) {
+        console.log('Detected number:', number[0]);
+        const matchedProduct = validProducts.find(
+          (p) => p.serial_number && p.serial_number.toString() === number[0].toString()
+        );
+
+        if (matchedProduct) {
+          addToCart(isModal, matchedProduct, false, 1);
+
+          // Play success sound
+          try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            oscillator.type = 'square';
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+            oscillator.connect(audioCtx.destination);
+            oscillator.start();
+            setTimeout(() => oscillator.stop(), 200);
+          } catch (soundErr) {
+            console.log('Sound not supported');
+          }
+
+          setScanError('Product added successfully!');
+          setTimeout(() => {
+            setScanError('');
+            setCameraOpen(false);
+            setCapturedImage(null);
+          }, 2000);
+        } else {
+          setScanError(`No product found for number: ${number[0]}`);
+          setTimeout(() => setScanError(''), 3000);
+        }
+      } else {
+        setScanError('No number detected in the image');
+        setTimeout(() => setScanError(''), 3000);
+      }
+    } catch (err) {
+      console.error('Tesseract error:', err);
+      setScanError('Failed to process image. Please try again.');
+      setTimeout(() => setScanError(''), 3000);
+    } finally {
+      setIsScanning(false);
+      setIsProcessing(false);
+    }
+  };
+
+  // Handle manual number input as fallback
+  const handleManualNumberInput = (e) => {
+    if (e.key === 'Enter') {
+      const number = e.target.value.trim();
+      if (number) {
+        const matchedProduct = validProducts.find(
+          (p) => p.serial_number && p.serial_number.toString() === number
+        );
+
+        if (matchedProduct) {
+          addToCart(isModal, matchedProduct, false, 1);
+          setScanError('Product added successfully!');
+          setTimeout(() => {
+            setScanError('');
+            setCameraOpen(false);
+            setCapturedImage(null);
+          }, 2000);
+        } else {
+          setScanError(`No product found for number: ${number}`);
+          setTimeout(() => setScanError(''), 3000);
+        }
+      }
+      e.target.value = '';
+    }
+  };
+
   const handleQuantityKeyDown = (e, id, product_type) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      // Focus on search input after adding quantity
       document.getElementById('product-search')?.focus();
     }
   };
@@ -151,14 +322,11 @@ const QuotationTable = ({
     }
   };
 
-  // Filter products based on search and selected type
-  const productTypes = ['all', ...new Set(products.map((p) => p.product_type))];
-  const filteredProducts = products.filter(
-    (p) =>
-      (selectedType === 'all' || p.product_type === selectedType) &&
-      (p.productname.toLowerCase().includes(search.toLowerCase()) ||
-       p.serial_number.toLowerCase().includes(search.toLowerCase()))
-  );
+  const handleCloseCamera = () => {
+    setCameraOpen(false);
+    setCapturedImage(null);
+    setScanError('');
+  };
 
   return (
     <div className="space-y-4">
@@ -180,6 +348,13 @@ const QuotationTable = ({
               className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mobile:text-sm"
               style={styles.input}
             />
+            <button
+              onClick={() => setCameraOpen(true)}
+              className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mobile:p-1.5"
+              title="Scan Number"
+            >
+              <FaCamera />
+            </button>
           </div>
           {/* Category Tabs */}
           <div className="flex gap-2 overflow-x-auto">
@@ -191,7 +366,7 @@ const QuotationTable = ({
                   selectedType === type
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
+                } mobile:px-2 mobile:py-1 mobile:text-xs`}
                 style={styles.button}
               >
                 {type === 'all' ? 'All' : type}
@@ -204,14 +379,14 @@ const QuotationTable = ({
               filteredProducts.map((product) => (
                 <div
                   key={`${product.id}-${product.product_type}`}
-                  className="p-4 rounded-lg shadow cursor-pointer hover:bg-gray-100"
+                  className="p-4 rounded-lg shadow cursor-pointer hover:bg-gray-100 mobile:p-2"
                   style={styles.card}
                 >
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-800 mobile:text-base">
                     {product.productname}
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-900 mobile:text-xs">
-                    Serial: {product.serial_number}
+                    Serial: {product.serial_number || 'N/A'}
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-800 mobile:text-xs">
                     Type: {product.product_type}
@@ -220,13 +395,8 @@ const QuotationTable = ({
                     Price: ₹{getEffectivePrice(product).toFixed(2)}
                   </p>
                   <button
-                    onClick={() =>
-                      addToCart(isModal, {
-                        ...product,
-                        value: `${product.id}-${product.product_type}`,
-                      })
-                    }
-                    className="mt-2 w-full text-white px-4 py-2 rounded-lg font-bold text-sm bg-blue-600 hover:bg-blue-700"
+                    onClick={() => addToCart(isModal, product, false, 1)}
+                    className="mt-2 w-full text-white px-4 py-2 rounded-lg font-bold text-sm bg-blue-600 hover:bg-blue-700 mobile:px-2 mobile:py-1 mobile:text-xs"
                     style={styles.button}
                   >
                     Add to Cart
@@ -253,7 +423,7 @@ const QuotationTable = ({
             value={additionalDiscount || ''}
             onChange={(e) => setAdditionalDiscount(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
             placeholder="Enter additional discount (%)"
-            className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mobile:text-sm"
             min="0"
             max="100"
             step="1"
@@ -273,7 +443,7 @@ const QuotationTable = ({
             value={changeDiscount || ''}
             onChange={(e) => handleChangeDiscount(e.target.value)}
             placeholder="Enter change discount (%)"
-            className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mobile:text-sm"
             min="0"
             max="100"
             step="1"
@@ -281,7 +451,7 @@ const QuotationTable = ({
           />
           <button
             onClick={() => openNewProductModal(isModal)}
-            className="h-10 text-white px-4 rounded-lg font-bold shadow bg-green-600 hover:bg-green-700"
+            className="h-10 text-white px-4 rounded-lg font-bold shadow bg-green-600 hover:bg-green-700 mobile:px-2 mobile:text-xs"
             style={styles.button}
           >
             Add New Product
@@ -321,7 +491,7 @@ const QuotationTable = ({
                       }
                       min="0"
                       step="1"
-                      className="w-20 text-center border border-gray-300 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-20 text-center border border-gray-300 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-600 mobile:w-16 mobile:text-xs"
                     />
                   </td>
                   <td className="text-center border-r mobile:p-1">
@@ -334,7 +504,7 @@ const QuotationTable = ({
                       min="0"
                       max="100"
                       step="0.01"
-                      className="w-20 text-center bg-transparent border border-gray-300 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-20 text-center bg-transparent border border-gray-300 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-600 mobile:w-16 mobile:text-xs"
                     />
                   </td>
                   <td className="text-center border-r mobile:p-1">
@@ -347,7 +517,7 @@ const QuotationTable = ({
                       onKeyDown={(e) => handleQuantityKeyDown(e, item.id, item.product_type)}
                       min="0"
                       ref={(el) => (quantityInputRefs.current[`${item.id}-${item.product_type}`] = el)}
-                      className="w-16 text-center border border-gray-300 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-16 text-center border border-gray-300 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-600 mobile:w-12 mobile:text-xs"
                     />
                   </td>
                   <td className="text-center border-r mobile:p-1">
@@ -386,10 +556,10 @@ const QuotationTable = ({
                 .filter(Boolean)
                 .map(({ label, value }) => (
                   <tr key={label} className="dark:text-white">
-                    <td colSpan="5" className="text-center font-bold mobile:p-1 text-xl">
+                    <td colSpan="5" className="text-center font-bold mobile:p-1 text-xl mobile:text-base">
                       {label}
                     </td>
-                    <td colSpan="2" className="text-center font-bold mobile:p-1 text-xl">
+                    <td colSpan="2" className="text-center font-bold mobile:p-1 text-xl mobile:text-base">
                       {value}
                     </td>
                   </tr>
@@ -398,11 +568,107 @@ const QuotationTable = ({
           )}
         </table>
       </div>
+
+      {/* Camera Capture Modal */}
+      <Modal
+        isOpen={cameraOpen}
+        onRequestClose={handleCloseCamera}
+        className="fixed inset-0 flex items-center justify-center p-4"
+        overlayClassName="fixed inset-0 bg-black/50"
+      >
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full relative mobile:p-4">
+          <button
+            onClick={handleCloseCamera}
+            className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100 mobile:text-sm"
+          >
+            ×
+          </button>
+          <h2 className="text-xl font-semibold text-center mb-4 mobile:text-base">Scan Product Number</h2>
+
+          {scanError && (
+            <div className={`px-4 py-2 rounded mb-4 text-center ${scanError.includes('successfully') ? 'bg-green-100 border border-green-400 text-green-700' : 'bg-red-100 border border-red-400 text-red-700'} mobile:text-sm`}>
+              {scanError}
+            </div>
+          )}
+
+          <div className="flex flex-col items-center space-y-4">
+            {/* Webcam Component */}
+            <div className="relative">
+              <Webcam
+                audio={false}
+                ref={webcamRef}
+                screenshotFormat="image/jpeg"
+                videoConstraints={{
+                  width: 640,
+                  height: 480,
+                  facingMode: 'environment'
+                }}
+                className="w-full h-64 bg-black rounded-lg object-cover mobile:h-48"
+              />
+              {isProcessing && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 rounded-lg">
+                  <div className="text-white text-center">
+                    <svg className="animate-spin h-8 w-8 mx-auto mb-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-sm">{isScanning ? 'Scanning...' : 'Processing...'}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Capture Button */}
+            <button
+              onClick={captureImage}
+              disabled={isProcessing || isScanning}
+              className={`px-6 py-2 rounded-lg font-bold text-white ${
+                isProcessing || isScanning 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+              style={styles.button}
+            >
+              {isScanning ? 'Scanning...' : 'Capture & Scan'}
+            </button>
+
+            {/* Manual Input Fallback */}
+            <div className="w-full">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Or enter number manually:
+              </label>
+              <input
+                type="text"
+                placeholder="Enter serial number and press Enter"
+                onKeyDown={handleManualNumberInput}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={styles.input}
+                disabled={isProcessing || isScanning}
+              />
+            </div>
+
+            {/* Captured Image Preview (if any) */}
+            {capturedImage && (
+              <div className="w-full max-w-xs">
+                <p className="text-sm text-gray-600 mb-2 text-center">Captured Image:</p>
+                <img src={capturedImage} alt="Captured" className="w-full h-32 object-cover rounded-lg" />
+              </div>
+            )}
+          </div>
+
+          {/* Instructions */}
+          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <p className="text-sm text-gray-700 dark:text-gray-300 text-center mobile:text-xs">
+              Point camera at product sticker and tap "Capture & Scan"
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
 
-// FormFields component (unchanged)
+// FormFields component
 const FormFields = ({
   isEdit,
   customers,
@@ -461,7 +727,7 @@ const FormFields = ({
         cart={modalCart}
         setCart={setModalCart}
         setModalCart={setModalCart}
-        products={products}
+        products={products || []} // Ensure products is an array
         selectedProduct={modalSelectedProduct}
         setSelectedProduct={setModalSelectedProduct}
         addToCart={addToCart}
@@ -504,7 +770,7 @@ const FormFields = ({
   </div>
 );
 
-// New Product Modal (unchanged)
+// New Product Modal
 const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProductData }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localProductData, setLocalProductData] = useState(newProductData);
@@ -553,6 +819,7 @@ const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProd
             { name: "discount", label: "Discount (%)", type: "number", placeholder: "Enter discount", min: 0, max: 100, step: 0.01 },
             { name: "quantity", label: "Quantity *", type: "number", placeholder: "Enter quantity", min: 1, step: 1, required: true },
             { name: "per", label: "Unit (e.g., Box, Unit)", type: "text", placeholder: "Enter unit" },
+            { name: "product_type", label: "Product Type *", type: "text", placeholder: "Enter product type", required: true },
           ].map(({ name, label, type, placeholder, min, max, step, required }) => (
             <div key={name} className="flex flex-col">
               <label className="text-sm font-semibold text-gray-700 dark:text-gray-100 mb-1">{label}</label>
@@ -579,8 +846,8 @@ const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProd
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || !localProductData.productname || localProductData.price === '' || localProductData.quantity === ''}
-            className={`rounded-md px-4 py-2 text-sm text-white ${isSubmitting || !localProductData.productname || localProductData.price === '' || localProductData.quantity === '' ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`}
+            disabled={isSubmitting || !localProductData.productname || localProductData.price === '' || localProductData.quantity === '' || !localProductData.product_type}
+            className={`rounded-md px-4 py-2 text-sm text-white ${isSubmitting || !localProductData.productname || localProductData.price === '' || localProductData.quantity === '' || !localProductData.product_type ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`}
           >
             Add Product
           </button>
@@ -590,7 +857,7 @@ const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProd
   );
 };
 
-// Cancel Confirmation Modal (unchanged)
+// Cancel Confirmation Modal
 const CancelConfirmModal = ({ isOpen, onClose, onConfirm, quotationId }) => (
   <Modal
     isOpen={isOpen}
@@ -624,7 +891,7 @@ const CancelConfirmModal = ({ isOpen, onClose, onConfirm, quotationId }) => (
   </Modal>
 );
 
-// PDF Download Confirm Modal (unchanged)
+// PDF Download Confirm Modal
 const PDFDownloadConfirmModal = ({ isOpen, onClose, onYes, fileName }) => (
   <Modal
     isOpen={isOpen}
@@ -657,32 +924,9 @@ const PDFDownloadConfirmModal = ({ isOpen, onClose, onYes, fileName }) => (
   </Modal>
 );
 
-// Shared select styles (unchanged, kept for FormFields)
-const selectStyles = {
-  control: (base) => ({
-    ...base,
-    padding: "0.25rem",
-    fontSize: "1rem",
-    borderRadius: "0.5rem",
-    background: "#fff",
-    borderColor: "#d1d5db",
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
-    "&:hover": { borderColor: "#3b82f6" },
-    "@media (max-width: 640px)": { padding: "0.25rem", fontSize: "0.875rem" },
-  }),
-  menu: (base) => ({ ...base, zIndex: 20, background: "#fff" }),
-  singleValue: (base) => ({ ...base, color: "#1f2937" }),
-  option: (base, { isFocused, isSelected }) => ({
-    ...base,
-    background: isSelected ? "#3b82f6" : isFocused ? "#e5e7eb" : "#fff",
-    color: isSelected ? "#fff" : "#1f2937",
-  }),
-  placeholder: (base) => ({ ...base, color: "#9ca3af" }),
-};
-
 export default function Direct() {
   const [customers, setCustomers] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState([]); // Initialize as empty array
   const [quotations, setQuotations] = useState([]);
   const [filteredQuotations, setFilteredQuotations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -713,6 +957,7 @@ export default function Direct() {
     discount: 0,
     quantity: 1,
     per: '',
+    product_type: 'custom',
   });
   const [newProductIsForModal, setNewProductIsForModal] = useState(false);
   const [lastAddedProduct, setLastAddedProduct] = useState(null);
@@ -756,7 +1001,9 @@ export default function Direct() {
     try {
       const quotationsResponse = await axios.get(`${API_BASE_URL}/api/direct/quotations`);
       const data = Array.isArray(quotationsResponse.data) ? quotationsResponse.data : [];
-      const validQuotations = data.filter(q => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id));
+      const validQuotations = data.filter(
+        (q) => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id)
+      );
       setQuotations(validQuotations);
       setFilteredQuotations(validQuotations);
     } catch (err) {
@@ -780,15 +1027,30 @@ export default function Direct() {
           ? customersResponse.data.sort((a, b) => (b.id || 0) - (a.id || 0))
           : [];
 
-        setCustomers(sortedCustomers);
-        setProducts(Array.isArray(productsResponse.data) ? productsResponse.data : []);
+        // Validate and filter products
+        const validProducts = Array.isArray(productsResponse.data)
+          ? productsResponse.data.filter(
+              (p) =>
+                p != null &&
+                typeof p === 'object' &&
+                typeof p.id !== 'undefined' &&
+                typeof p.product_type === 'string' &&
+                typeof p.productname === 'string'
+            )
+          : [];
 
+        setCustomers(sortedCustomers);
+        setProducts(validProducts);
         const data = Array.isArray(quotationsResponse.data) ? quotationsResponse.data : [];
-        const validQuotations = data.filter(q => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id));
+        const validQuotations = data.filter(
+          (q) => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id)
+        );
         setQuotations(validQuotations);
         setFilteredQuotations(validQuotations);
       } catch (err) {
+        console.error('Fetch data error:', err);
         setError(`Failed to fetch data: ${err.message}`);
+        setProducts([]); // Ensure products is always an array
       } finally {
         setLoading(false);
       }
@@ -883,7 +1145,7 @@ export default function Direct() {
       product = {
         ...customProduct,
         id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        product_type: 'custom',
+        product_type: customProduct.product_type || 'custom',
         price: Math.round(Number(customProduct.price) || 0),
         quantity: Number.parseInt(customProduct.quantity) || 1,
         discount: Number.parseFloat(customProduct.discount) || targetDiscount,
@@ -891,7 +1153,7 @@ export default function Direct() {
         per: customProduct.per || 'Unit',
       };
     } else {
-      const [id, type] = customProduct ? [customProduct.id, customProduct.product_type] : targetSelectedProduct.value.split("-");
+      const [id, type] = targetSelectedProduct.value.split("-");
       product = products.find((p) => p.id.toString() === id && p.product_type === type);
       if (!product) {
         setError("Product not found");
@@ -1092,6 +1354,7 @@ export default function Direct() {
                 initialDiscount: Number.parseFloat(p.discount) || 0,
                 quantity: Number.parseInt(p.quantity) || 0,
                 per: p.per || 'Unit',
+                product_type: p.product_type || 'custom',
               }))
             : [],
         );
@@ -1197,6 +1460,7 @@ export default function Direct() {
                 initialDiscount: Number.parseFloat(p.discount) || 0,
                 quantity: Number.parseInt(p.quantity) || 0,
                 per: p.per || 'Unit',
+                product_type: p.product_type || 'custom',
               }))
             : [],
         );
@@ -1324,12 +1588,19 @@ export default function Direct() {
   const openNewProductModal = (isModal = false) => {
     setNewProductIsForModal(isModal);
     setNewProductModalIsOpen(true);
-    setNewProductData({ productname: '', price: '', discount: isModal ? modalChangeDiscount : changeDiscount, quantity: 1, per: '' });
+    setNewProductData({
+      productname: '',
+      price: '',
+      discount: isModal ? modalChangeDiscount : changeDiscount,
+      quantity: 1,
+      per: '',
+      product_type: 'custom',
+    });
   };
 
   const closeNewProductModal = () => {
     setNewProductModalIsOpen(false);
-    setNewProductData({ productname: '', price: '', discount: 0, quantity: 1, per: '' });
+    setNewProductData({ productname: '', price: '', discount: 0, quantity: 1, per: '', product_type: 'custom' });
     setError("");
   };
 
@@ -1338,12 +1609,14 @@ export default function Direct() {
     if (productData.price === '' || productData.price < 0) return setError("Price must be a non-negative number");
     if (productData.quantity === '' || productData.quantity < 1) return setError("Quantity must be at least 1");
     if (productData.discount < 0 || productData.discount > 100) return setError("Discount must be between 0 and 100");
+    if (!productData.product_type) return setError("Product type is required");
 
     addToCart(newProductIsForModal, {
       ...productData,
       price: Number.parseFloat(productData.price) || 0,
       discount: Number.parseFloat(productData.discount) || 0,
       quantity: parseInt(productData.quantity) || 1,
+      product_type: productData.product_type || 'custom',
     });
     closeNewProductModal();
   };
