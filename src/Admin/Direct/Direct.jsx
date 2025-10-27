@@ -10,7 +10,7 @@ import Logout from '../Logout';
 import { FaEdit, FaArrowRight, FaTrash, FaDownload, FaSearch, FaCamera } from 'react-icons/fa';
 import Select from 'react-select';
 import Tesseract from 'tesseract.js';
-import Webcam from 'react-webcam'; // Correct import
+import Webcam from 'react-webcam';
 
 // Set app element for accessibility
 Modal.setAppElement("#root");
@@ -115,7 +115,6 @@ const styles = {
     boxShadow: "0 10px 20px rgba(0,0,0,0.1)",
   },
 };
-
 
 const QuotationTable = ({
   cart = [],
@@ -230,15 +229,12 @@ const QuotationTable = ({
 
       const number = text.trim().match(/^\d+$/); // Match pure numbers
       if (number) {
-        console.log('Detected number:', number[0]);
         const matchedProduct = validProducts.find(
           (p) => p.serial_number && p.serial_number.toString() === number[0].toString()
         );
 
         if (matchedProduct) {
-          addToCart(isModal, matchedProduct, false, 1);
-
-          // Play success sound
+          addToCart(isModal, null, matchedProduct); // Pass matchedProduct directly
           try {
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             const oscillator = audioCtx.createOscillator();
@@ -250,10 +246,8 @@ const QuotationTable = ({
           } catch (soundErr) {
             console.log('Sound not supported');
           }
-
           setScanError('Product added successfully!');
           setTimeout(() => setScanError(''), 3000);
-          // Clear captured image to prepare for next scan
           setCapturedImage(null);
         } else {
           setScanError(`No product found for number: ${number[0]}`);
@@ -286,7 +280,7 @@ const QuotationTable = ({
         );
 
         if (matchedProduct) {
-          addToCart(isModal, matchedProduct, false, 1);
+          addToCart(isModal, null, matchedProduct); // Pass matchedProduct directly
           setScanError('Product added successfully!');
           setTimeout(() => setScanError(''), 3000);
           e.target.value = '';
@@ -393,7 +387,7 @@ const QuotationTable = ({
                     Price: ₹{getEffectivePrice(product).toFixed(2)}
                   </p>
                   <button
-                    onClick={() => addToCart(isModal, product, false, 1)}
+                    onClick={() => addToCart(isModal, null, product)} // Pass product directly
                     className="mt-2 w-full text-white px-4 py-2 rounded-lg font-bold text-sm bg-blue-600 hover:bg-blue-700 mobile:px-2 mobile:py-1 mobile:text-xs"
                     style={styles.button}
                   >
@@ -725,7 +719,7 @@ const FormFields = ({
         cart={modalCart}
         setCart={setModalCart}
         setModalCart={setModalCart}
-        products={products || []} // Ensure products is an array
+        products={products || []}
         selectedProduct={modalSelectedProduct}
         setSelectedProduct={setModalSelectedProduct}
         addToCart={addToCart}
@@ -924,7 +918,7 @@ const PDFDownloadConfirmModal = ({ isOpen, onClose, onYes, fileName }) => (
 
 export default function Direct() {
   const [customers, setCustomers] = useState([]);
-  const [products, setProducts] = useState([]); // Initialize as empty array
+  const [products, setProducts] = useState([]);
   const [quotations, setQuotations] = useState([]);
   const [filteredQuotations, setFilteredQuotations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1025,7 +1019,6 @@ export default function Direct() {
           ? customersResponse.data.sort((a, b) => (b.id || 0) - (a.id || 0))
           : [];
 
-        // Validate and filter products
         const validProducts = Array.isArray(productsResponse.data)
           ? productsResponse.data.filter(
               (p) =>
@@ -1048,7 +1041,7 @@ export default function Direct() {
       } catch (err) {
         console.error('Fetch data error:', err);
         setError(`Failed to fetch data: ${err.message}`);
-        setProducts([]); // Ensure products is always an array
+        setProducts([]);
       } finally {
         setLoading(false);
       }
@@ -1125,7 +1118,7 @@ export default function Direct() {
   };
 
   // Cart helpers
-  const addToCart = (isModal = false, customProduct = null) => {
+  const addToCart = (isModal = false, customProduct = null, directProduct = null) => {
     const targetCart = isModal ? modalCart : cart;
     const setTargetCart = isModal ? setModalCart : setCart;
     const targetSelectedProduct = isModal ? modalSelectedProduct : selectedProduct;
@@ -1133,13 +1126,14 @@ export default function Direct() {
     const targetDiscount = isModal ? modalChangeDiscount : changeDiscount;
     const setTargetLastAddedProduct = isModal ? setModalLastAddedProduct : setLastAddedProduct;
 
-    if (!customProduct && !targetSelectedProduct) {
+    if (!customProduct && !targetSelectedProduct && !directProduct) {
       setError("Please select a product");
       return;
     }
 
     let product;
     if (customProduct) {
+      // Handle custom products (from New Product Modal)
       product = {
         ...customProduct,
         id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -1150,7 +1144,19 @@ export default function Direct() {
         initialDiscount: Number.parseFloat(customProduct.discount) || targetDiscount,
         per: customProduct.per || 'Unit',
       };
+    } else if (directProduct) {
+      // Handle products from scanning or grid selection
+      product = {
+        ...directProduct,
+        id: directProduct.id, // Use the existing integer ID
+        price: Math.round(Number(directProduct.price) || 0),
+        quantity: 1,
+        discount: Number.parseFloat(directProduct.discount) || targetDiscount,
+        initialDiscount: Number.parseFloat(directProduct.discount) || 0,
+        per: directProduct.per || 'Unit',
+      };
     } else {
+      // Handle products selected via dropdown
       const [id, type] = targetSelectedProduct.value.split("-");
       product = products.find((p) => p.id.toString() === id && p.product_type === type);
       if (!product) {
@@ -1159,6 +1165,7 @@ export default function Direct() {
       }
       product = {
         ...product,
+        id: product.id, // Use the existing integer ID
         price: Math.round(Number(product.price) || 0),
         quantity: 1,
         discount: Number.parseFloat(product.discount) || targetDiscount,
@@ -1173,7 +1180,7 @@ export default function Direct() {
         ? prev.map((item) =>
             item.id === product.id && item.product_type === product.product_type
               ? { ...item, quantity: item.quantity + 1 }
-              : item,
+              : item
           )
         : [product, ...prev];
     });
@@ -1186,8 +1193,8 @@ export default function Direct() {
     const setTargetCart = isModal ? setModalCart : setCart;
     setTargetCart((prev) =>
       prev.map((item) =>
-        item.id === id && item.product_type === type ? { ...item, quantity: quantity < 0 ? 0 : quantity } : item,
-      ),
+        item.id === id && item.product_type === type ? { ...item, quantity: quantity < 0 ? 0 : quantity } : item
+      )
     );
   };
 
@@ -1197,8 +1204,8 @@ export default function Direct() {
       prev.map((item) =>
         item.id === id && item.product_type === type
           ? { ...item, discount: discount < 0 ? 0 : discount > 100 ? 100 : discount }
-          : item,
-      ),
+          : item
+      )
     );
   };
 
@@ -1206,8 +1213,8 @@ export default function Direct() {
     const setTargetCart = isModal ? setModalCart : setCart;
     setTargetCart((prev) =>
       prev.map((item) =>
-        item.id === id && item.product_type === type ? { ...item, price: price < 0 ? 0 : price } : item,
-      ),
+        item.id === id && item.product_type === type ? { ...item, price: price < 0 ? 0 : price } : item
+      )
     );
   };
 
@@ -1225,7 +1232,7 @@ export default function Direct() {
   const calculateProcessingFee = (targetCart = [], additionalDiscount = 0) => {
     const subtotal = targetCart.reduce(
       (total, item) => total + getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity,
-      0,
+      0
     );
     const discountedSubtotal = subtotal * (1 - additionalDiscount / 100);
     return (discountedSubtotal * 0.03).toFixed(2);
@@ -1234,7 +1241,7 @@ export default function Direct() {
   const calculateTotal = (targetCart = [], additionalDiscount = 0) => {
     const subtotal = targetCart.reduce(
       (total, item) => total + getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity,
-      0,
+      0
     );
     const discountedSubtotal = subtotal * (1 - additionalDiscount / 100);
     const processingFee = discountedSubtotal * 0.01;
@@ -1269,6 +1276,7 @@ export default function Direct() {
           discount: parseFloat(item.discount) || 0,
           quantity: parseInt(item.quantity) || 0,
           per: item.per || 'Unit',
+          serial_number: item.serial_number || undefined, // Include if backend expects it
         })),
         net_rate: parseFloat(calculateNetRate(cart)),
         you_save: parseFloat(calculateYouSave(cart)),
@@ -1319,7 +1327,7 @@ export default function Direct() {
       setIsQuotationCreated(false);
     } catch (err) {
       console.error("Create quotation error:", err);
-      setError(`Failed to create quotation. Try again.`);
+      setError(`Failed to create quotation: ${err.message}`);
     } finally {
       setCreateLoading(false);
     }
@@ -1347,6 +1355,7 @@ export default function Direct() {
           Array.isArray(products)
             ? products.map((p) => ({
                 ...p,
+                id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 price: Number.parseFloat(p.price) || 0,
                 discount: Number.parseFloat(p.discount) || 0,
                 initialDiscount: Number.parseFloat(p.discount) || 0,
@@ -1354,7 +1363,7 @@ export default function Direct() {
                 per: p.per || 'Unit',
                 product_type: p.product_type || 'custom',
               }))
-            : [],
+            : []
         );
       } catch (e) {
         setModalCart([]);
@@ -1424,7 +1433,7 @@ export default function Direct() {
       closeModal();
     } catch (err) {
       console.error("Edit quotation error:", err);
-      setError(`Failed to update quotation. Try again.`);
+      setError(`Failed to update quotation: ${err.message}`);
     } finally {
       setModalSubmitLoading(false);
     }
@@ -1453,6 +1462,7 @@ export default function Direct() {
           Array.isArray(products)
             ? products.map((p) => ({
                 ...p,
+                id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 price: Number.parseFloat(p.price) || 0,
                 discount: Number.parseFloat(p.discount) || 0,
                 initialDiscount: Number.parseFloat(p.discount) || 0,
@@ -1460,7 +1470,7 @@ export default function Direct() {
                 per: p.per || 'Unit',
                 product_type: p.product_type || 'custom',
               }))
-            : [],
+            : []
         );
       } catch (e) {
         setModalCart([]);
@@ -1500,6 +1510,7 @@ export default function Direct() {
           discount: parseFloat(item.discount) || 0,
           quantity: parseInt(item.quantity) || 0,
           per: item.per || 'Unit',
+          serial_number: item.serial_number || undefined,
         })),
         net_rate: parseFloat(calculateNetRate(modalCart)),
         you_save: parseFloat(calculateYouSave(modalCart)),
@@ -1536,7 +1547,7 @@ export default function Direct() {
       closeModal();
     } catch (err) {
       console.error("Convert to booking error:", err);
-      setError(`Failed to create booking. Try again.`);
+      setError(`Failed to create booking: ${err.message}`);
     } finally {
       setModalSubmitLoading(false);
     }
@@ -1609,13 +1620,7 @@ export default function Direct() {
     if (productData.discount < 0 || productData.discount > 100) return setError("Discount must be between 0 and 100");
     if (!productData.product_type) return setError("Product type is required");
 
-    addToCart(newProductIsForModal, {
-      ...productData,
-      price: Number.parseFloat(productData.price) || 0,
-      discount: Number.parseFloat(productData.discount) || 0,
-      quantity: parseInt(productData.quantity) || 1,
-      product_type: productData.product_type || 'custom',
-    });
+    addToCart(newProductIsForModal, productData); // Pass as customProduct
     closeNewProductModal();
   };
 
