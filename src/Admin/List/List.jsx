@@ -5,10 +5,12 @@ import Modal from "react-modal"
 import Sidebar from "../Sidebar/Sidebar"
 import "../../App.css"
 import { API_BASE_URL } from "../../../Config"
-import { FaEye, FaEdit, FaTrash, FaArrowLeft, FaArrowRight, FaExclamationTriangle } from "react-icons/fa"
+import { FaEye, FaEdit, FaTrash, FaArrowLeft, FaArrowRight, FaExclamationTriangle, FaDownload } from "react-icons/fa"
 import Logout from "../Logout"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
+import JSZip from "jszip"
+import { saveAs } from "file-saver"
 
 Modal.setAppElement("#root")
 
@@ -39,7 +41,7 @@ export default function List() {
     box_count: 1,
     images: [],
     existingImages: [],
-    imagesToDelete: [], // Add this new field
+    imagesToDelete: [],
   })
 
   const productsPerPage = 9
@@ -115,7 +117,7 @@ export default function List() {
       )
     }
     setFilteredProducts(filtered)
-    setCurrentPage(1)
+    // DO NOT reset page on filter change
   }
 
   const handleToggle = async (product, endpoint, keyPrefix) => {
@@ -134,12 +136,24 @@ export default function List() {
     }
   }
 
+  // ──────────────────────── PERSIST PAGE ON REFRESH & EDIT ────────────────────────
+  useEffect(() => {
+    const savedPage = sessionStorage.getItem('listPage')
+    if (savedPage) {
+      setCurrentPage(Number(savedPage))
+    }
+  }, [])
+
+  useEffect(() => {
+    sessionStorage.setItem('listPage', currentPage.toString())
+  }, [currentPage])
+
   useEffect(() => {
     fetchProductTypes()
     fetchProducts()
     const intervalId = setInterval(() => {
       fetchProductTypes()
-      fetchProducts()
+      fetchProducts() // Refreshes data but keeps current page
     }, 300000)
     return () => clearInterval(intervalId)
   }, [])
@@ -147,6 +161,46 @@ export default function List() {
   useEffect(() => {
     applyFilters(products, filterType, searchQuery)
   }, [filterType, searchQuery, products])
+
+  // ──────────────────────── DOWNLOAD ALL IMAGES IN ZIP ────────────────────────
+  const handleDownloadAllImages = async () => {
+    if (products.length === 0) {
+      setError("No products to download images from.")
+      return
+    }
+
+    const zip = new JSZip()
+    const folder = zip.folder("Product_Images")
+
+    const fetchPromises = products.map(async (product) => {
+      const images = product.images || []
+      const productName = (product.productname || "Unknown").replace(/[^a-zA-Z0-9]/g, "_")
+
+      for (let i = 0; i < images.length; i++) {
+        const url = images[i]
+        if (url.includes("/video/")) continue // Skip videos
+
+        try {
+          const res = await fetch(url)
+          const blob = await res.blob()
+          const ext = url.split('.').pop().split(/[\?\#]/)[0] || 'jpg'
+          const filename = `${productName}_img${i + 1}.${ext}`
+          folder.file(filename, blob)
+        } catch (err) {
+          console.warn(`Failed to download: ${url}`)
+        }
+      }
+    })
+
+    try {
+      setError("")
+      await Promise.all(fetchPromises)
+      const content = await zip.generateAsync({ type: "blob" })
+      saveAs(content, "all_product_images.zip")
+    } catch (err) {
+      setError("Failed to create ZIP file.")
+    }
+  }
 
   const handleImageChange = (event) => {
     const files = Array.from(event.target.files)
@@ -236,20 +290,13 @@ export default function List() {
     formDataToSend.append("product_type", formData.product_type)
     formDataToSend.append("box_count", Math.max(1, Number.parseInt(formData.box_count) || 1))
 
-    // Handle images for edit vs add
     if (isEdit) {
-      // For edit: send remaining existing images and new images
       const remainingExistingImages = formData.existingImages || []
-
-      // Send existing images that weren't deleted
       if (remainingExistingImages.length > 0) {
         formDataToSend.append("existingImages", JSON.stringify(remainingExistingImages))
       }
-
-      // Add new images using the same 'images' field that multer expects
       formData.images.forEach((file) => formDataToSend.append("images", file))
     } else {
-      // For add operation, just append new images
       formData.images.forEach((file) => formDataToSend.append("images", file))
     }
 
@@ -668,7 +715,6 @@ export default function List() {
               className="mt-1 mobile:mt-0.5 block w-full text-sm text-gray-900 dark:text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-gray-700 file:text-indigo-600 dark:file:text-gray-200 hover:file:bg-indigo-100 dark:hover:file:bg-gray-600"
             />
 
-            {/* Show existing images for edit mode with delete buttons */}
             {isEdit && formData.existingImages.length > 0 && (
               <div className="mt-2">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Current images (click × to delete):</p>
@@ -690,7 +736,6 @@ export default function List() {
               </div>
             )}
 
-            {/* Show new images if selected */}
             {formData.images.length > 0 && (
               <div className="mt-2">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
@@ -865,6 +910,21 @@ export default function List() {
               >
                 Download Pricelist
               </button>
+              {/* ──────────────────────── NEW: Download Images Button ──────────────────────── */}
+              <button
+                onClick={handleDownloadAllImages}
+                className="rounded-md px-3 py-2 mobile:translate-y-3 text-sm font-semibold text-white dark:text-gray-100 shadow-sm hover:bg-green-700 dark:hover:bg-green-600 flex items-center gap-1"
+                style={{
+                  background: "linear-gradient(135deg, rgba(34,197,94,0.9), rgba(22,163,74,0.95))",
+                  backgroundDark: "linear-gradient(135deg, rgba(34,197,94,0.9), rgba(21,128,61,0.95))",
+                  border: "1px solid rgba(74,222,128,0.4)",
+                  borderDark: "1px solid rgba(74,222,128,0.4)",
+                  boxShadow: "0 15px 35px rgba(34,197,94,0.3), inset 0 1px 0 rgba(255,255,255,0.2)",
+                  boxShadowDark: "0 15px 35px rgba(34,197,94,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
+                }}
+              >
+                <FaDownload className="h-4 w-4" /> Images
+              </button>
             </div>
           </div>
 
@@ -987,9 +1047,9 @@ export default function List() {
                               product_type: product.product_type,
                               description: product.description || "",
                               box_count: product.box_count,
-                              images: [], // Reset new images
-                              existingImages: product.images || [], // Store existing images separately
-                              imagesToDelete: [], // Reset deleted images tracker
+                              images: [],
+                              existingImages: product.images || [],
+                              imagesToDelete: [],
                             })
                             setEditModalIsOpen(true)
                           }}
@@ -1031,7 +1091,8 @@ export default function List() {
             <div className="mt-6 mobile:mt-4 flex justify-center items-center space-x-4 mobile:space-x-2">
               <button
                 onClick={() => {
-                  setCurrentPage((p) => Math.max(1, p - 1))
+                  const prev = Math.max(1, currentPage - 1)
+                  setCurrentPage(prev)
                   window.scrollTo(0, 0)
                 }}
                 disabled={currentPage === 1}
@@ -1056,7 +1117,8 @@ export default function List() {
               </span>
               <button
                 onClick={() => {
-                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  const next = Math.min(totalPages, currentPage + 1)
+                  setCurrentPage(next)
                   window.scrollTo(0, 0)
                 }}
                 disabled={currentPage === totalPages}
