@@ -1229,7 +1229,7 @@ export default function Home() {
                   <p>
                     Madhu Nisha Crackers
                     <br />
-                    Pernayakkanpatti, Pachayapuram.,
+                    Pernayakkanpatti
                     <br />
                     Kil Thayilapatti, Sivakasi
                   </p>

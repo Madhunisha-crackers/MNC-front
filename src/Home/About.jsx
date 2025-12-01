@@ -260,13 +260,13 @@ export default function About() {
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <motion.a
-                href="tel:+919487524689"
+                href="tel:+919487594689"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className="flex items-center gap-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-8 py-4 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl"
               >
                 <Phone className="w-5 h-5" />
-                +91 94875 24689
+                +91 94875 94689
               </motion.a>
 
        
@@ -337,9 +337,9 @@ export default function About() {
                   <div className="flex items-start gap-3">
                     <MapPin className="w-5 h-5 text-orange-400 mt-1 flex-shrink-0" />
                     <div>
-                      <p className="text-white font-medium">Madhu Nisha Pyrotech</p>
+                      <p className="text-white font-medium">Madhu Nisha Crackers</p>
                       <p className="text-gray-300">
-                        Pernayakkanpatti, Pachayapuram.,
+                        Pernayakkanpatti
                         <br />
                         Kil Thayilapatti, Sivakasi
                       </p>
