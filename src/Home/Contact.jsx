@@ -682,12 +682,6 @@ const contactCards = [
                     <Phone className="w-5 h-5 text-orange-400" />
                     <div className="space-y-1">
                       <a
-                        href="tel:+919487524689"
-                        className="text-gray-300 hover:text-orange-400 transition-colors block"
-                      >
-                        +91 94875 24689
-                      </a>
-                      <a
                         href="tel:+919487594689"
                         className="text-gray-300 hover:text-orange-400 transition-colors block"
                       >
