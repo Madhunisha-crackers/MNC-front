@@ -398,12 +398,12 @@ export default function List() {
 
       doc.setFontSize(16)
       doc.setFont("helvetica", "bold")
-      doc.text("FUN WITH CRACKERS", pageWidth / 2, yOffset, { align: "center" })
+      doc.text("MADHU NISHA CRACKERS", pageWidth / 2, yOffset, { align: "center" })
       yOffset += 10
 
       doc.setFontSize(12)
       doc.setFont("helvetica", "normal")
-      doc.text("Website - www.funwithcrackers.com", pageWidth / 2, yOffset, { align: "center" })
+      doc.text("Website - www.madhunishacrackers.com", pageWidth / 2, yOffset, { align: "center" })
       yOffset += 10
       doc.text("Retail Pricelist - 2025", pageWidth / 2, yOffset, { align: "center" })
       yOffset += 20
@@ -412,7 +412,7 @@ export default function List() {
       let hasActiveProducts = false
 
       productTypes.forEach((type) => {
-        const typeProducts = products.filter((product) => product.product_type === type && product.status === "on")
+        const typeProducts = products.filter((product) => product.product_type === type)
 
         if (typeProducts.length > 0) {
           hasActiveProducts = true
