@@ -262,115 +262,115 @@ const Pricelist = () => {
     });
   }, []);
 
-  const generateSuggestions = useCallback(() => {
-    const budget = Number.parseFloat(aiBudget);
-    if (isNaN(budget) || budget <= 0) {
-      showError("Please enter a valid budget greater than 0.");
-      return;
+const generateSuggestions = useCallback(() => {
+  const budget = Number(aiBudget);
+  if (!budget || budget <= 0) {
+    showError("Please enter a valid budget");
+    return;
+  }
+
+  const categories = {
+    kids: [
+      "kids_special",
+      "fountain_and_fancy_novelties",
+      "flower_pots",
+      "ground_chakkar",
+      "sparklers",
+      "premium_sparklers",
+      "fancy_pencil_varieties",
+      "twinkling_star"
+    ],
+    sound: ["bombs", "one_sound_crackers"],
+    night: [
+      "comets_sky_shots",
+      "repeating_shots",
+      "fountain_and_fancy_novelties",
+      "flower_pots",
+      "ground_chakkar",
+      "sparklers",
+      "premium_sparklers",
+      "rockets"
+    ]
+  };
+
+  const selectedPrefs = ["night", "kids", "sound"].filter(p => aiPreferences[p]);
+  if (!selectedPrefs.length) {
+    showError("Select at least one preference");
+    return;
+  }
+
+  const TARGET = 50;
+
+  const pool = products
+    .filter(p =>
+      selectedPrefs.some(pref =>
+        categories[pref].includes(p.product_type)
+      )
+    )
+    .map(p => ({
+      ...p,
+      finalPrice: p.price * (1 - p.discount / 100),
+      rand: Math.random()
+    }))
+    .sort((a, b) => a.rand - b.rand); // 🔥 true shuffle
+
+  const cheap = pool.filter(p => p.finalPrice <= budget * 0.03);
+  const mid = pool.filter(
+    p => p.finalPrice > budget * 0.03 && p.finalPrice <= budget * 0.08
+  );
+  const costly = pool.filter(p => p.finalPrice > budget * 0.08);
+
+  const tempCart = {};
+  let remaining = budget;
+  let count = 0;
+
+  const usedTypes = new Set();
+  const usedSparklerSizes = new Set();
+
+  const getSparklerSize = name => {
+    const m = name?.match(/(\d+)\s*cm/i);
+    return m ? m[1] + "cm" : null;
+  };
+
+  const tryAdd = (p, allowSameType = false) => {
+    if (count >= TARGET) return;
+    if (p.finalPrice > remaining) return;
+    if (tempCart[p.serial_number]) return;
+
+    if (
+      p.product_type === "sparklers" ||
+      p.product_type === "premium_sparklers"
+    ) {
+      const size = getSparklerSize(p.product_name);
+      if (!size || usedSparklerSizes.has(size)) return;
+      usedSparklerSizes.add(size);
+    } else {
+      if (!allowSameType && usedTypes.has(p.product_type)) return;
+      usedTypes.add(p.product_type);
     }
 
-    const categories = {
-      kids: [
-        "kids_special",
-        "fountain_and_fancy_novelties",
-        "flower_pots",
-        "ground_chakkar",
-        "sparklers",
-        "premium_sparklers",
-        "fancy_pencil_varieties",
-        "twinkling_star"
-      ],
-      sound: ["bombs", "one_sound_crackers"],
-      night: [
-        "comets_sky_shots",
-        "repeating_shots",
-        "fountain_and_fancy_novelties",
-        "flower_pots",
-        "ground_chakkar",
-        "sparklers",
-        "premium_sparklers",
-        "rockets"
-      ]
-    };
+    tempCart[p.serial_number] = 1;
+    remaining -= p.finalPrice;
+    count++;
+  };
 
-    const priorityOrder = ["night", "kids", "sound"];
-    const selected = priorityOrder.filter(cat => aiPreferences[cat]);
+  // 🔹 Phase 1: cheap (base variety)
+  cheap.forEach(p => tryAdd(p, false));
 
-    if (selected.length === 0) {
-      showError("Please select at least one preference.");
-      return;
-    }
+  // 🔹 Phase 2: mid range
+  mid.forEach(p => tryAdd(p, true));
 
-    let targetVariety = 30;
-    if (budget <= 3000) targetVariety = 35;
-    if (budget <= 2000) targetVariety = 40;
+  // 🔹 Phase 3: costly (limited)
+  costly.forEach(p => tryAdd(p, true));
 
-    const getProducts = types =>
-      products
-        .filter(p => types.includes(p.product_type))
-        .map(p => ({
-          ...p,
-          finalPrice: p.price * (1 - p.discount / 100)
-        }));
+  // 🔹 Phase 4: fallback fill
+  pool.forEach(p => {
+    if (count < TARGET) tryAdd(p, true);
+  });
 
-    const pool = getProducts([...new Set(selected.flatMap(cat => categories[cat]))]);
+  setSuggestedCart(tempCart);
+}, [aiBudget, aiPreferences, products, showError]);
 
-    const sortedByPrice = [...pool].sort((a, b) => a.finalPrice - b.finalPrice);
-    const shuffledPool = [...pool].sort(() => Math.random() - 0.5);
-
-    const tempCart = {};
-    let remaining = budget;
-    let varietyCount = 0;
-
-    const typeUsedOnce = new Set();
-    const sparklerSizeUsed = new Set();
-
-    const getSparklerSize = name => {
-      const match = name?.match(/(\d+\s*cm)/i);
-      return match ? match[1].toLowerCase() : name;
-    };
-
-    for (let product of shuffledPool) {
-      if (varietyCount >= targetVariety) break;
-      if (product.finalPrice > remaining) continue;
-      if (tempCart[product.serial_number]) continue;
-
-      if (product.product_type === "sparklers") {
-        const sizeKey = getSparklerSize(product.product_name);
-        if (sparklerSizeUsed.has(sizeKey)) continue;
-        sparklerSizeUsed.add(sizeKey);
-      } else {
-        if (typeUsedOnce.has(product.product_type)) continue;
-        typeUsedOnce.add(product.product_type);
-      }
-
-      tempCart[product.serial_number] = 1;
-      remaining -= product.finalPrice;
-      varietyCount++;
-    }
-
-    if (varietyCount < targetVariety) {
-      for (let product of sortedByPrice) {
-        if (varietyCount >= targetVariety) break;
-        if (product.finalPrice > remaining) continue;
-        if (tempCart[product.serial_number]) continue;
-
-        tempCart[product.serial_number] = 1;
-        remaining -= product.finalPrice;
-        varietyCount++;
-      }
-    }
-
-    for (let product of sortedByPrice) {
-      if (remaining < product.finalPrice) break;
-      if (!tempCart[product.serial_number]) continue;
-
-      tempCart[product.serial_number] += 1;
-      remaining -= product.finalPrice;
-    }
-
-    setSuggestedCart(tempCart);
-  }, [aiBudget, aiPreferences, products, showError]);
 
   const handleAiNext = () => {
     if (aiStep === 0 && !aiBudget) return showError("Please enter a budget.");
@@ -873,35 +873,96 @@ const Pricelist = () => {
           </motion.div>
         )}
         {showAiModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm" onClick={() => { setShowAiModal(false); setAiStep(0); setAiBudget(""); setAiPreferences({ kids: false, sound: false, night: false }); setSuggestedCart({}); }}>
-            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto p-6">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm"
+            onClick={() => {
+              setShowAiModal(false);
+              setAiStep(0);
+              setAiBudget("");
+              setAiPreferences({ kids: false, sound: false, night: false });
+              setSuggestedCart({});
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto p-6"
+            >
               <h2 className="text-2xl font-bold mb-6 text-gray-800">Smart AI Assistant</h2>
+
               <AnimatePresence mode="wait">
                 {aiStep === 0 && (
                   <motion.div key="step0" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}>
                     <p className="mb-4">What's your budget? (in ₹)</p>
-                    <input type="number" value={aiBudget} onChange={e => setAiBudget(e.target.value)} className="w-full px-4 py-3 border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400" placeholder="Enter budget" />
+                    <input
+                      type="number"
+                      value={aiBudget}
+                      onChange={e => setAiBudget(e.target.value)}
+                      className="w-full px-4 py-3 border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400"
+                      placeholder="Enter budget"
+                    />
                   </motion.div>
                 )}
+
                 {aiStep === 1 && (
                   <motion.div key="step1" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}>
                     <p className="mb-4">Preferences: (Select what you want more of)</p>
                     <div className="space-y-2">
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={aiPreferences.kids} onChange={e => setAiPreferences(prev => ({ ...prev, kids: e.target.checked }))} /> More for Kids (Sparklers, Novelties)</label>
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={aiPreferences.sound} onChange={e => setAiPreferences(prev => ({ ...prev, sound: e.target.checked }))} /> Sound Crackers (Bombs, Shots)</label>
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={aiPreferences.night} onChange={e => setAiPreferences(prev => ({ ...prev, night: e.target.checked }))} /> Night Shots (Rockets, Sky Shots)</label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={aiPreferences.kids}
+                          onChange={e => setAiPreferences(prev => ({ ...prev, kids: e.target.checked }))}
+                        />
+                        More for Kids (Sparklers, Novelties)
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={aiPreferences.sound}
+                          onChange={e => setAiPreferences(prev => ({ ...prev, sound: e.target.checked }))}
+                        />
+                        Sound Crackers (Bombs, Shots)
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={aiPreferences.night}
+                          onChange={e => setAiPreferences(prev => ({ ...prev, night: e.target.checked }))}
+                        />
+                        Night Shots (Rockets, Sky Shots)
+                      </label>
                     </div>
                   </motion.div>
                 )}
+
                 {aiStep === 2 && (
                   <motion.div key="step2" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }} className="space-y-6">
                     <div className="flex justify-between items-center">
-                      <p className="text-lg font-semibold">Suggested Items (≈ ₹{suggestedTotals})</p>
-                      <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={generateSuggestions} className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2">
+                      <p className="text-lg font-semibold">
+                        Suggested Items
+                        <span className="text-gray-500 font-normal text-base ml-2">
+                          ({Object.keys(suggestedCart).length} items ≈ ₹{suggestedTotals})
+                        </span>
+                      </p>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={generateSuggestions}
+                        className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2"
+                      >
                         <span>Regenerate</span>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
                       </motion.button>
                     </div>
+
                     {Object.keys(suggestedCart).length === 0 ? (
                       <div className="text-center py-8 text-gray-500">
                         <p>No suggestions could be generated.</p>
@@ -914,20 +975,38 @@ const Pricelist = () => {
                           if (!product) return null;
                           const discount = (product.price * product.discount) / 100;
                           const priceAfterDiscount = formatPrice(product.price - discount);
-                          const imageSrc = Array.isArray(product.images) && product.images.length > 0 ? product.images.find(img => !img.includes("/video/")) || product.images[0] : need;
+                          const imageSrc = Array.isArray(product.images) && product.images.length > 0
+                            ? product.images.find(img => !img.includes("/video/")) || product.images[0]
+                            : need;
+
                           return (
                             <div key={serial} className="flex items-center gap-4 p-4 bg-orange-50/70 rounded-2xl border border-orange-100">
-                              <img src={imageSrc} alt={product.productname} className="w-16 h-16 rounded-xl object-cover bg-white border border-orange-200 shadow-sm" onError={e => e.target.src = need} />
+                              <img
+                                src={imageSrc}
+                                alt={product.productname}
+                                className="w-16 h-16 rounded-xl object-cover bg-white border border-orange-200 shadow-sm"
+                                onError={e => e.target.src = need}
+                              />
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium text-gray-800 line-clamp-2">{product.productname}</p>
                                 <p className="text-sm text-orange-600">₹{priceAfterDiscount} × {qty}</p>
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
-                                <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => removeFromSuggestedCart(product)} className="w-8 h-8 bg-orange-100 hover:bg-orange-200 rounded-full flex items-center justify-center text-orange-700">
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => removeFromSuggestedCart(product)}
+                                  className="w-8 h-8 bg-orange-100 hover:bg-orange-200 rounded-full flex items-center justify-center text-orange-700"
+                                >
                                   <FaMinus className="w-4 h-4" />
                                 </motion.button>
                                 <span className="w-10 text-center font-medium">{qty}</span>
-                                <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => addToSuggestedCart(product)} className="w-8 h-8 bg-orange-100 hover:bg-orange-200 rounded-full flex items-center justify-center text-orange-700">
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => addToSuggestedCart(product)}
+                                  className="w-8 h-8 bg-orange-100 hover:bg-orange-200 rounded-full flex items-center justify-center text-orange-700"
+                                >
                                   <FaPlus className="w-4 h-4" />
                                 </motion.button>
                               </div>
@@ -936,8 +1015,14 @@ const Pricelist = () => {
                         })}
                       </div>
                     )}
+
                     {Object.keys(suggestedCart).length > 0 && (
-                      <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={addSuggestedToCart} className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-3 rounded-2xl font-semibold shadow-md">
+                      <motion.button
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={addSuggestedToCart}
+                        className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-3 rounded-2xl font-semibold shadow-md"
+                      >
                         Add All Suggested to Cart
                       </motion.button>
                     )}
