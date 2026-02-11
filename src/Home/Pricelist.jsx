@@ -262,114 +262,121 @@ const Pricelist = () => {
     });
   }, []);
 
-const generateSuggestions = useCallback(() => {
-  const budget = Number(aiBudget);
-  if (!budget || budget <= 0) {
-    showError("Please enter a valid budget");
-    return;
-  }
-
-  const categories = {
-    kids: [
-      "kids_special",
-      "fountain_and_fancy_novelties",
-      "flower_pots",
-      "ground_chakkar",
-      "sparklers",
-      "premium_sparklers",
-      "fancy_pencil_varieties",
-      "twinkling_star"
-    ],
-    sound: ["bombs", "one_sound_crackers"],
-    night: [
-      "comets_sky_shots",
-      "repeating_shots",
-      "fountain_and_fancy_novelties",
-      "flower_pots",
-      "ground_chakkar",
-      "sparklers",
-      "premium_sparklers",
-      "rockets"
-    ]
-  };
-
-  const selectedPrefs = ["night", "kids", "sound"].filter(p => aiPreferences[p]);
-  if (!selectedPrefs.length) {
-    showError("Select at least one preference");
-    return;
-  }
-
-  const TARGET = 50;
-
-  const pool = products
-    .filter(p =>
-      selectedPrefs.some(pref =>
-        categories[pref].includes(p.product_type)
-      )
-    )
-    .map(p => ({
-      ...p,
-      finalPrice: p.price * (1 - p.discount / 100),
-      rand: Math.random()
-    }))
-    .sort((a, b) => a.rand - b.rand); // 🔥 true shuffle
-
-  const cheap = pool.filter(p => p.finalPrice <= budget * 0.03);
-  const mid = pool.filter(
-    p => p.finalPrice > budget * 0.03 && p.finalPrice <= budget * 0.08
-  );
-  const costly = pool.filter(p => p.finalPrice > budget * 0.08);
-
-  const tempCart = {};
-  let remaining = budget;
-  let count = 0;
-
-  const usedTypes = new Set();
-  const usedSparklerSizes = new Set();
-
-  const getSparklerSize = name => {
-    const m = name?.match(/(\d+)\s*cm/i);
-    return m ? m[1] + "cm" : null;
-  };
-
-  const tryAdd = (p, allowSameType = false) => {
-    if (count >= TARGET) return;
-    if (p.finalPrice > remaining) return;
-    if (tempCart[p.serial_number]) return;
-
-    if (
-      p.product_type === "sparklers" ||
-      p.product_type === "premium_sparklers"
-    ) {
-      const size = getSparklerSize(p.product_name);
-      if (!size || usedSparklerSizes.has(size)) return;
-      usedSparklerSizes.add(size);
-    } else {
-      if (!allowSameType && usedTypes.has(p.product_type)) return;
-      usedTypes.add(p.product_type);
+  const generateSuggestions = useCallback(() => {
+    const budget = Number(aiBudget);
+    if (!budget || budget <= 0) {
+      showError("Please enter a valid budget");
+      return;
     }
 
-    tempCart[p.serial_number] = 1;
-    remaining -= p.finalPrice;
-    count++;
-  };
+    const categories = {
+      kids: [
+        "kids_special",
+        "fountain_and_fancy_novelties",
+        "flower_pots",
+        "ground_chakkar",
+        "sparklers",
+        "premium_sparklers",
+        "fancy_pencil_varieties",
+        "twinkling_star"
+      ],
+      sound: ["bombs", "one_sound_crackers"],
+      night: [
+        "repeating_shots",
+        "comets_sky_shots",
+        "fountain_and_fancy_novelties",
+        "flower_pots",
+        "ground_chakkar",
+        "sparklers",
+        "premium_sparklers",
+        "rockets"
+      ]
+    };
 
-  // 🔹 Phase 1: cheap (base variety)
-  cheap.forEach(p => tryAdd(p, false));
+    const selectedPrefs = ["night", "kids", "sound"].filter(
+      p => aiPreferences[p]
+    );
+    if (!selectedPrefs.length) {
+      showError("Select at least one preference");
+      return;
+    }
 
-  // 🔹 Phase 2: mid range
-  mid.forEach(p => tryAdd(p, true));
+    const TARGET = 50;
 
-  // 🔹 Phase 3: costly (limited)
-  costly.forEach(p => tryAdd(p, true));
+    const pool = products
+      .filter(p =>
+        selectedPrefs.some(pref =>
+          categories[pref].includes(p.product_type)
+        )
+      )
+      .map(p => ({
+        ...p,
+        finalPrice: p.price * (1 - p.discount / 100),
+        rand: Math.random()
+      }))
+      .sort((a, b) => a.rand - b.rand);
 
-  // 🔹 Phase 4: fallback fill
-  pool.forEach(p => {
-    if (count < TARGET) tryAdd(p, true);
-  });
+    const cheap = pool.filter(p => p.finalPrice <= budget * 0.03);
+    const mid = pool.filter(
+      p => p.finalPrice > budget * 0.03 && p.finalPrice <= budget * 0.08
+    );
+    const costly = pool.filter(p => p.finalPrice > budget * 0.08);
 
-  setSuggestedCart(tempCart);
-}, [aiBudget, aiPreferences, products, showError]);
+    const tempCart = {};
+    let remaining = budget;
+    let count = 0;
+
+    const usedTypes = new Set();
+    const sparklerSizeCount = {}; // size => count
+
+    const getSparklerSize = name => {
+      const m = name?.match(/(\d+)\s*cm/i);
+      return m ? m[1] : null;
+    };
+
+    const tryAdd = (p, allowSameType = false) => {
+      if (count >= TARGET) return;
+      if (p.finalPrice > remaining) return;
+      if (tempCart[p.serial_number]) return;
+
+      // 🔥 Sparkler variety logic
+      if (
+        p.product_type === "sparklers" ||
+        p.product_type === "premium_sparklers"
+      ) {
+        const size = getSparklerSize(p.product_name) || "unknown";
+
+        // Allow max 2 variants per size
+        if (sparklerSizeCount[size] >= 2) return;
+
+        sparklerSizeCount[size] = (sparklerSizeCount[size] || 0) + 1;
+      } else {
+        // Prefer variety in non-sparkler types
+        if (!allowSameType && usedTypes.has(p.product_type)) return;
+        usedTypes.add(p.product_type);
+      }
+
+      tempCart[p.serial_number] = 1;
+      remaining -= p.finalPrice;
+      count++;
+    };
+
+    // 🔹 Phase 1: cheap items (max variety)
+    cheap.forEach(p => tryAdd(p, false));
+
+    // 🔹 Phase 2: mid range (balanced)
+    mid.forEach(p => tryAdd(p, true));
+
+    // 🔹 Phase 3: costly (limited)
+    costly.forEach(p => tryAdd(p, true));
+
+    // 🔹 Phase 4: fallback fill
+    pool.forEach(p => {
+      if (count < TARGET) tryAdd(p, true);
+    });
+
+    setSuggestedCart(tempCart);
+  }, [aiBudget, aiPreferences, products, showError]);
 
 
   const handleAiNext = () => {
@@ -956,7 +963,7 @@ const generateSuggestions = useCallback(() => {
                         onClick={generateSuggestions}
                         className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2"
                       >
-                        <span>Regenerate</span>
+                        <span>Change</span>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
