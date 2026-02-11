@@ -51,7 +51,6 @@ const Pricelist = () => {
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImages, setSelectedImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiStep, setAiStep] = useState(0);
   const [aiBudget, setAiBudget] = useState("");
@@ -68,6 +67,7 @@ const Pricelist = () => {
     return Number.isInteger(num) ? num.toString() : num.toFixed(2);
   };
   const capitalize = str => str ? str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : '';
+
   const serialSort = (a, b) => {
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
     return collator.compare(a.serial_number, b.serial_number);
@@ -271,118 +271,106 @@ const Pricelist = () => {
 
     const categories = {
       kids: [
-        'kids_special',
-        'fountain_and_fancy_novelties',
-        'flower_pots',
-        'ground_chakkar',
-        'sparklers',
-        'premium_sparklers',
-        'fancy_pencil_varieties',
-        'twinkling_star',
+        "kids_special",
+        "fountain_and_fancy_novelties",
+        "flower_pots",
+        "ground_chakkar",
+        "sparklers",
+        "premium_sparklers",
+        "fancy_pencil_varieties",
+        "twinkling_star"
       ],
-      sound: [
-        'bombs',
-        'one_sound_crackers',
-      ],
+      sound: ["bombs", "one_sound_crackers"],
       night: [
-        'comets_sky_shots',
-        'repeating_shots',
-        'fountain_and_fancy_novelties',
-        'flower_pots',
-        'ground_chakkar',
-        'sparklers',
-        'premium_sparklers',
-        'rockets',
-      ],
+        "comets_sky_shots",
+        "repeating_shots",
+        "fountain_and_fancy_novelties",
+        "flower_pots",
+        "ground_chakkar",
+        "sparklers",
+        "premium_sparklers",
+        "rockets"
+      ]
     };
 
-    const priorityOrder = ['kids', 'night', 'sound'];
+    const priorityOrder = ["night", "kids", "sound"];
+    const selected = priorityOrder.filter(cat => aiPreferences[cat]);
 
-    const activeCategories = priorityOrder.filter(
-      cat => aiPreferences[cat]
-    );
-
-    if (activeCategories.length === 0) {
+    if (selected.length === 0) {
       showError("Please select at least one preference.");
       return;
     }
 
-    const budgets = {};
-    if (activeCategories.length === 1) {
-      budgets[activeCategories[0]] = budget;
-    } else {
-      const weights = [0.45, 0.35, 0.2];
-      activeCategories.forEach((cat, i) => {
-        budgets[cat] = budget * (weights[i] || 0.2);
-      });
-    }
+    let targetVariety = 30;
+    if (budget <= 3000) targetVariety = 35;
+    if (budget <= 2000) targetVariety = 40;
 
-    const getProductsForCategory = (catName) => {
-      const typeList = categories[catName] || [];
-      return products
-        .filter(p => typeList.includes(p.product_type))
+    const getProducts = types =>
+      products
+        .filter(p => types.includes(p.product_type))
         .map(p => ({
           ...p,
-          finalPrice: p.price * (1 - p.discount / 100),
-          valueScore: (p.discount || 0) * 2 + (1000 / p.price),
-        }))
-        .sort((a, b) => b.valueScore - a.valueScore);
-    };
+          finalPrice: p.price * (1 - p.discount / 100)
+        }));
+
+    const pool = getProducts([...new Set(selected.flatMap(cat => categories[cat]))]);
+
+    const sortedByPrice = [...pool].sort((a, b) => a.finalPrice - b.finalPrice);
+    const shuffledPool = [...pool].sort(() => Math.random() - 0.5);
 
     const tempCart = {};
-    const typeCount = {};
+    let remaining = budget;
+    let varietyCount = 0;
 
-    const tryAddProduct = (product, remaining) => {
-      if (!product?.serial_number || product.finalPrice <= 0) return 0;
-      const maxQty = Math.floor(remaining / product.finalPrice);
-      if (maxQty <= 0) return 0;
-      const qty = Math.min(maxQty, 2);
-      tempCart[product.serial_number] =
-        (tempCart[product.serial_number] || 0) + qty;
-      return qty * product.finalPrice;
+    const typeUsedOnce = new Set();
+    const sparklerSizeUsed = new Set();
+
+    const getSparklerSize = name => {
+      const match = name?.match(/(\d+\s*cm)/i);
+      return match ? match[1].toLowerCase() : name;
     };
 
-    activeCategories.forEach(cat => {
-      let remaining = budgets[cat];
-      const pool = getProductsForCategory(cat);
-      if (!pool.length) return;
+    for (let product of shuffledPool) {
+      if (varietyCount >= targetVariety) break;
+      if (product.finalPrice > remaining) continue;
+      if (tempCart[product.serial_number]) continue;
 
-      for (let i = 0; i < pool.length; i++) {
-        if (remaining < 100) break;
-        const product = pool[i];
-        const type = product.product_type;
-        if ((typeCount[type] || 0) >= 2) continue;
-        const spent = tryAddProduct(product, remaining);
-        if (spent > 0) {
-          remaining -= spent;
-          typeCount[type] = (typeCount[type] || 0) + 1;
-        }
+      if (product.product_type === "sparklers") {
+        const sizeKey = getSparklerSize(product.product_name);
+        if (sparklerSizeUsed.has(sizeKey)) continue;
+        sparklerSizeUsed.add(sizeKey);
+      } else {
+        if (typeUsedOnce.has(product.product_type)) continue;
+        typeUsedOnce.add(product.product_type);
       }
 
-      if (remaining > 300) {
-        for (let i = 0; i < pool.length; i++) {
-          if (remaining < 150) break;
-          const product = pool[i];
-          if ((tempCart[product.serial_number] || 0) >= 2) continue;
-          const spent = tryAddProduct(product, remaining);
-          if (spent > 0) remaining -= spent;
-        }
-      }
+      tempCart[product.serial_number] = 1;
+      remaining -= product.finalPrice;
+      varietyCount++;
+    }
 
-      if (remaining > 200) {
-        for (let i = 0; i < pool.length; i++) {
-          if (remaining < 100) break;
-          const product = pool[i];
-          const spent = tryAddProduct(product, remaining);
-          if (spent > 0) remaining -= spent;
-        }
+    if (varietyCount < targetVariety) {
+      for (let product of sortedByPrice) {
+        if (varietyCount >= targetVariety) break;
+        if (product.finalPrice > remaining) continue;
+        if (tempCart[product.serial_number]) continue;
+
+        tempCart[product.serial_number] = 1;
+        remaining -= product.finalPrice;
+        varietyCount++;
       }
-    });
+    }
+
+    for (let product of sortedByPrice) {
+      if (remaining < product.finalPrice) break;
+      if (!tempCart[product.serial_number]) continue;
+
+      tempCart[product.serial_number] += 1;
+      remaining -= product.finalPrice;
+    }
 
     setSuggestedCart(tempCart);
   }, [aiBudget, aiPreferences, products, showError]);
-
-
 
   const handleAiNext = () => {
     if (aiStep === 0 && !aiBudget) return showError("Please enter a budget.");
@@ -434,22 +422,26 @@ const Pricelist = () => {
         status: product.status,
       };
     });
+
     if (!selectedProducts.length) {
       showError("Your cart is empty.");
       setIsBookingLoading(false);
       return;
     }
+
     if (!customerDetails.customer_name || !customerDetails.address || !customerDetails.district || !customerDetails.state || !customerDetails.mobile_number) {
       showError("Please fill all required customer details.");
       setIsBookingLoading(false);
       return;
     }
+
     const mobile = customerDetails.mobile_number.replace(/\D/g, "").slice(-10);
     if (mobile.length !== 10) {
       showError("Mobile number must be 10 digits.");
       setIsBookingLoading(false);
       return;
     }
+
     const selectedState = customerDetails.state?.trim();
     const minOrder = states.find(s => s.name === selectedState)?.min_rate;
     if (minOrder && Number.parseFloat(originalTotal) < minOrder) {
@@ -457,6 +449,7 @@ const Pricelist = () => {
       setIsBookingLoading(false);
       return;
     }
+
     try {
       setShowLoader(true);
       const response = await fetch(`${API_BASE_URL}/api/direct/bookings`, {
@@ -480,6 +473,7 @@ const Pricelist = () => {
           promocode: appliedPromo?.code || null,
         }),
       });
+
       if (response.ok) {
         const data = await response.json();
         const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: "blob" });
@@ -681,7 +675,6 @@ const Pricelist = () => {
             </motion.div>
           </motion.div>
         )}
-
         {showDetailsModal && selectedProduct && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm" onClick={handleCloseDetails}>
             <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-white rounded-3xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -717,7 +710,6 @@ const Pricelist = () => {
             </motion.div>
           </motion.div>
         )}
-
         {isCartOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm" onClick={() => { setIsCartOpen(false); setIsExpandedCart(false); }}>
             <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()} className={`${isExpandedCart ? 'w-full max-w-4xl h-[90vh] flex flex-col' : 'w-full max-w-2xl mobile:max-w-md mobile:w-[90%] mx-4 max-h-[90vh] flex flex-col'} bg-white rounded-3xl shadow-2xl`}>
@@ -836,7 +828,6 @@ const Pricelist = () => {
             </motion.div>
           </motion.div>
         )}
-
         {showImageModal && selectedImages.length > 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center backdrop-blur-sm" onClick={handleCloseImageModal}>
             <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()} className="relative max-w-4xl max-h-[90vh] w-full mx-4">
@@ -881,7 +872,6 @@ const Pricelist = () => {
             </motion.div>
           </motion.div>
         )}
-
         {showAiModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm" onClick={() => { setShowAiModal(false); setAiStep(0); setAiBudget(""); setAiPreferences({ kids: false, sound: false, night: false }); setSuggestedCart({}); }}>
             <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto p-6">
@@ -968,7 +958,6 @@ const Pricelist = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
       <main className="hundred:pt-48 mobile:pt-34 px-4 sm:px-8 max-w-7xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row gap-4 mb-8 mobile:-mt-20">
           <div className="relative flex-1">
@@ -982,12 +971,10 @@ const Pricelist = () => {
             </select>
           </motion.div>
         </motion.div>
-
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex justify-center mb-8 gap-4">
           <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={downloadPDF} className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-8 py-3 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2">
             Download Pricelist <FaArrowRight className="w-4 h-4" />
           </motion.button>
-
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 1.1 }}
@@ -995,7 +982,6 @@ const Pricelist = () => {
             className="relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-full shadow-2xl w-16 h-16 flex items-center justify-center"
           >
             <span className="text-2xl">🤖</span>
-
             <motion.span
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1004,8 +990,7 @@ const Pricelist = () => {
               Need Help?
             </motion.span>
           </motion.button>
-                  </motion.div>
-
+        </motion.div>
         {Object.entries(grouped).map(([type, items]) => (
           <motion.div key={type} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="mb-16">
             <div className="flex items-center gap-4 mb-8">
@@ -1064,7 +1049,6 @@ const Pricelist = () => {
           </motion.div>
         ))}
       </main>
-
       <div className="fixed hundred:bottom-6 mobile:bottom-22 right-6 z-20 flex flex-col items-end gap-4">
         <motion.button onClick={() => setIsCartOpen(true)} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }} className={`bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-full shadow-2xl w-16 h-16 flex items-center justify-center ${isCartOpen ? "hidden" : ""}`}>
           <ShoppingCart className="w-6 h-6" />
@@ -1075,7 +1059,6 @@ const Pricelist = () => {
           )}
         </motion.button>
       </div>
-
       <AnimatePresence>
         {showModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
@@ -1140,7 +1123,6 @@ const Pricelist = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
       <style jsx>{`
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .animate-marquee { display: inline-block; white-space: nowrap; animation: marquee 15s linear infinite; }
