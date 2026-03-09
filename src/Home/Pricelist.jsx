@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FaPlus, FaMinus, FaArrowLeft, FaArrowRight, FaInfoCircle, FaExpand, FaCompress } from "react-icons/fa";
-import { ShoppingCart, Search, Filter, X } from "lucide-react";
+import { ShoppingCart, Search, Filter, X, Download, Sparkles, ChevronRight } from "lucide-react";
 import Navbar from "../Component/Navbar";
 import { API_BASE_URL } from "../../Config";
 import RocketLoader from "../Component/RocketLoader";
@@ -264,135 +264,69 @@ const Pricelist = () => {
 
   const generateSuggestions = useCallback(() => {
     const budget = Number(aiBudget);
-    if (!budget || budget <= 0) {
-      showError("Please enter a valid budget");
-      return;
-    }
+    if (!budget || budget <= 0) { showError("Please enter a valid budget"); return; }
 
     const categories = {
-      kids: [
-        "kids_special",
-        "fountain_and_fancy_novelties",
-        "flower_pots",
-        "ground_chakkar",
-        "sparklers",
-        "premium_sparklers",
-        "fancy_pencil_varieties",
-        "twinkling_star"
-      ],
+      kids: ["kids_special","fountain_and_fancy_novelties","flower_pots","ground_chakkar","sparklers","premium_sparklers","fancy_pencil_varieties","twinkling_star"],
       sound: ["bombs", "one_sound_crackers"],
-      night: [
-        "repeating_shots",
-        "comets_sky_shots",
-        "fountain_and_fancy_novelties",
-        "flower_pots",
-        "ground_chakkar",
-        "sparklers",
-        "premium_sparklers",
-        "rockets"
-      ]
+      night: ["repeating_shots","comets_sky_shots","fountain_and_fancy_novelties","flower_pots","ground_chakkar","sparklers","premium_sparklers","rockets"]
     };
 
-    const selectedPrefs = ["night", "kids", "sound"].filter(
-      p => aiPreferences[p]
-    );
-    if (!selectedPrefs.length) {
-      showError("Select at least one preference");
-      return;
-    }
+    const selectedPrefs = ["night", "kids", "sound"].filter(p => aiPreferences[p]);
+    if (!selectedPrefs.length) { showError("Select at least one preference"); return; }
 
     const TARGET = 50;
-
     const pool = products
-      .filter(p =>
-        selectedPrefs.some(pref =>
-          categories[pref].includes(p.product_type)
-        )
-      )
-      .map(p => ({
-        ...p,
-        finalPrice: p.price * (1 - p.discount / 100),
-        rand: Math.random()
-      }))
+      .filter(p => selectedPrefs.some(pref => categories[pref].includes(p.product_type)))
+      .map(p => ({ ...p, finalPrice: p.price * (1 - p.discount / 100), rand: Math.random() }))
       .sort((a, b) => a.rand - b.rand);
 
     const cheap = pool.filter(p => p.finalPrice <= budget * 0.03);
-    const mid = pool.filter(
-      p => p.finalPrice > budget * 0.03 && p.finalPrice <= budget * 0.08
-    );
+    const mid = pool.filter(p => p.finalPrice > budget * 0.03 && p.finalPrice <= budget * 0.08);
     const costly = pool.filter(p => p.finalPrice > budget * 0.08);
 
     const tempCart = {};
     let remaining = budget;
     let count = 0;
-
     const usedTypes = new Set();
-    const sparklerSizeCount = {}; // size => count
+    const sparklerSizeCount = {};
 
-    const getSparklerSize = name => {
-      const m = name?.match(/(\d+)\s*cm/i);
-      return m ? m[1] : null;
-    };
+    const getSparklerSize = name => { const m = name?.match(/(\d+)\s*cm/i); return m ? m[1] : null; };
 
     const tryAdd = (p, allowSameType = false) => {
       if (count >= TARGET) return;
       if (p.finalPrice > remaining) return;
       if (tempCart[p.serial_number]) return;
-
-      // 🔥 Sparkler variety logic
-      if (
-        p.product_type === "sparklers" ||
-        p.product_type === "premium_sparklers"
-      ) {
+      if (p.product_type === "sparklers" || p.product_type === "premium_sparklers") {
         const size = getSparklerSize(p.product_name) || "unknown";
-
-        // Allow max 2 variants per size
         if (sparklerSizeCount[size] >= 2) return;
-
         sparklerSizeCount[size] = (sparklerSizeCount[size] || 0) + 1;
       } else {
-        // Prefer variety in non-sparkler types
         if (!allowSameType && usedTypes.has(p.product_type)) return;
         usedTypes.add(p.product_type);
       }
-
       tempCart[p.serial_number] = 1;
       remaining -= p.finalPrice;
       count++;
     };
 
-    // 🔹 Phase 1: cheap items (max variety)
     cheap.forEach(p => tryAdd(p, false));
-
-    // 🔹 Phase 2: mid range (balanced)
     mid.forEach(p => tryAdd(p, true));
-
-    // 🔹 Phase 3: costly (limited)
     costly.forEach(p => tryAdd(p, true));
-
-    // 🔹 Phase 4: fallback fill
-    pool.forEach(p => {
-      if (count < TARGET) tryAdd(p, true);
-    });
+    pool.forEach(p => { if (count < TARGET) tryAdd(p, true); });
 
     setSuggestedCart(tempCart);
   }, [aiBudget, aiPreferences, products, showError]);
 
-
   const handleAiNext = () => {
     if (aiStep === 0 && !aiBudget) return showError("Please enter a budget.");
-    if (aiStep < 2) {
-      setAiStep(aiStep + 1);
-    } else {
-      generateSuggestions();
-    }
+    if (aiStep < 2) { setAiStep(aiStep + 1); }
+    else { generateSuggestions(); }
   };
 
   const handleAiBack = () => {
     if (aiStep > 0) {
-      if (aiStep === 2) {
-        setSuggestedCart({});
-      }
+      if (aiStep === 2) setSuggestedCart({});
       setAiStep(aiStep - 1);
     }
   };
@@ -430,31 +364,19 @@ const Pricelist = () => {
       };
     });
 
-    if (!selectedProducts.length) {
-      showError("Your cart is empty.");
-      setIsBookingLoading(false);
-      return;
-    }
-
+    if (!selectedProducts.length) { showError("Your cart is empty."); setIsBookingLoading(false); return; }
     if (!customerDetails.customer_name || !customerDetails.address || !customerDetails.district || !customerDetails.state || !customerDetails.mobile_number) {
-      showError("Please fill all required customer details.");
-      setIsBookingLoading(false);
-      return;
+      showError("Please fill all required customer details."); setIsBookingLoading(false); return;
     }
 
     const mobile = customerDetails.mobile_number.replace(/\D/g, "").slice(-10);
-    if (mobile.length !== 10) {
-      showError("Mobile number must be 10 digits.");
-      setIsBookingLoading(false);
-      return;
-    }
+    if (mobile.length !== 10) { showError("Mobile number must be 10 digits."); setIsBookingLoading(false); return; }
 
     const selectedState = customerDetails.state?.trim();
     const minOrder = states.find(s => s.name === selectedState)?.min_rate;
     if (minOrder && Number.parseFloat(originalTotal) < minOrder) {
       showError(`Minimum order for ${selectedState} is ₹${minOrder}. Your total is ₹${originalTotal}.`);
-      setIsBookingLoading(false);
-      return;
+      setIsBookingLoading(false); return;
     }
 
     try {
@@ -560,11 +482,7 @@ const Pricelist = () => {
   }, []);
 
   const handleApplyPromo = useCallback(async (code) => {
-    if (!code) {
-      setAppliedPromo(null);
-      setPromocode("");
-      return;
-    }
+    if (!code) { setAppliedPromo(null); setPromocode(""); return; }
     try {
       const res = await fetch(`${API_BASE_URL}/api/promocodes`);
       const promos = await res.json();
@@ -659,56 +577,124 @@ const Pricelist = () => {
     return orderedResult;
   }, [products, selectedType, searchTerm]);
 
+  const cartItemCount = Object.values(cart).reduce((a, b) => a + b, 0);
+
   if (isLoading) return <LoadingSpinner />;
+
+  /* ── Reusable summary rows ── */
+  const SummaryRows = () => (
+    <div className="space-y-2 text-sm">
+      <div className="flex justify-between text-gray-600"><span>Net Total</span><span className="font-medium text-gray-800">₹{totals.net}</span></div>
+      <div className="flex justify-between text-emerald-600"><span>Product Discount</span><span>−₹{totals.product_discount}</span></div>
+      {appliedPromo && <div className="flex justify-between text-emerald-600"><span>Promo ({appliedPromo.code})</span><span>−₹{totals.promo_discount}</span></div>}
+      <div className="flex justify-between text-emerald-600 font-medium"><span>You Save</span><span>−₹{totals.save}</span></div>
+      <div className="flex justify-between text-gray-500"><span>Processing Fee (1%)</span><span>₹{totals.processing_fee}</span></div>
+      <div className="flex justify-between text-orange-600 font-bold text-base pt-2 border-t border-orange-100"><span>Total</span><span>₹{totals.total}</span></div>
+    </div>
+  );
+
+  const PromoSelector = () => (
+    <div className="space-y-2">
+      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Promo Code</label>
+      <select value={promocode} onChange={e => setPromocode(e.target.value)}
+        className="w-full px-3 py-2.5 rounded-xl border border-orange-200 bg-orange-50 text-sm focus:ring-2 focus:ring-orange-400 focus:border-transparent transition-all">
+        <option value="">Select a promocode</option>
+        {promocodes.map(promo => (
+          <option key={promo.id} value={promo.code}>
+            {promo.code} ({formatPercentage(promo.discount)}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}{promo.product_type ? `, Type: ${promo.product_type.replace(/_/g, " ")}` : ""}{promo.end_date ? `, Exp: ${new Date(promo.end_date).toLocaleDateString()}` : ""})
+          </option>
+        ))}
+        <option value="custom">Enter custom code</option>
+      </select>
+      {promocode === "custom" && (
+        <input type="text" value={promocode === "custom" ? "" : promocode} onChange={e => setPromocode(e.target.value)}
+          placeholder="Enter custom code"
+          className="w-full px-3 py-2.5 rounded-xl border border-orange-200 bg-orange-50 text-sm focus:ring-2 focus:ring-orange-400 transition-all" />
+      )}
+      {appliedPromo && (
+        <p className="text-emerald-600 text-xs bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">
+          ✓ {appliedPromo.code} — {formatPercentage(appliedPromo.discount)}% OFF applied
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <>
       <Navbar />
       <ToasterNotification show={showToaster} onClose={() => setShowToaster(false)} />
+
       <AnimatePresence>
         {showLoader && <RocketLoader onComplete={handleRocketComplete} />}
         {showSuccess && <SuccessAnimation />}
+
+        {/* ── Error Modal ── */}
         {showMinOrderModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 flex items-center justify-center z-96 bg-black/50 backdrop-blur-sm">
-            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} className="bg-white rounded-3xl p-8 max-w-md mx-4 text-center shadow-2xl">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <X className="w-8 h-8 text-red-500" />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 flex items-center justify-center z-[96] bg-black/60 backdrop-blur-md px-4">
+            <motion.div initial={{ scale: 0.85, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-red-100">
+              <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <X className="w-7 h-7 text-red-500" />
               </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-4">Oops!</h3>
-              <p className="text-gray-600 mb-6">{minOrderMessage}</p>
-              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setShowMinOrderModal(false)} className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold px-6 py-3 rounded-2xl">
+              <h3 className="text-lg font-bold text-gray-800 mb-2">Hold on!</h3>
+              <p className="text-gray-500 text-sm leading-relaxed mb-6">{minOrderMessage}</p>
+              <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                onClick={() => setShowMinOrderModal(false)}
+                className="bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold px-8 py-3 rounded-2xl shadow-lg shadow-red-200">
                 Got it
               </motion.button>
             </motion.div>
           </motion.div>
         )}
+
+        {/* ── Product Details Modal ── */}
         {showDetailsModal && selectedProduct && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm" onClick={handleCloseDetails}>
-            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-white rounded-3xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-md px-4"
+            onClick={handleCloseDetails}>
+            <motion.div initial={{ scale: 0.85, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-gray-800 mb-2">{selectedProduct.productname}</h2>
                     <div className="flex items-center gap-2">
-                      {selectedProduct.discount > 0 && <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">{formatPercentage(selectedProduct.discount)}% OFF</span>}
-                      <span className="text-orange-600 font-semibold text-lg">₹{formatPrice(selectedProduct.price * (1 - selectedProduct.discount / 100))} / {selectedProduct.per}</span>
+                      {selectedProduct.discount > 0 && (
+                        <span className="bg-orange-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                          {formatPercentage(selectedProduct.discount)}% OFF
+                        </span>
+                      )}
+                      <span className="text-orange-600 font-bold text-lg">
+                        ₹{formatPrice(selectedProduct.price * (1 - selectedProduct.discount / 100))}
+                        <span className="text-sm font-normal text-gray-500 ml-1">/ {selectedProduct.per}</span>
+                      </span>
                     </div>
                   </div>
-                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={handleCloseDetails} className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center">
-                    <X className="w-5 h-5 text-gray-600" />
+                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                    onClick={handleCloseDetails}
+                    className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors">
+                    <X className="w-4 h-4 text-gray-600" />
                   </motion.button>
                 </div>
                 <ModernCarousel media={selectedProduct.images} onImageClick={handleImageClick} />
-                <div className="space-y-4">
+                <div className="space-y-4 mt-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Description</h3>
-                    <p className="text-gray-600">{selectedProduct.description || "Experience the magic of celebrations with our premium quality fireworks."}</p>
+                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Description</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed">{selectedProduct.description || "Experience the magic of celebrations with our premium quality fireworks."}</p>
                   </div>
                   <div className="flex gap-3">
-                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => { addToCart(selectedProduct); handleCloseDetails(); }} className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg flex items-center justify-center gap-2">
-                      <FaPlus className="w-4 h-4" /> Add to Cart
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={() => { addToCart(selectedProduct); handleCloseDetails(); }}
+                      className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold py-3 rounded-2xl shadow-lg shadow-orange-200 flex items-center justify-center gap-2">
+                      <FaPlus className="w-3 h-3" /> Add to Cart
                     </motion.button>
-                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleCloseDetails} className="px-6 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl">
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={handleCloseDetails}
+                      className="px-5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl transition-colors">
                       Close
                     </motion.button>
                   </div>
@@ -717,27 +703,55 @@ const Pricelist = () => {
             </motion.div>
           </motion.div>
         )}
+
+        {/* ── Cart Modal ── */}
         {isCartOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm" onClick={() => { setIsCartOpen(false); setIsExpandedCart(false); }}>
-            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()} className={`${isExpandedCart ? 'w-full max-w-4xl h-[90vh] flex flex-col' : 'w-full max-w-2xl mobile:max-w-md mobile:w-[90%] mx-4 max-h-[90vh] flex flex-col'} bg-white rounded-3xl shadow-2xl`}>
-              <div className="flex justify-between items-center p-6 border-b border-orange-100">
-                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-orange-600" /> Your Cart</h3>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-md"
+            onClick={() => { setIsCartOpen(false); setIsExpandedCart(false); }}>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 40 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 40 }}
+              onClick={e => e.stopPropagation()}
+              className={`${isExpandedCart ? 'w-full max-w-4xl h-[90vh]' : 'w-full max-w-lg sm:mx-4 max-h-[90vh] sm:rounded-3xl rounded-t-3xl'} bg-white flex flex-col shadow-2xl overflow-hidden`}>
+
+              {/* Cart Header */}
+              <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-orange-100 rounded-xl flex items-center justify-center">
+                    <ShoppingCart className="w-4 h-4 text-orange-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-800">Your Cart</h3>
+                    <p className="text-xs text-gray-400">{cartItemCount} item{cartItemCount !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
                 <div className="flex items-center gap-2">
                   {!isExpandedCart && Object.keys(cart).length > 0 && (
-                    <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setIsExpandedCart(true)} className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center">
-                      <FaExpand className="w-5 h-5 text-gray-600" />
+                    <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                      onClick={() => setIsExpandedCart(true)}
+                      className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors">
+                      <FaExpand className="w-3.5 h-3.5 text-gray-600" />
                     </motion.button>
                   )}
-                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => { setIsCartOpen(false); setIsExpandedCart(false); }} className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center">
-                    <X className="w-5 h-5 text-gray-600" />
+                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                    onClick={() => { setIsCartOpen(false); setIsExpandedCart(false); }}
+                    className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors">
+                    <X className="w-4 h-4 text-gray-600" />
                   </motion.button>
                 </div>
               </div>
-              <div className={`flex-1 overflow-y-auto p-6 space-y-4 ${isExpandedCart ? '' : 'max-h-[40vh]'}`}>
+
+              {/* Cart Items */}
+              <div className={`flex-1 overflow-y-auto px-4 py-4 space-y-3 ${isExpandedCart ? '' : 'max-h-[38vh]'}`}>
                 {Object.keys(cart).length === 0 ? (
-                  <div className="text-center py-12">
-                    <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500">Your cart is empty</p>
+                  <div className="text-center py-16">
+                    <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <ShoppingCart className="w-8 h-8 text-orange-300" />
+                    </div>
+                    <p className="text-gray-400 font-medium">Your cart is empty</p>
+                    <p className="text-gray-300 text-sm mt-1">Add some fireworks to get started!</p>
                   </div>
                 ) : (
                   Object.entries(cart).map(([serial, qty]) => {
@@ -747,20 +761,27 @@ const Pricelist = () => {
                     const priceAfterDiscount = formatPrice(product.price - discount);
                     const imageSrc = Array.isArray(product.images) ? product.images.filter(item => !item.includes("/video/") && !item.toLowerCase().endsWith(".gif"))[0] || need : need;
                     return (
-                      <motion.div key={serial} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-4 p-4 bg-orange-50 rounded-2xl border border-orange-100">
-                        <img src={imageSrc} alt={product.productname} className="w-20 h-20 rounded-xl object-cover bg-white" onClick={() => handleImageClick(product.images)} />
-                        <div className="flex-1">
-                          <p className="text-base font-semibold text-gray-800 line-clamp-2">{product.productname}</p>
-                          <p className="text-sm text-orange-600 font-bold">₹{priceAfterDiscount} x {qty}</p>
-                          <p className="text-xs text-gray-600">Subtotal: ₹{formatPrice((product.price - discount) * qty)}</p>
+                      <motion.div key={serial} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                        className="flex items-center gap-3 p-3 bg-orange-50 rounded-2xl border border-orange-100 hover:border-orange-200 transition-colors">
+                        <img src={imageSrc} alt={product.productname}
+                          className="w-16 h-16 rounded-xl object-cover bg-white border border-orange-100 cursor-pointer flex-shrink-0"
+                          onClick={() => handleImageClick(product.images)} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 line-clamp-2 leading-tight">{product.productname}</p>
+                          <p className="text-xs text-orange-600 font-bold mt-0.5">₹{priceAfterDiscount} × {qty}</p>
+                          <p className="text-xs text-gray-400">= ₹{formatPrice((product.price - discount) * qty)}</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => removeFromCart(product)} className="w-8 h-8 bg-orange-500 hover:bg-orange-600 text-white rounded-full flex items-center justify-center">
-                            <FaMinus className="w-4 h-4" />
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                            onClick={() => removeFromCart(product)}
+                            className="w-7 h-7 bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex items-center justify-center transition-colors">
+                            <FaMinus className="w-2.5 h-2.5" />
                           </motion.button>
-                          <span className="text-sm font-medium w-8 text-center">{qty}</span>
-                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => addToCart(product)} className="w-8 h-8 bg-orange-500 hover:bg-orange-600 text-white rounded-full flex items-center justify-center">
-                            <FaPlus className="w-4 h-4" />
+                          <span className="text-sm font-bold w-7 text-center text-gray-800">{qty}</span>
+                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                            onClick={() => addToCart(product)}
+                            className="w-7 h-7 bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex items-center justify-center transition-colors">
+                            <FaPlus className="w-2.5 h-2.5" />
                           </motion.button>
                         </div>
                       </motion.div>
@@ -768,66 +789,44 @@ const Pricelist = () => {
                   })
                 )}
               </div>
+
+              {/* Cart Footer */}
               {isExpandedCart ? (
-                <div className="p-6 border-t border-orange-100 bg-white rounded-b-3xl">
-                  <div className="text-sm text-gray-700 space-y-2 mb-4">
-                    <div className="flex justify-between"><span>Net Total:</span><span>₹{totals.net}</span></div>
-                    <div className="flex justify-between text-green-600"><span>Product Discount:</span><span>-₹{totals.product_discount}</span></div>
-                    {appliedPromo && <div className="flex justify-between text-green-600"><span>Promocode ({appliedPromo.code}):</span><span>-₹{totals.promo_discount}</span></div>}
-                    <div className="flex justify-between text-green-600"><span>Total Discount:</span><span>-₹{totals.save}</span></div>
-                    <div className="flex justify-between text-gray-600"><span>Processing Fee:</span><span>₹{totals.processing_fee}</span></div>
-                    <div className="flex justify-between font-bold text-lg text-orange-600 pt-2 border-t border-orange-200"><span>Total:</span><span>₹{totals.total}</span></div>
-                  </div>
-                  <div className="flex gap-3">
-                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setIsExpandedCart(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl flex items-center justify-center gap-2">
-                      <FaCompress className="w-4 h-4" /> Collapse
-                    </motion.button>
-                  </div>
+                <div className="px-6 py-5 border-t border-gray-100 bg-white">
+                  <SummaryRows />
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    onClick={() => setIsExpandedCart(false)}
+                    className="mt-4 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl flex items-center justify-center gap-2 transition-colors">
+                    <FaCompress className="w-3.5 h-3.5" /> Collapse View
+                  </motion.button>
                 </div>
               ) : (
-                <div className="p-6 border-t border-orange-100 bg-white rounded-b-3xl">
-                  <div className="mb-4 p-3 bg-orange-50 rounded-2xl border border-orange-200">
-                    <p className="text-xs font-medium text-orange-800 mb-2 text-center">Minimum Purchase Rates</p>
-                    <div className="text-xs text-orange-700 overflow-hidden">
+                <div className="px-5 py-5 border-t border-gray-100 bg-white space-y-4">
+                  {/* Min order marquee */}
+                  <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-2.5 overflow-hidden">
+                    <p className="text-xs font-semibold text-amber-700 mb-1">Minimum Purchase Rates</p>
+                    <div className="text-xs text-amber-600 overflow-hidden">
                       <div className="animate-marquee whitespace-nowrap">
                         {states.map(s => `${s.name}: ₹${s.min_rate}`).join(" • ")}
                       </div>
                     </div>
                   </div>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Promocode</label>
-                    <select value={promocode} onChange={e => setPromocode(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400 transition-all duration-300">
-                      <option value="">Select Promocode</option>
-                      {promocodes.map(promo => (
-                        <option key={promo.id} value={promo.code}>
-                          {promo.code} ({formatPercentage(promo.discount)}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}{promo.product_type ? `, Type: ${promo.product_type.replace(/_/g, " ")}` : ""}{promo.end_date ? `, Exp: ${new Date(promo.end_date).toLocaleDateString()}` : ""})
-                        </option>
-                      ))}
-                      <option value="custom">Enter custom code</option>
-                    </select>
-                    {promocode === "custom" && (
-                      <input type="text" value={promocode === "custom" ? "" : promocode} onChange={e => setPromocode(e.target.value)} placeholder="Enter custom code" className="w-full px-3 py-2 mt-2 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400 transition-all duration-300" />
-                    )}
-                    {appliedPromo && <p className="text-green-600 text-xs mt-1">Applied: {appliedPromo.code} ({formatPercentage(appliedPromo.discount)}% OFF){appliedPromo.min_amount && `, Min: ₹${appliedPromo.min_amount}`}{appliedPromo.product_type && `, Type: ${appliedPromo.product_type.replace(/_/g, " ")}`}{appliedPromo.end_date && `, Expires: ${new Date(appliedPromo.end_date).toLocaleDateString()}`}</p>}
+                  <PromoSelector />
+                  <div className="text-xs text-red-500 space-y-1 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">
+                    <p>⚠ Product images are for reference only — actual products may vary.</p>
+                    <p>⚠ Delivery charges are payable to transport. Pickup at your own cost.</p>
                   </div>
-                  <div>
-                    <p className="text-red-500 font-semibold text-sm">T&C - The images given for crackers are provides for your references the products may vary according to avilability</p>
-                    <p className="text-red-500 font-semibold text-sm">Dear customers, delivery charges are payable to the transport service and pickup is at your own cost.</p>
-                  </div>
-                  <div className="text-sm text-gray-700 space-y-2 mb-4">
-                    <div className="flex justify-between"><span>Net Total:</span><span>₹{totals.net}</span></div>
-                    <div className="flex justify-between text-green-600"><span>Product Discount:</span><span>-₹{totals.product_discount}</span></div>
-                    {appliedPromo && <div className="flex justify-between text-green-600"><span>Promocode ({appliedPromo.code}):</span><span>-₹{totals.promo_discount}</span></div>}
-                    <div className="flex justify-between text-green-600"><span>Total Discount:</span><span>-₹{totals.save}</span></div>
-                    <div className="flex justify-between text-gray-600"><span>Processing Fee:</span><span>₹{totals.processing_fee}</span></div>
-                    <div className="flex justify-between font-bold text-lg text-orange-600 pt-2 border-t border-orange-200"><span>Total:</span><span>₹{totals.total}</span></div>
-                  </div>
-                  <div className="flex gap-3">
-                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setCart({})} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl">
+                  <SummaryRows />
+                  <div className="flex gap-3 pt-1">
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={() => setCart({})}
+                      className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl transition-colors text-sm">
                       Clear Cart
                     </motion.button>
-                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleCheckoutClick} className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg">
-                      Checkout
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={handleCheckoutClick}
+                      className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg shadow-orange-200 text-sm">
+                      Checkout →
                     </motion.button>
                   </div>
                 </div>
@@ -835,379 +834,474 @@ const Pricelist = () => {
             </motion.div>
           </motion.div>
         )}
+
+        {/* ── Image Lightbox Modal ── */}
         {showImageModal && selectedImages.length > 0 && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center backdrop-blur-sm" onClick={handleCloseImageModal}>
-            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()} className="relative max-w-4xl max-h-[90vh] w-full mx-4">
-              <div className="relative">
-                <AnimatePresence mode="wait">
-                  <motion.div key={currentImageIndex} initial={{ opacity: 0, scale: 1.1 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ duration: 0.3 }}>
-                    {selectedImages[currentImageIndex]?.includes("/video/") ? (
-                      <video src={selectedImages[currentImageIndex]} autoPlay muted loop className="w-full max-h-[80vh] object-contain rounded-2xl" />
-                    ) : (
-                      <img src={selectedImages[currentImageIndex] || "/placeholder.svg?height=600&width=800&query=firecracker"} alt="Product Image" className="w-full max-h-[80vh] object-contain rounded-2xl" />
-                    )}
-                  </motion.div>
-                </AnimatePresence>
-                <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={handleCloseImageModal} className="absolute top-4 right-4 w-12 h-12 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-full flex items-center justify-center text-white">
-                  <X className="w-6 h-6" />
-                </motion.button>
-                {selectedImages.length > 1 && (
-                  <>
-                    <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentImageIndex(prev => prev === 0 ? selectedImages.length - 1 : prev - 1)} className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-full flex items-center justify-center text-white">
-                      <FaArrowLeft className="w-5 h-5" />
-                    </motion.button>
-                    <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setCurrentImageIndex(prev => prev === selectedImages.length - 1 ? 0 : prev + 1)} className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-full flex items-center justify-center text-white">
-                      <FaArrowRight className="w-5 h-5" />
-                    </motion.button>
-                  </>
-                )}
-                {selectedImages.length > 1 && (
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm rounded-full px-4 py-2 text-white text-sm">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center backdrop-blur-sm"
+            onClick={handleCloseImageModal}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="relative max-w-4xl max-h-[90vh] w-full mx-4">
+              <AnimatePresence mode="wait">
+                <motion.div key={currentImageIndex} initial={{ opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.25 }}>
+                  {selectedImages[currentImageIndex]?.includes("/video/") ? (
+                    <video src={selectedImages[currentImageIndex]} autoPlay muted loop className="w-full max-h-[80vh] object-contain rounded-2xl" />
+                  ) : (
+                    <img src={selectedImages[currentImageIndex] || "/placeholder.svg"} alt="Product"
+                      className="w-full max-h-[80vh] object-contain rounded-2xl" />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+              <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                onClick={handleCloseImageModal}
+                className="absolute top-3 right-3 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white transition-colors">
+                <X className="w-5 h-5" />
+              </motion.button>
+              {selectedImages.length > 1 && (
+                <>
+                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                    onClick={() => setCurrentImageIndex(prev => prev === 0 ? selectedImages.length - 1 : prev - 1)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white transition-colors">
+                    <FaArrowLeft className="w-4 h-4" />
+                  </motion.button>
+                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                    onClick={() => setCurrentImageIndex(prev => prev === selectedImages.length - 1 ? 0 : prev + 1)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white transition-colors">
+                    <FaArrowRight className="w-4 h-4" />
+                  </motion.button>
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1 text-white text-xs">
                     {currentImageIndex + 1} / {selectedImages.length}
                   </div>
-                )}
-                {selectedImages.length > 1 && (
-                  <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 max-w-md overflow-x-auto p-2 mobile:translate-y-40">
+                  <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex gap-2 max-w-sm overflow-x-auto p-1 mobile:translate-y-40">
                     {selectedImages.map((image, index) => (
-                      <motion.button key={index} whileHover={{ scale: 1.1 }} onClick={() => setCurrentImageIndex(index)} className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${index === currentImageIndex ? "border-orange-400" : "border-white/30 hover:border-white/60"}`}>
-                        {image?.includes("/video/") ? <video src={image} className="w-full h-full object-cover" /> : <img src={image || "/placeholder.svg?height=64&width=64&query=firecracker"} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />}
+                      <motion.button key={index} whileHover={{ scale: 1.1 }}
+                        onClick={() => setCurrentImageIndex(index)}
+                        className={`flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden border-2 transition-all ${index === currentImageIndex ? "border-orange-400 opacity-100" : "border-white/20 hover:border-white/50 opacity-60 hover:opacity-80"}`}>
+                        {image?.includes("/video/") ? <video src={image} className="w-full h-full object-cover" /> : <img src={image || "/placeholder.svg"} alt={`Thumb ${index + 1}`} className="w-full h-full object-cover" />}
                       </motion.button>
                     ))}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </motion.div>
           </motion.div>
         )}
+
+        {/* ── AI Assistant Modal ── */}
         {showAiModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm"
-            onClick={() => {
-              setShowAiModal(false);
-              setAiStep(0);
-              setAiBudget("");
-              setAiPreferences({ kids: false, sound: false, night: false });
-              setSuggestedCart({});
-            }}
-          >
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-md px-4"
+            onClick={() => { setShowAiModal(false); setAiStep(0); setAiBudget(""); setAiPreferences({ kids: false, sound: false, night: false }); setSuggestedCart({}); }}>
+            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto p-6"
-            >
-              <h2 className="text-2xl font-bold mb-6 text-gray-800">Smart AI Assistant</h2>
+              className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
 
-              <AnimatePresence mode="wait">
-                {aiStep === 0 && (
-                  <motion.div key="step0" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}>
-                    <p className="mb-4">What's your budget? (in ₹)</p>
-                    <input
-                      type="number"
-                      value={aiBudget}
-                      onChange={e => setAiBudget(e.target.value)}
-                      className="w-full px-4 py-3 border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400"
-                      placeholder="Enter budget"
-                    />
-                  </motion.div>
-                )}
-
-                {aiStep === 1 && (
-                  <motion.div key="step1" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}>
-                    <p className="mb-4">Preferences: (Select what you want more of)</p>
-                    <div className="space-y-2">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={aiPreferences.kids}
-                          onChange={e => setAiPreferences(prev => ({ ...prev, kids: e.target.checked }))}
-                        />
-                        More for Kids (Sparklers, Novelties)
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={aiPreferences.sound}
-                          onChange={e => setAiPreferences(prev => ({ ...prev, sound: e.target.checked }))}
-                        />
-                        Sound Crackers (Bombs, Shots)
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={aiPreferences.night}
-                          onChange={e => setAiPreferences(prev => ({ ...prev, night: e.target.checked }))}
-                        />
-                        Night Shots (Rockets, Sky Shots)
-                      </label>
+              {/* AI Modal Header */}
+              <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-200">
+                    <span className="text-xl">🤖</span>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-800">Smart AI Assistant</h2>
+                    <p className="text-xs text-gray-400">Let me build your perfect cart</p>
+                  </div>
+                </div>
+                {/* Step indicator */}
+                <div className="flex items-center gap-2 mt-4">
+                  {["Budget", "Preferences", "Suggestions"].map((label, i) => (
+                    <div key={i} className="flex-1 flex items-center gap-1">
+                      <div className={`flex-1 h-1 rounded-full transition-all duration-300 ${i <= aiStep ? 'bg-orange-500' : 'bg-gray-200'}`} />
+                      {i < 2 && <div className={`w-1 h-1 rounded-full ${i < aiStep ? 'bg-orange-500' : 'bg-gray-200'}`} />}
                     </div>
-                  </motion.div>
-                )}
+                  ))}
+                </div>
+                <div className="flex justify-between text-xs text-gray-400 mt-1 px-0.5">
+                  {["Budget", "Preferences", "Suggestions"].map((label, i) => (
+                    <span key={i} className={i === aiStep ? 'text-orange-500 font-medium' : ''}>{label}</span>
+                  ))}
+                </div>
+              </div>
 
-                {aiStep === 2 && (
-                  <motion.div key="step2" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }} className="space-y-6">
-                    <div className="flex justify-between items-center">
-                      <p className="text-lg font-semibold">
-                        Suggested Items
-                        <span className="text-gray-500 font-normal text-base ml-2">
-                          ({Object.keys(suggestedCart).length} items ≈ ₹{suggestedTotals})
-                        </span>
-                      </p>
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={generateSuggestions}
-                        className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2"
-                      >
-                        <span>Change</span>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                      </motion.button>
-                    </div>
-
-                    {Object.keys(suggestedCart).length === 0 ? (
-                      <div className="text-center py-8 text-gray-500">
-                        <p>No suggestions could be generated.</p>
-                        <p className="text-sm mt-2">Try increasing the budget or changing preferences.</p>
+              <div className="p-6">
+                <AnimatePresence mode="wait">
+                  {aiStep === 0 && (
+                    <motion.div key="step0" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-4">
+                      <p className="text-gray-600 text-sm">What's your total budget for fireworks?</p>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">₹</span>
+                        <input type="number" value={aiBudget} onChange={e => setAiBudget(e.target.value)}
+                          className="w-full pl-8 pr-4 py-3.5 border border-orange-200 rounded-2xl bg-orange-50 focus:ring-2 focus:ring-orange-400 focus:border-transparent text-lg font-semibold text-gray-800 transition-all"
+                          placeholder="Enter amount" />
                       </div>
-                    ) : (
-                      <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
-                        {Object.entries(suggestedCart).map(([serial, qty]) => {
-                          const product = products.find(p => p.serial_number === serial);
-                          if (!product) return null;
-                          const discount = (product.price * product.discount) / 100;
-                          const priceAfterDiscount = formatPrice(product.price - discount);
-                          const imageSrc = Array.isArray(product.images) && product.images.length > 0
-                            ? product.images.find(img => !img.includes("/video/")) || product.images[0]
-                            : need;
+                    </motion.div>
+                  )}
 
-                          return (
-                            <div key={serial} className="flex items-center gap-4 p-4 bg-orange-50/70 rounded-2xl border border-orange-100">
-                              <img
-                                src={imageSrc}
-                                alt={product.productname}
-                                className="w-16 h-16 rounded-xl object-cover bg-white border border-orange-200 shadow-sm"
-                                onError={e => e.target.src = need}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-gray-800 line-clamp-2">{product.productname}</p>
-                                <p className="text-sm text-orange-600">₹{priceAfterDiscount} × {qty}</p>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <motion.button
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => removeFromSuggestedCart(product)}
-                                  className="w-8 h-8 bg-orange-100 hover:bg-orange-200 rounded-full flex items-center justify-center text-orange-700"
-                                >
-                                  <FaMinus className="w-4 h-4" />
-                                </motion.button>
-                                <span className="w-10 text-center font-medium">{qty}</span>
-                                <motion.button
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => addToSuggestedCart(product)}
-                                  className="w-8 h-8 bg-orange-100 hover:bg-orange-200 rounded-full flex items-center justify-center text-orange-700"
-                                >
-                                  <FaPlus className="w-4 h-4" />
-                                </motion.button>
-                              </div>
+                  {aiStep === 1 && (
+                    <motion.div key="step1" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-4">
+                      <p className="text-gray-600 text-sm">What kind of fireworks do you prefer?</p>
+                      <div className="space-y-3">
+                        {[
+                          { key: 'kids', emoji: '🧒', label: 'Kids Friendly', desc: 'Sparklers, Novelties, Flowers' },
+                          { key: 'sound', emoji: '💥', label: 'Sound Crackers', desc: 'Bombs, Atom Bombs, Shots' },
+                          { key: 'night', emoji: '🌙', label: 'Night Display', desc: 'Rockets, Sky Shots, Comets' },
+                        ].map(({ key, emoji, label, desc }) => (
+                          <label key={key}
+                            className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all ${aiPreferences[key] ? 'border-orange-400 bg-orange-50' : 'border-gray-100 bg-gray-50 hover:border-orange-200'}`}>
+                            <input type="checkbox" checked={aiPreferences[key]}
+                              onChange={e => setAiPreferences(prev => ({ ...prev, [key]: e.target.checked }))}
+                              className="sr-only" />
+                            <span className="text-2xl">{emoji}</span>
+                            <div className="flex-1">
+                              <p className={`font-semibold text-sm ${aiPreferences[key] ? 'text-orange-700' : 'text-gray-700'}`}>{label}</p>
+                              <p className="text-xs text-gray-400">{desc}</p>
                             </div>
-                          );
-                        })}
+                            <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all ${aiPreferences[key] ? 'bg-orange-500 border-orange-500' : 'border-gray-300'}`}>
+                              {aiPreferences[key] && <span className="text-white text-xs">✓</span>}
+                            </div>
+                          </label>
+                        ))}
                       </div>
-                    )}
+                    </motion.div>
+                  )}
 
-                    {Object.keys(suggestedCart).length > 0 && (
-                      <motion.button
-                        whileHover={{ scale: 1.03 }}
-                        whileTap={{ scale: 0.97 }}
-                        onClick={addSuggestedToCart}
-                        className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-3 rounded-2xl font-semibold shadow-md"
-                      >
-                        Add All Suggested to Cart
-                      </motion.button>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              <div className="mt-6 flex justify-between">
-                {aiStep > 0 && (
-                  <motion.button whileHover={{ scale: 1.02 }} onClick={handleAiBack} className="bg-gray-200 px-4 py-2 rounded-2xl">
-                    Back
+                  {aiStep === 2 && (
+                    <motion.div key="step2" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-semibold text-gray-800">Suggested Items</p>
+                          <p className="text-xs text-gray-400">{Object.keys(suggestedCart).length} items · ≈ ₹{suggestedTotals}</p>
+                        </div>
+                        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                          onClick={generateSuggestions}
+                          className="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors">
+                          <span>Regenerate</span>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </motion.button>
+                      </div>
+
+                      {Object.keys(suggestedCart).length === 0 ? (
+                        <div className="text-center py-10 text-gray-400">
+                          <p className="text-sm">No suggestions generated.</p>
+                          <p className="text-xs mt-1">Try increasing the budget or changing preferences.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
+                          {Object.entries(suggestedCart).map(([serial, qty]) => {
+                            const product = products.find(p => p.serial_number === serial);
+                            if (!product) return null;
+                            const discount = (product.price * product.discount) / 100;
+                            const priceAfterDiscount = formatPrice(product.price - discount);
+                            const imageSrc = Array.isArray(product.images) && product.images.length > 0
+                              ? product.images.find(img => !img.includes("/video/")) || product.images[0] : need;
+                            return (
+                              <div key={serial} className="flex items-center gap-3 p-3 bg-orange-50 rounded-2xl border border-orange-100">
+                                <img src={imageSrc} alt={product.productname}
+                                  className="w-14 h-14 rounded-xl object-cover bg-white border border-orange-100 flex-shrink-0"
+                                  onError={e => e.target.src = need} />
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-gray-800 text-sm line-clamp-2 leading-tight">{product.productname}</p>
+                                  <p className="text-xs text-orange-600 mt-0.5">₹{priceAfterDiscount} × {qty}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                                    onClick={() => removeFromSuggestedCart(product)}
+                                    className="w-7 h-7 bg-orange-100 hover:bg-orange-200 rounded-lg flex items-center justify-center text-orange-700 transition-colors">
+                                    <FaMinus className="w-2.5 h-2.5" />
+                                  </motion.button>
+                                  <span className="w-8 text-center font-bold text-sm text-gray-800">{qty}</span>
+                                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                                    onClick={() => addToSuggestedCart(product)}
+                                    className="w-7 h-7 bg-orange-100 hover:bg-orange-200 rounded-lg flex items-center justify-center text-orange-700 transition-colors">
+                                    <FaPlus className="w-2.5 h-2.5" />
+                                  </motion.button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {Object.keys(suggestedCart).length > 0 && (
+                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                          onClick={addSuggestedToCart}
+                          className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white py-3.5 rounded-2xl font-semibold shadow-lg shadow-emerald-200 text-sm transition-all">
+                          ✓ Add All to Cart
+                        </motion.button>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div className="mt-6 flex justify-between items-center">
+                  {aiStep > 0 ? (
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={handleAiBack}
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2.5 rounded-2xl text-sm font-medium transition-colors">
+                      ← Back
+                    </motion.button>
+                  ) : <div />}
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    onClick={handleAiNext}
+                    className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-6 py-2.5 rounded-2xl text-sm font-semibold shadow-lg shadow-orange-200 transition-all">
+                    {aiStep < 2 ? "Next →" : "Generate"}
                   </motion.button>
-                )}
-                <motion.button whileHover={{ scale: 1.02 }} onClick={handleAiNext} className="bg-orange-500 text-white px-4 py-2 rounded-2xl">
-                  {aiStep < 2 ? "Next" : "Suggest"}
-                </motion.button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-      <main className="hundred:pt-48 mobile:pt-34 px-4 sm:px-8 max-w-7xl mx-auto">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row gap-4 mb-8 mobile:-mt-20">
+
+      {/* ── Main Content ── */}
+      <main className="hundred:pt-48 mobile:pt-34 px-4 sm:px-8 max-w-7xl mx-auto pb-32">
+
+        {/* ── Top Controls Bar ── */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col sm:flex-row gap-3 mb-6 mobile:-mt-20">
+          {/* Search */}
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input type="text" placeholder="Search by name or serial number..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-3 bg-white border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent shadow-sm" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input type="text" placeholder="Search by name or code…"
+              value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 bg-white border border-orange-100 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent shadow-sm text-sm transition-all" />
           </div>
-          <motion.div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <select value={selectedType} onChange={e => setSelectedType(e.target.value)} className="pl-10 pr-8 py-3 bg-white border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent shadow-sm appearance-none cursor-pointer min-w-[200px]">
+          {/* Filter */}
+          <div className="relative">
+            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <select value={selectedType} onChange={e => setSelectedType(e.target.value)}
+              className="pl-11 pr-10 py-3 bg-white border border-orange-100 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent shadow-sm text-sm appearance-none cursor-pointer min-w-[200px] transition-all">
               {productTypes.map(type => <option key={type} value={type}>{type}</option>)}
             </select>
-          </motion.div>
+          </div>
         </motion.div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex justify-center mb-8 gap-4">
-          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={downloadPDF} className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-8 py-3 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2">
-            Download Pricelist <FaArrowRight className="w-4 h-4" />
+
+        {/* ── Action Buttons ── */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-center gap-4 mb-10">
+          <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+            onClick={downloadPDF}
+            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-6 py-3 rounded-2xl shadow-lg shadow-orange-200 flex items-center gap-2.5 text-sm transition-all">
+            <Download className="w-4 h-4" />
+            Download Pricelist
           </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 1.1 }}
-            onClick={() => setShowAiModal(true)}
-            className="relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-full shadow-2xl w-16 h-16 flex items-center justify-center"
-          >
-            <span className="text-2xl">🤖</span>
-            <motion.span
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="absolute -top-2 -right-10 px-3 py-1 bg-red-500 text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap"
-            >
+
+          <div className="relative">
+            <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.95 }}
+              onClick={() => setShowAiModal(true)}
+              className="relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-2xl shadow-lg shadow-orange-200 w-14 h-14 flex items-center justify-center transition-all">
+              <span className="text-2xl">🤖</span>
+            </motion.button>
+            <motion.span initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+              className="absolute -top-2 -right-12 px-2.5 py-1 bg-red-500 text-white text-xs font-bold rounded-full shadow-md whitespace-nowrap">
               Need Help?
             </motion.span>
-          </motion.button>
+          </div>
         </motion.div>
-        {Object.entries(grouped).map(([type, items]) => (
-          <motion.div key={type} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="mb-16">
-            <div className="flex items-center gap-4 mb-8">
-              <h2 className="text-3xl font-bold text-gray-800 capitalize">{type.replace(/_/g, " ")}</h2>
-              <div className="flex-1 h-1 bg-gradient-to-r from-orange-400 to-transparent rounded-full" />
-              <span className="text-orange-600 font-semibold bg-orange-100 px-3 py-1 rounded-full text-sm">{items.length} items</span>
+
+        {/* ── Product Groups ── */}
+        {Object.entries(grouped).map(([type, items], groupIndex) => (
+          <motion.section key={type}
+            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: groupIndex * 0.05 }}
+            className="mb-16">
+            {/* Section Header */}
+            <div className="flex items-center gap-4 mb-7">
+              <div className="w-1 h-8 bg-gradient-to-b from-orange-500 to-orange-300 rounded-full flex-shrink-0" />
+              <h2 className="text-2xl font-bold text-gray-800 capitalize">{type.replace(/_/g, " ")}</h2>
+              <div className="flex-1 h-px bg-gradient-to-r from-orange-200 to-transparent" />
+              <span className="text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-100 px-3 py-1.5 rounded-full">
+                {items.length} items
+              </span>
             </div>
-            <div className="grid mobile:grid-cols-2 hundred:grid-cols-4 onefifty:grid-cols-3 gap-6">
-              {items.map(product => {
+
+            {/* Product Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {items.map((product, idx) => {
                 if (!product) return null;
                 const originalPrice = Number.parseFloat(product.price);
                 const discount = originalPrice * (product.discount / 100);
                 const finalPrice = product.discount > 0 ? formatPrice(originalPrice - discount) : formatPrice(originalPrice);
                 const count = cart[product.serial_number] || 0;
                 return (
-                  <motion.div key={product.serial_number} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -8, scale: 1.02 }} className="group bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-orange-100">
+                  <motion.div key={product.serial_number}
+                    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.03 }}
+                    whileHover={{ y: -6, scale: 1.015 }}
+                    className="group bg-white rounded-3xl shadow-sm hover:shadow-xl border border-gray-100 hover:border-orange-100 transition-all duration-300 overflow-hidden">
+                    {/* Image area */}
                     <div className="relative">
                       <ModernCarousel media={product.images} onImageClick={handleImageClick} />
-                      {product.discount > 0 && <div className="absolute top-4 left-4 bg-red-500 text-white text-sm font-bold px-3 py-1 rounded-full shadow-lg">{formatPercentage(product.discount)}% OFF</div>}
-                      <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => handleShowDetails(product)} className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-all">
-                        <FaInfoCircle className="text-orange-600" />
+                      {product.discount > 0 && (
+                        <div className="absolute top-3 left-3 bg-gradient-to-r from-red-500 to-rose-500 text-white text-xs font-bold px-2.5 py-1 rounded-xl shadow-lg">
+                          {formatPercentage(product.discount)}% OFF
+                        </div>
+                      )}
+                      <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                        onClick={() => handleShowDetails(product)}
+                        className="absolute top-3 right-3 w-8 h-8 bg-white/90 hover:bg-white backdrop-blur-sm rounded-xl flex items-center justify-center shadow-md transition-colors">
+                        <FaInfoCircle className="text-orange-500 w-3.5 h-3.5" />
                       </motion.button>
                     </div>
-                    <div className="p-6">
-                      <h3 className="text-lg font-bold text-gray-800 mb-3 line-clamp-2 group-hover:text-orange-600">{product.productname}</h3>
-                      <div className="flex items-center gap-3 mb-4">
-                        {product.discount > 0 && <span className="text-sm text-gray-500 line-through">₹{formatPrice(originalPrice)}</span>}
-                        <span className="text-xl font-bold text-orange-600">₹{finalPrice}</span>
-                        <span className="text-sm text-gray-600">/ {product.per}</span>
+
+                    {/* Info area */}
+                    <div className="p-4">
+                      <p className="text-xs text-gray-400 font-mono mb-1">{product.serial_number}</p>
+                      <h3 className="text-sm font-bold text-gray-800 line-clamp-2 leading-snug mb-2 group-hover:text-orange-600 transition-colors">
+                        {product.productname}
+                      </h3>
+                      <div className="flex items-baseline gap-2 mb-3">
+                        {product.discount > 0 && (
+                          <span className="text-xs text-gray-400 line-through">₹{formatPrice(originalPrice)}</span>
+                        )}
+                        <span className="text-base font-bold text-orange-600">₹{finalPrice}</span>
+                        <span className="text-xs text-gray-400">/ {product.per}</span>
                       </div>
-                      <div className="flex items-center justify-end">
-                        <AnimatePresence mode="wait">
-                          {count > 0 ? (
-                            <motion.div key="quantity-controls" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} className="flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl sm:rounded-2xl p-1.5 sm:p-2">
-                              <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => removeFromCart(product)} className="w-6 h-6 sm:w-8 sm:h-8 bg-white/20 rounded-full flex items-center justify-center text-white">
-                                <FaMinus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                              </motion.button>
-                              <span className="text-white font-bold text-sm sm:text-lg px-1 sm:px-2 w-10 sm:w-16 text-center">{count}</span>
-                              <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => addToCart(product)} className="w-6 h-6 sm:w-8 sm:h-8 bg-white/20 rounded-full flex items-center justify-center text-white">
-                                <FaPlus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                              </motion.button>
-                            </motion.div>
-                          ) : (
-                            <motion.button key="add-button" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => addToCart(product)} className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-xl sm:rounded-2xl shadow-lg flex items-center gap-1 sm:gap-2 text-sm sm:text-base">
-                              <FaPlus className="w-3 h-3 sm:w-4 sm:h-4" />
-                              <span className="hidden sm:inline">Add</span>
+
+                      {/* Cart controls */}
+                      <AnimatePresence mode="wait">
+                        {count > 0 ? (
+                          <motion.div key="qty"
+                            initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.85, opacity: 0 }}
+                            className="flex items-center justify-between bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-1.5 shadow-md shadow-orange-200">
+                            <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
+                              onClick={() => removeFromCart(product)}
+                              className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center text-white transition-colors">
+                              <FaMinus className="w-2.5 h-2.5" />
                             </motion.button>
-                          )}
-                        </AnimatePresence>
-                      </div>
+                            <span className="text-white font-bold text-sm px-2 min-w-[2rem] text-center">{count}</span>
+                            <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
+                              onClick={() => addToCart(product)}
+                              className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center text-white transition-colors">
+                              <FaPlus className="w-2.5 h-2.5" />
+                            </motion.button>
+                          </motion.div>
+                        ) : (
+                          <motion.button key="add"
+                            initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.85, opacity: 0 }}
+                            whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+                            onClick={() => addToCart(product)}
+                            className="w-full bg-orange-50 hover:bg-gradient-to-r hover:from-orange-500 hover:to-orange-600 text-orange-600 hover:text-white border border-orange-200 hover:border-transparent font-semibold py-2.5 rounded-xl transition-all duration-300 text-sm flex items-center justify-center gap-1.5">
+                            <FaPlus className="w-2.5 h-2.5" />
+                            Add
+                          </motion.button>
+                        )}
+                      </AnimatePresence>
                     </div>
                   </motion.div>
                 );
               })}
             </div>
-          </motion.div>
+          </motion.section>
         ))}
       </main>
-      <div className="fixed hundred:bottom-6 mobile:bottom-22 right-6 z-20 flex flex-col items-end gap-4">
-        <motion.button onClick={() => setIsCartOpen(true)} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }} className={`bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-full shadow-2xl w-16 h-16 flex items-center justify-center ${isCartOpen ? "hidden" : ""}`}>
+
+      {/* ── Floating Cart Button ── */}
+      <div className="fixed hundred:bottom-6 mobile:bottom-22 right-6 z-20">
+        <motion.button onClick={() => setIsCartOpen(true)}
+          whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
+          className={`relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-2xl shadow-2xl shadow-orange-300 w-16 h-16 flex items-center justify-center transition-all ${isCartOpen ? "hidden" : ""}`}>
           <ShoppingCart className="w-6 h-6" />
-          {Object.keys(cart).length > 0 && (
-            <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-6 h-6 flex items-center justify-center rounded-full font-bold">
-              {Object.values(cart).reduce((a, b) => a + b, 0)}
+          {cartItemCount > 0 && (
+            <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
+              className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-6 h-6 flex items-center justify-center rounded-full font-bold shadow-md">
+              {cartItemCount}
             </motion.span>
           )}
         </motion.button>
       </div>
+
+      {/* ── Checkout / Customer Details Modal ── */}
       <AnimatePresence>
         {showModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
-            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }} className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-md px-4">
+            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
-                <h2 className="text-2xl font-bold mb-6 text-gray-800">Customer Details</h2>
-                <div className="space-y-4">
-                  {["customer_name", "address", "mobile_number", "email"].map(field => (
-                    <input key={field} name={field} type={field === "email" ? "email" : "text"} placeholder={field.replace(/_/g, " ").toUpperCase()} value={customerDetails[field]} onChange={handleInputChange} className="w-full px-4 py-3 border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent" required={field !== "email"} />
-                  ))}
-                  <select name="state" value={customerDetails.state} onChange={e => setCustomerDetails(prev => ({ ...prev, state: e.target.value, district: "" }))} className="w-full px-4 py-3 border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent" required>
-                    <option value="">Select State</option>
-                    {states.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
-                  </select>
-                  {customerDetails.state && (
-                    <select name="district" value={customerDetails.district} onChange={handleInputChange} className="w-full px-4 py-3 border border-orange-200 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent" required>
-                      <option value="">Select Place / City</option>
-                      {districts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-                    </select>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Promocode</label>
-                    <select value={promocode} onChange={e => setPromocode(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400 transition-all duration-300">
-                      <option value="">Select Promocode</option>
-                      {promocodes.map(promo => (
-                        <option key={promo.id} value={promo.code}>
-                          {promo.code} ({formatPercentage(promo.discount)}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}{promo.product_type ? `, Type: ${promo.product_type.replace(/_/g, " ")}` : ""}{promo.end_date ? `, Exp: ${new Date(promo.end_date).toLocaleDateString()}` : ""})
-                        </option>
-                      ))}
-                      <option value="custom">Enter custom code</option>
-                    </select>
-                    {promocode === "custom" && <input type="text" value={promocode === "custom" ? "" : promocode} onChange={e => setPromocode(e.target.value)} placeholder="Enter custom code" className="w-full px-3 py-2 mt-2 rounded-xl border border-orange-200 text-sm focus:ring-2 focus:ring-orange-400 transition-all duration-300" />}
-                    {appliedPromo && <p className="text-green-600 text-xs mt-1">Applied: {appliedPromo.code} ({formatPercentage(appliedPromo.discount)}% OFF){appliedPromo.min_amount && `, Min: ₹${appliedPromo.min_amount}`}{appliedPromo.product_type && `, Type: ${appliedPromo.product_type.replace(/_/g, " ")}`}{appliedPromo.end_date && `, Expires: ${new Date(appliedPromo.end_date).toLocaleDateString()}`}</p>}
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                    <ShoppingCart className="w-5 h-5 text-orange-600" />
                   </div>
-                  <div className="text-sm text-gray-700 space-y-1">
-                    <div className="flex justify-between"><span>Net Total:</span><span>₹{totals.net}</span></div>
-                    <div className="flex justify-between text-green-600"><span>Product Discount:</span><span>-₹{totals.product_discount}</span></div>
-                    {appliedPromo && <div className="flex justify-between text-green-600"><span>Promocode ({appliedPromo.code}):</span><span>-₹{totals.promo_discount}</span></div>}
-                    <div className="flex justify-between text-green-600"><span>Total Discount:</span><span>-₹{totals.save}</span></div>
-                    <div className="flex justify-between text-gray-600"><span>Processing Fee:</span><span>₹{totals.processing_fee}</span></div>
-                    <div className="flex justify-between font-bold text-lg text-orange-600 pt-2 border-t border-orange-200"><span>Total:</span><span>₹{totals.total}</span></div>
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-800">Customer Details</h2>
+                    <p className="text-xs text-gray-400">Fill in your details to confirm booking</p>
                   </div>
                 </div>
+
+                <div className="space-y-3">
+                  {["customer_name", "address", "mobile_number", "email"].map(field => (
+                    <div key={field}>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        {field.replace(/_/g, " ")}{field !== "email" && " *"}
+                      </label>
+                      <input name={field} type={field === "email" ? "email" : "text"}
+                        placeholder={`Enter ${field.replace(/_/g, " ")}`}
+                        value={customerDetails[field]} onChange={handleInputChange}
+                        className="w-full px-4 py-3 border border-orange-100 rounded-2xl bg-orange-50 focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm transition-all"
+                        required={field !== "email"} />
+                    </div>
+                  ))}
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">State *</label>
+                    <select name="state" value={customerDetails.state}
+                      onChange={e => setCustomerDetails(prev => ({ ...prev, state: e.target.value, district: "" }))}
+                      className="w-full px-4 py-3 border border-orange-100 rounded-2xl bg-orange-50 focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm transition-all" required>
+                      <option value="">Select State</option>
+                      {states.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </div>
+
+                  {customerDetails.state && (
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">City / Place *</label>
+                      <select name="district" value={customerDetails.district} onChange={handleInputChange}
+                        className="w-full px-4 py-3 border border-orange-100 rounded-2xl bg-orange-50 focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm transition-all" required>
+                        <option value="">Select Place / City</option>
+                        {districts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  <PromoSelector />
+
+                  {/* Order Summary */}
+                  <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Order Summary</p>
+                    <SummaryRows />
+                  </div>
+                </div>
+
                 <div className="mt-6 flex gap-3">
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setShowModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl">
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowModal(false)}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl text-sm transition-colors">
                     Cancel
                   </motion.button>
-                  <motion.button whileHover={{ scale: isBookingLoading ? 1 : 1.02 }} whileTap={{ scale: isBookingLoading ? 1 : 0.98 }} onClick={handleFinalCheckout} disabled={isBookingLoading} className={`flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg flex items-center justify-center gap-2 ${isBookingLoading ? "opacity-75 cursor-not-allowed" : ""}`}>
+                  <motion.button
+                    whileHover={{ scale: isBookingLoading ? 1 : 1.02 }}
+                    whileTap={{ scale: isBookingLoading ? 1 : 0.98 }}
+                    onClick={handleFinalCheckout} disabled={isBookingLoading}
+                    className={`flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg shadow-orange-200 flex items-center justify-center gap-2 text-sm transition-all ${isBookingLoading ? "opacity-75 cursor-not-allowed" : ""}`}>
                     {isBookingLoading ? (
                       <>
-                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        Booking...
+                        Booking…
                       </>
-                    ) : "Confirm Booking"}
+                    ) : "Confirm Booking →"}
                   </motion.button>
                 </div>
               </div>
@@ -1215,6 +1309,7 @@ const Pricelist = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
       <style jsx>{`
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .animate-marquee { display: inline-block; white-space: nowrap; animation: marquee 15s linear infinite; }
