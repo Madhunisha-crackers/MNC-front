@@ -9,185 +9,151 @@ export default function Banner() {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previewURLs, setPreviewURLs] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const fileInputRef = React.useRef(null);
 
-  const styles = {
-    input: { 
-      background: "linear-gradient(135deg, rgba(255,255,255,0.8), rgba(240,249,255,0.6))", 
-      backgroundDark: "linear-gradient(135deg, rgba(55,65,81,0.8), rgba(75,85,99,0.6))",
-      backdropFilter: "blur(10px)", 
-      border: "1px solid rgba(2,132,199,0.3)", 
-      borderDark: "1px solid rgba(59,130,246,0.4)"
-    },
-    button: { 
-      background: "linear-gradient(135deg, rgba(2,132,199,0.9), rgba(14,165,233,0.95))", 
-      backgroundDark: "linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.95))",
-      backdropFilter: "blur(15px)", 
-      border: "1px solid rgba(125,211,252,0.4)", 
-      borderDark: "1px solid rgba(147,197,253,0.4)",
-      boxShadow: "0 15px 35px rgba(2,132,199,0.3), inset 0 1px 0 rgba(255,255,255,0.2)",
-      boxShadowDark: "0 15px 35px rgba(59,130,246,0.4), inset 0 1px 0 rgba(255,255,255,0.1)"
-    }
-  };
-
-  useEffect(() => {
-    fetchBanners();
-  }, []);
+  useEffect(() => { fetchBanners(); }, []);
 
   const fetchBanners = async () => {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/banners`);
       setBanners(res.data);
-    } catch (err) {
-      console.error('Failed to fetch banners:', err);
-    }
+    } catch (err) { setError('Failed to fetch banners'); }
   };
 
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
     setSelectedFiles(files);
-    const previews = files.map(file => URL.createObjectURL(file));
-    setPreviewURLs(previews);
+    setPreviewURLs(files.map(file => URL.createObjectURL(file)));
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this banner?')) return;
     try {
       await axios.delete(`${API_BASE_URL}/api/banners/${id}`);
+      setDeleteConfirmId(null);
       fetchBanners();
-    } catch (err) {
-      console.error('Delete failed:', err);
-      alert('Failed to delete banner');
-    }
+      setSuccess('Banner deleted successfully');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) { setError('Failed to delete banner'); setDeleteConfirmId(null); }
   };
 
   const handleUpload = async () => {
     if (selectedFiles.length === 0) return;
-
     const formData = new FormData();
     selectedFiles.forEach((file) => formData.append('images', file));
-
     try {
       setUploading(true);
-      await axios.post(`${API_BASE_URL}/api/banners/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setSelectedFiles([]);
-      setPreviewURLs([]);
-      document.querySelector('input[type="file"]').value = ''; // Clear input
+      await axios.post(`${API_BASE_URL}/api/banners/upload`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setSelectedFiles([]); setPreviewURLs([]);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       fetchBanners();
-    } catch (err) {
-      console.error('Upload failed:', err);
-      alert('Upload failed: ' + (err?.response?.data?.message || err.message));
-    } finally {
-      setUploading(false);
-    }
+      setSuccess('Banners uploaded successfully');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) { setError('Upload failed: ' + (err?.response?.data?.message || err.message)); }
+    finally { setUploading(false); }
   };
 
   const toggleActive = async (id, currentStatus) => {
     try {
-      await axios.patch(`${API_BASE_URL}/api/banners/${id}`, {
-        is_active: !currentStatus,
-      });
+      await axios.patch(`${API_BASE_URL}/api/banners/${id}`, { is_active: !currentStatus });
       fetchBanners();
-    } catch (err) {
-      console.error('Failed to update status:', err);
-    }
+    } catch (err) { setError('Failed to update status'); }
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <Logout />
-      <div className="p-6 w-full justify-center">
-        <h2 className="text-3xl text-center font-bold mb-6 text-gray-900 dark:text-gray-100">Manage Banners</h2>
+      <div className="hundred:ml-64 mobile:ml-0 mobile:px-3 w-auto">
+        <div className="mx-auto px-6 py-8 w-full">
 
-        {/* Upload Section */}
-        <div className="mb-10 bg-white dark:bg-gray-900 p-6 rounded-lg shadow mx-auto max-w-2xl onefifty:ml-[25%]">
-          <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Upload Banner Images</label>
-          <input
-            type="file"
-            multiple
-            accept="image/*"
-            onChange={handleFileChange}
-            className="mb-4 text-sm text-gray-900 dark:text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-gray-700 file:text-indigo-600 dark:file:text-gray-200 hover:file:bg-indigo-100 dark:hover:file:bg-gray-600"
-          />
-          {previewURLs.length > 0 && (
-            <div className="flex flex-wrap gap-4 mb-4 justify-center">
-              {previewURLs.map((src, index) => (
-                <img
-                  key={index}
-                  src={src}
-                  alt={`Preview ${index}`}
-                  className="h-24 w-auto rounded border border-gray-300 dark:border-gray-600 shadow"
-                />
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Manage Banners</h1>
+            <p className="text-slate-400 mt-1.5 text-sm">Upload and control banner visibility</p>
+          </div>
+
+          {error && <div className="bg-red-50 border border-red-200 border-l-4 border-l-red-500 text-red-700 px-4 py-3.5 rounded-xl mb-5 text-sm font-medium">⚠️ {error}</div>}
+          {success && <div className="bg-emerald-50 border border-emerald-200 border-l-4 border-l-emerald-500 text-emerald-800 px-4 py-3.5 rounded-xl mb-5 text-sm font-medium">✓ {success}</div>}
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-8 py-7 mb-8 mobile:p-4 max-w-2xl">
+            <h3 className="text-base font-extrabold text-slate-800 mb-5 flex items-center gap-2">
+              <span className="w-1 h-5 bg-indigo-500 rounded-full inline-block" />
+              Upload Banner Images
+            </h3>
+            <div className="border-2 border-dashed border-slate-200 rounded-xl p-5 hover:border-indigo-300 transition-colors mb-4">
+              <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange}
+                className="block w-full text-sm text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 transition-colors" />
+              <p className="text-xs text-slate-400 mt-2">Select one or more image files to upload as banners</p>
+            </div>
+            {previewURLs.length > 0 && (
+              <div className="flex flex-wrap gap-3 mb-4">
+                {previewURLs.map((src, index) => (
+                  <img key={index} src={src} alt={`Preview ${index}`} className="h-24 w-auto rounded-xl border border-slate-200 shadow-sm object-cover" />
+                ))}
+              </div>
+            )}
+            <button onClick={handleUpload} disabled={uploading || selectedFiles.length === 0}
+              className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all duration-200
+                ${uploading || selectedFiles.length === 0
+                  ? "bg-slate-300 cursor-not-allowed"
+                  : "bg-gradient-to-br from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500"}`}>
+              {uploading
+                ? <span className="flex items-center gap-2"><span className="inline-block w-4 h-4 border-[3px] border-white/30 border-t-white rounded-full animate-spin" /> Uploading...</span>
+                : 'Upload Banners'}
+            </button>
+          </div>
+
+          {banners.length === 0 ? (
+            <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl">
+              <div className="text-4xl mb-3">🖼️</div>
+              <p className="text-slate-400 font-medium text-sm">No banners uploaded yet</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+              {banners.map((banner) => (
+                <div key={banner.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+                  <img src={banner.image_url.startsWith('http') ? banner.image_url : `${API_BASE_URL}${banner.image_url}`} alt="Banner" className="w-full h-36 object-cover" />
+                  <div className="p-3 flex items-center justify-between gap-2">
+                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border
+                      ${banner.is_active ? "text-emerald-600 bg-emerald-50 border-emerald-200" : "text-slate-400 bg-slate-50 border-slate-200"}`}>
+                      {banner.is_active ? '● Visible' : '○ Hidden'}
+                    </span>
+                    <div className="flex gap-1.5">
+                      <button onClick={() => toggleActive(banner.id, banner.is_active)}
+                        className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all duration-200
+                          ${banner.is_active
+                            ? "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-500 hover:text-white hover:border-slate-500"
+                            : "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500"}`}>
+                        {banner.is_active ? 'Hide' : 'Show'}
+                      </button>
+                      <button onClick={() => setDeleteConfirmId(banner.id)}
+                        className="py-1.5 px-3 rounded-lg text-xs font-bold bg-red-50 text-red-500 border border-red-200 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200">
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
           )}
-          <button
-            onClick={handleUpload}
-            disabled={uploading}
-            className={`px-5 py-2 rounded text-white dark:text-gray-100 font-semibold ${
-              uploading ? 'bg-gray-500 dark:bg-gray-700 cursor-not-allowed' : 'hover:bg-blue-700 dark:hover:bg-blue-600'
-            }`}
-            style={uploading ? {} : { background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
-          >
-            {uploading ? 'Uploading...' : 'Upload'}
-          </button>
-        </div>
-
-        {/* Banner List */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mobile:grid-cols-1 justify-items-center mx-auto max-w-7xl onefifty:ml-[25%]">
-          {banners.length === 0 ? (
-            <p className="col-span-full text-center text-gray-500 dark:text-gray-400">No banners uploaded yet.</p>
-          ) : (
-            banners.map((banner) => (
-              <div key={banner.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow p-3">
-                <img
-                  src={banner.image_url.startsWith('http') ? banner.image_url : `${API_BASE_URL}${banner.image_url}`}
-                  alt="Banner"
-                  className="w-full h-32 object-cover rounded mb-2"
-                />
-                <div className="flex justify-between items-center">
-                  <span
-                    className={`text-xs font-semibold px-2 py-1 rounded ${
-                      banner.is_active
-                        ? 'bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-200'
-                        : 'bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-200'
-                    }`}
-                  >
-                    {banner.is_active ? 'Visible' : 'Hidden'}
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => toggleActive(banner.id, banner.is_active)}
-                      className={`text-xs px-3 py-1 rounded text-white dark:text-gray-100 font-semibold ${
-                        banner.is_active ? 'bg-red-500 dark:bg-red-600' : 'bg-green-500 dark:bg-green-600'
-                      } hover:bg-opacity-80 dark:hover:bg-opacity-80`}
-                    >
-                      {banner.is_active ? 'Hide' : 'Show'}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(banner.id)}
-                      className="text-xs px-3 py-1 rounded text-white dark:text-gray-100 font-semibold hover:bg-gray-700 dark:hover:bg-gray-600"
-                      style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
         </div>
       </div>
-      <style>{`
-        [style*="backgroundDark"] { background: var(--bg, ${styles.input.background}); }
-        [style*="backgroundDark"][data-dark] { --bg: ${styles.input.backgroundDark}; }
-        [style*="borderDark"] { border: var(--border, ${styles.input.border}); }
-        [style*="borderDark"][data-dark] { --border: ${styles.input.borderDark}; }
-        [style*="boxShadowDark"] { box-shadow: var(--shadow, ${styles.button.boxShadow}); }
-        [style*="boxShadowDark"][data-dark] { --shadow: ${styles.button.boxShadowDark}; }
-      `}</style>
+
+      {deleteConfirmId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl text-center">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h2 className="text-lg font-extrabold text-slate-800 mb-2.5">Delete Banner?</h2>
+            <p className="text-slate-500 text-sm mb-6">This banner will be permanently removed.</p>
+            <div className="flex gap-2.5 justify-center">
+              <button onClick={() => setDeleteConfirmId(null)} className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors">Keep It</button>
+              <button onClick={() => handleDelete(deleteConfirmId)} className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-red-500 to-red-400 shadow-lg shadow-red-200 hover:from-red-600 hover:to-red-500 transition-all duration-200">Yes, Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

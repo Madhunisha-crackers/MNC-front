@@ -12,695 +12,357 @@ import Select from 'react-select';
 import Tesseract from 'tesseract.js';
 import Webcam from 'react-webcam';
 
-// Set app element for accessibility
 Modal.setAppElement("#root");
 
-// Shared select styles
 const selectStyles = {
-  control: (base) => ({
+  control: (base, { isFocused }) => ({
     ...base,
-    padding: "0.25rem",
-    fontSize: "1rem",
-    borderRadius: "0.5rem",
+    padding: "0.2rem 0.4rem",
+    fontSize: "0.95rem",
+    borderRadius: "10px",
     background: "#fff",
-    borderColor: "#d1d5db",
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
-    "&:hover": { borderColor: "#3b82f6" },
-    "@media (max-width: 640px)": { padding: "0.25rem", fontSize: "0.875rem" },
+    borderColor: isFocused ? "#6366f1" : "#e2e8f0",
+    boxShadow: isFocused ? "0 0 0 3px rgba(99,102,241,0.15)" : "0 1px 3px rgba(0,0,0,0.06)",
+    transition: "all 0.2s",
+    "&:hover": { borderColor: "#6366f1" },
   }),
-  menu: (base) => ({ ...base, zIndex: 20, background: "#fff" }),
-  singleValue: (base) => ({ ...base, color: "#1f2937" }),
+  menu: (base) => ({ ...base, zIndex: 50, borderRadius: "10px", boxShadow: "0 10px 40px rgba(0,0,0,0.12)", border: "1px solid #e2e8f0", overflow: "hidden" }),
+  singleValue: (base) => ({ ...base, color: "#1e293b", fontWeight: 500 }),
   option: (base, { isFocused, isSelected }) => ({
     ...base,
-    background: isSelected ? "#3b82f6" : isFocused ? "#e5e7eb" : "#fff",
-    color: isSelected ? "#fff" : "#1f2937",
+    background: isSelected ? "#6366f1" : isFocused ? "#f0f0ff" : "#fff",
+    color: isSelected ? "#fff" : "#1e293b",
+    fontWeight: isFocused || isSelected ? 500 : 400,
+    cursor: "pointer",
   }),
-  placeholder: (base) => ({ ...base, color: "#9ca3af" }),
+  placeholder: (base) => ({ ...base, color: "#94a3b8" }),
+  clearIndicator: (base) => ({ ...base, color: "#94a3b8", "&:hover": { color: "#ef4444" } }),
 };
 
-// Error Boundary for Direct component
 class DirectErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error("Error caught by DirectErrorBoundary:", error, errorInfo);
-    console.log("Error stack:", error.stack);
-    console.log("Component stack:", errorInfo.componentStack);
-  }
-
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, errorInfo) { console.error("DirectErrorBoundary:", error, errorInfo); }
   render() {
-    if (this.state.hasError) {
-      return (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-3 rounded-lg text-center shadow-md">
-          An error occurred in the Direct Booking component: {this.state.error?.message || 'Unknown error'}. Please refresh the page or contact support.
-        </div>
-      );
-    }
+    if (this.state.hasError) return (
+      <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl text-center">
+        An error occurred: {this.state.error?.message || 'Unknown error'}. Please refresh.
+      </div>
+    );
     return this.props.children;
   }
 }
 
-// Error Boundary for QuotationTable
 class QuotationTableErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error("Error caught by QuotationTableErrorBoundary:", error, errorInfo);
-    console.log("Error stack:", error.stack);
-    console.log("Component stack:", errorInfo.componentStack);
-    console.log("Products prop:", this.props.products);
-  }
-
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, errorInfo) { console.error("QuotationTableErrorBoundary:", error, errorInfo); }
   render() {
-    if (this.state.hasError) {
-      return (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-3 rounded-lg text-center shadow-md">
-          An error occurred while rendering the quotation table. Please try again.
-        </div>
-      );
-    }
+    if (this.state.hasError) return (
+      <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl text-center">
+        Error rendering quotation table. Please try again.
+      </div>
+    );
     return this.props.children;
   }
 }
 
-// Helper to calculate effective price
-const getEffectivePrice = (item) => {
-  return Math.round(Number(item.price) || 0);
+const getEffectivePrice = (item) => Math.round(Number(item.price) || 0);
+
+const styles = { input: {}, button: {}, card: {} };
+
+const SummaryChip = ({ label, value, color, large }) => {
+  const colorMap = {
+    "#64748b": "text-slate-500",
+    "#10b981": "text-emerald-500",
+    "#f59e0b": "text-amber-500",
+    "#94a3b8": "text-slate-400",
+    "#6366f1": "text-indigo-500",
+  };
+  const textColor = colorMap[color] || "text-slate-600";
+  return (
+    <div className="text-right">
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</div>
+      <div className={`font-bold ${large ? "text-xl" : "text-sm"} ${textColor}`}>{value}</div>
+    </div>
+  );
 };
 
-// Shared styles
-const styles = {
-  input: {
-    background: "linear-gradient(135deg, rgba(255,255,255,0.8), rgba(240,249,255,0.6))",
-    backdropFilter: "blur(10px)",
-    border: "1px solid rgba(2,132,199,0.3)",
-  },
-  button: {
-    background: "linear-gradient(135deg, rgba(2,132,199,0.9), rgba(14,165,233,0.95))",
-    backdropFilter: "blur(15px)",
-    border: "1px solid rgba(125,211,252,0.4)",
-    boxShadow: "0 15px 35px rgba(2,132,199,0.3), inset 0 1px 0 rgba(255,255,255,0.2)",
-  },
-  card: {
-    background: "linear-gradient(135deg, rgba(255,255,255,0.9), rgba(240,249,255,0.7))",
-    border: "1px solid rgba(2,132,199,0.3)",
-    boxShadow: "0 10px 20px rgba(0,0,0,0.1)",
-  },
+const StatusBadge = ({ status }) => {
+  const map = {
+    pending: "text-amber-500 bg-amber-50 border-amber-200",
+    booked:  "text-emerald-600 bg-emerald-50 border-emerald-200",
+    cancelled: "text-red-500 bg-red-50 border-red-200",
+  };
+  const icons = { pending: "⏳ Pending", booked: "✓ Booked", cancelled: "✕ Cancelled" };
+  const cls = map[status] || "text-slate-400 bg-slate-50 border-slate-200";
+  return (
+    <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${cls}`}>
+      {icons[status] || status}
+    </span>
+  );
 };
+
+const QuotActionBtn = ({ label, onClick, disabled, color }) => {
+  const colorMap = {
+    "#f59e0b": {
+      idle: "bg-amber-50 text-amber-500 border border-amber-200 hover:bg-amber-500 hover:text-white hover:border-amber-500",
+      off:  "bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed",
+    },
+    "#10b981": {
+      idle: "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500",
+      off:  "bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed",
+    },
+    "#ef4444": {
+      idle: "bg-red-50 text-red-500 border border-red-200 hover:bg-red-500 hover:text-white hover:border-red-500",
+      off:  "bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed",
+    },
+  };
+  const variant = colorMap[color] || colorMap["#6366f1"];
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all duration-150 ${disabled ? variant.off : variant.idle}`}
+    >
+      {label}
+    </button>
+  );
+};
+
+const PaginBtn = ({ label, onClick, disabled, active }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={`px-4 py-2 rounded-lg border text-sm font-bold transition-all duration-150
+      ${active    ? "bg-indigo-600 border-indigo-600 text-white"
+      : disabled  ? "bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed"
+                  : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:text-indigo-600"}`}
+  >
+    {label}
+  </button>
+);
 
 const QuotationTable = ({
-  cart = [],
-  products = [],
-  selectedProduct,
-  setSelectedProduct,
-  addToCart,
-  updateQuantity,
-  updateDiscount,
-  updatePrice,
-  removeFromCart,
-  calculateNetRate,
-  calculateYouSave,
-  calculateProcessingFee,
-  calculateTotal,
-  styles,
-  isModal = false,
-  additionalDiscount,
-  setAdditionalDiscount,
-  changeDiscount,
-  setChangeDiscount,
-  openNewProductModal,
-  lastAddedProduct,
-  setLastAddedProduct,
-  setCart,
-  setModalCart,
+  cart = [], products = [], selectedProduct, setSelectedProduct,
+  addToCart, updateQuantity, updateDiscount, updatePrice, removeFromCart,
+  calculateNetRate, calculateYouSave, calculateProcessingFee, calculateTotal,
+  isModal = false, additionalDiscount, setAdditionalDiscount,
+  changeDiscount, setChangeDiscount, openNewProductModal,
+  lastAddedProduct, setLastAddedProduct, setCart, setModalCart,
 }) => {
   const quantityInputRefs = useRef({});
-  const [search, setSearch] = useState('');
-  const [selectedType, setSelectedType] = useState('all');
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [scanError, setScanError] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [capturedImage, setCapturedImage] = useState(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const webcamRef = useRef(null);
+  const productSelectRef = useRef(null);
 
-  // Filter out invalid products
-  const validProducts = products.filter(
-    (p) =>
-      p != null &&
-      typeof p === 'object' &&
-      typeof p.product_type === 'string' &&
-      typeof p.productname === 'string' &&
-      typeof p.id !== 'undefined'
-  );
-
-  // Define product types
-  const productTypes = [
-    'all',
-    ...new Set(
-      validProducts
-        .map((p) => p.product_type)
-        .filter((type) => typeof type === 'string')
-    ),
-  ];
-
-  // Filter products based on search and selected type
-  const filteredProducts = validProducts.filter(
-    (p) =>
-      (selectedType === 'all' || p.product_type === selectedType) &&
-      (p.productname.toLowerCase().includes(search.toLowerCase()) ||
-        (p.serial_number && typeof p.serial_number === 'string' && p.serial_number.toLowerCase().includes(search.toLowerCase())))
-  );
-
-  // Focus on quantity input after adding product
   useEffect(() => {
     if (lastAddedProduct) {
       const key = `${lastAddedProduct.id}-${lastAddedProduct.product_type}`;
       const input = quantityInputRefs.current[key];
-      if (input) {
-        input.focus();
-        input.select();
-        setLastAddedProduct(null);
-      }
+      if (input) { input.focus(); input.select(); setLastAddedProduct(null); }
     }
   }, [lastAddedProduct, setLastAddedProduct]);
 
-  // Handle image capture
-  const captureImage = async () => {
-    if (!webcamRef.current) return;
-
-    try {
-      setIsProcessing(true);
-      const imageSrc = webcamRef.current.getScreenshot();
-      if (!imageSrc) {
-        setScanError('Failed to capture image');
-        setIsProcessing(false);
-        return;
-      }
-      setCapturedImage(imageSrc);
-
-      // Process the captured image for OCR
-      await processImageForOCR(imageSrc);
-    } catch (err) {
-      console.error('Capture error:', err);
-      setScanError('Failed to capture image');
-      setIsProcessing(false);
-    }
-  };
-
-  // Process image with Tesseract.js
-  const processImageForOCR = async (imageSrc) => {
-    if (!imageSrc) return;
-
-    try {
-      setIsScanning(true);
-
-      const { data: { text } } = await Tesseract.recognize(imageSrc, 'eng', {
-        tessedit_char_whitelist: '0123456789', // Restrict to numbers
-      });
-
-      const number = text.trim().match(/^\d+$/); // Match pure numbers
-      if (number) {
-        const matchedProduct = validProducts.find(
-          (p) => p.serial_number && p.serial_number.toString() === number[0].toString()
-        );
-
-        if (matchedProduct) {
-          addToCart(isModal, null, matchedProduct); // Pass matchedProduct directly
-          try {
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioCtx.createOscillator();
-            oscillator.type = 'square';
-            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
-            oscillator.connect(audioCtx.destination);
-            oscillator.start();
-            setTimeout(() => oscillator.stop(), 200);
-          } catch (soundErr) {
-            console.log('Sound not supported');
-          }
-          setScanError('Product added successfully!');
-          setTimeout(() => setScanError(''), 3000);
-          setCapturedImage(null);
-        } else {
-          setScanError(`No product found for number: ${number[0]}`);
-          setTimeout(() => setScanError(''), 3000);
-          setCapturedImage(null);
-        }
-      } else {
-        setScanError('No number detected in the image');
-        setTimeout(() => setScanError(''), 3000);
-        setCapturedImage(null);
-      }
-    } catch (err) {
-      console.error('Tesseract error:', err);
-      setScanError('Failed to process image. Please try again.');
-      setTimeout(() => setScanError(''), 3000);
-      setCapturedImage(null);
-    } finally {
-      setIsScanning(false);
-      setIsProcessing(false);
-    }
-  };
-
-  // Handle manual number input as fallback
-  const handleManualNumberInput = (e) => {
-    if (e.key === 'Enter') {
-      const number = e.target.value.trim();
-      if (number) {
-        const matchedProduct = validProducts.find(
-          (p) => p.serial_number && p.serial_number.toString() === number
-        );
-
-        if (matchedProduct) {
-          addToCart(isModal, null, matchedProduct); // Pass matchedProduct directly
-          setScanError('Product added successfully!');
-          setTimeout(() => setScanError(''), 3000);
-          e.target.value = '';
-        } else {
-          setScanError(`No product found for number: ${number}`);
-          setTimeout(() => setScanError(''), 3000);
-          e.target.value = '';
-        }
-      }
-    }
-  };
-
-  const handleQuantityKeyDown = (e, id, product_type) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      document.getElementById('product-search')?.focus();
-    }
+  const handleQuantityKeyDown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); productSelectRef.current?.focus(); }
   };
 
   const handleChangeDiscount = (value) => {
     const newDiscount = Math.max(0, Math.min(100, parseFloat(value) || 0));
     setChangeDiscount(newDiscount);
-    const updatedCart = cart.map(item => ({
-      ...item,
-      discount: item.initialDiscount === 0 ? 0 : newDiscount,
-    }));
-    if (isModal) {
-      setModalCart(updatedCart);
-    } else {
-      setCart(updatedCart);
-    }
+    const updatedCart = cart.map(item => ({ ...item, discount: item.initialDiscount === 0 ? 0 : newDiscount }));
+    if (isModal) setModalCart(updatedCart); else setCart(updatedCart);
   };
 
-  const handleCloseCamera = () => {
-    setCameraOpen(false);
-    setCapturedImage(null);
-    setScanError('');
-  };
+  const total = parseFloat(calculateTotal(cart, additionalDiscount));
+  const cartInputCls = "w-20 px-2 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 text-center bg-slate-50 outline-none focus:border-indigo-400 transition-colors";
 
   return (
-    <div className="space-y-4">
-      {/* Product Grid Section */}
-      <div className="flex flex-col items-center mobile:w-full">
-        <label className="text-lg font-semibold text-gray-700 dark:text-gray-100 mb-2 mobile:text-base">
-          Select Product
-        </label>
-        <div className="flex flex-col gap-4 w-full max-w-3xl">
-          {/* Search Bar */}
-          <div className="flex items-center gap-2 mobile:w-full">
-            <FaSearch className="text-gray-500" />
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white border border-slate-200 rounded-xl p-4">
+          <label className="block text-xs font-semibold text-amber-500 uppercase tracking-widest mb-2">
+            Additional Discount (%)
+          </label>
+          <div className="relative">
             <input
-              id="product-search"
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by product name or serial number..."
-              className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mobile:text-sm"
-              style={styles.input}
+              type="number"
+              value={additionalDiscount || ''}
+              onChange={(e) => setAdditionalDiscount(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+              placeholder="0"
+              min="0" max="100" step="1"
+              className="w-full pl-3 pr-8 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 bg-slate-50 outline-none focus:border-amber-400 transition-colors box-border"
             />
-            <button
-              onClick={() => setCameraOpen(true)}
-              className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mobile:p-1.5"
-              title="Scan Number"
-            >
-              <FaCamera />
-            </button>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">%</span>
           </div>
-          {/* Category Tabs */}
-          <div className="flex gap-2 overflow-x-auto">
-            {productTypes.map((type) => (
-              <button
-                key={type}
-                onClick={() => setSelectedType(type)}
-                className={`px-4 py-2 rounded-lg font-medium text-sm ${
-                  selectedType === type
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                } mobile:px-2 mobile:py-1 mobile:text-xs`}
-                style={styles.button}
-              >
-                {type === 'all' ? 'All' : type}
-              </button>
-            ))}
-          </div>
-          {/* Product Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
-            {filteredProducts.length > 0 ? (
-              filteredProducts.map((product) => (
-                <div
-                  key={`${product.id}-${product.product_type}`}
-                  className="p-4 rounded-lg shadow cursor-pointer hover:bg-gray-100 mobile:p-2"
-                  style={styles.card}
-                >
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-800 mobile:text-base">
-                    {product.productname}
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-900 mobile:text-xs">
-                    Serial: {product.serial_number || 'N/A'}
-                  </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-800 mobile:text-xs">
-                    Type: {product.product_type}
-                  </p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-800 mobile:text-xs">
-                    Price: ₹{getEffectivePrice(product).toFixed(2)}
-                  </p>
-                  <button
-                    onClick={() => addToCart(isModal, null, product)} // Pass product directly
-                    className="mt-2 w-full text-white px-4 py-2 rounded-lg font-bold text-sm bg-blue-600 hover:bg-blue-700 mobile:px-2 mobile:py-1 mobile:text-xs"
-                    style={styles.button}
-                  >
-                    Add to Cart
-                  </button>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-full text-center text-gray-500 mobile:text-xs">
-                No products found
-              </div>
-            )}
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4">
+          <label className="block text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-2">
+            Bulk Change Discount (%)
+          </label>
+          <div className="relative">
+            <input
+              type="number"
+              value={changeDiscount || ''}
+              onChange={(e) => handleChangeDiscount(e.target.value)}
+              placeholder="0"
+              min="0" max="100" step="1"
+              className="w-full pl-3 pr-8 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">%</span>
           </div>
         </div>
       </div>
 
-      {/* Additional Discount */}
-      <div className="flex flex-col items-center mobile:w-full">
-        <label className="text-lg font-semibold text-gray-700 dark:text-gray-100 mb-2 mobile:text-base">
-          Additional Discount (%)
-        </label>
-        <div className="flex items-center gap-4 mobile:w-full onefifty:w-96">
-          <input
-            type="number"
-            value={additionalDiscount || ''}
-            onChange={(e) => setAdditionalDiscount(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
-            placeholder="Enter additional discount (%)"
-            className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mobile:text-sm"
-            min="0"
-            max="100"
-            step="1"
-            style={styles.input}
-          />
+      {cart.length === 0 ? (
+        <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl py-12 text-center">
+          <div className="text-4xl mb-3">🛒</div>
+          <p className="text-slate-400 font-medium text-sm">Cart is empty — search and add products above</p>
         </div>
-      </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-gradient-to-r from-indigo-50 to-slate-50 border-b-2 border-indigo-100">
+                  {["#", "Product", "Price (₹)", "Discount", "Qty", "Total", ""].map((h, i) => (
+                    <th
+                      key={i}
+                      className={`px-3.5 py-3 text-xs font-bold text-indigo-500 uppercase tracking-widest whitespace-nowrap
+                        ${i === 0 || i === 6 ? "text-center" : "text-left"}`}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {cart.map((item, index) => {
+                  const lineTotal = Math.round(getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity);
+                  return (
+                    <tr
+                      key={`${item.id}-${item.product_type}`}
+                      className="border-b border-slate-100 hover:bg-indigo-50/30 transition-colors duration-150"
+                    >
+                      <td className="px-3.5 py-2.5 text-center text-xs font-bold text-slate-400">{index + 1}</td>
+                      <td className="px-3.5 py-2.5">
+                        <div className="font-semibold text-slate-800">{item.productname}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">{item.product_type}{item.serial_number ? ` · ${item.serial_number}` : ""}</div>
+                      </td>
+                      <td className="px-3.5 py-2.5">
+                        <input
+                          type="number" value={getEffectivePrice(item)} min="0" step="1"
+                          onChange={(e) => updatePrice(item.id, item.product_type, parseFloat(e.target.value) || 0, isModal)}
+                          className={`${cartInputCls} focus:border-emerald-400`}
+                        />
+                      </td>
+                      <td className="px-3.5 py-2.5">
+                        <div className="relative inline-block">
+                          <input
+                            type="number" value={item.discount} min="0" max="100" step="0.01"
+                            onChange={(e) => updateDiscount(item.id, item.product_type, parseFloat(e.target.value) || 0, isModal)}
+                            className={`${cartInputCls} pr-6 focus:border-amber-400`}
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">%</span>
+                        </div>
+                      </td>
+                      <td className="px-3.5 py-2.5">
+                        <input
+                          type="number" value={item.quantity} min="0"
+                          onChange={(e) => updateQuantity(item.id, item.product_type, parseInt(e.target.value) || 0, isModal)}
+                          onKeyDown={handleQuantityKeyDown}
+                          ref={(el) => (quantityInputRefs.current[`${item.id}-${item.product_type}`] = el)}
+                          className={`${cartInputCls} focus:border-indigo-400`}
+                        />
+                      </td>
+                      <td className="px-3.5 py-2.5">
+                        <span className="font-bold text-slate-800">₹{lineTotal.toLocaleString('en-IN')}</span>
+                      </td>
+                      <td className="px-3.5 py-2.5 text-center">
+                        <button
+                          onClick={() => removeFromCart(item.id, item.product_type, isModal)}
+                          className="bg-red-50 border border-red-200 text-red-500 rounded-lg px-2.5 py-1.5 text-xs font-bold hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-      {/* Change Discount */}
-      <div className="flex flex-col items-center mobile:w-full">
-        <label className="text-lg font-semibold text-gray-700 dark:text-gray-100 mb-2 mobile:text-base">
-          Change Discount (%)
-        </label>
-        <div className="flex items-center gap-4 mobile:w-full onefifty:w-96">
-          <input
-            type="number"
-            value={changeDiscount || ''}
-            onChange={(e) => handleChangeDiscount(e.target.value)}
-            placeholder="Enter change discount (%)"
-            className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mobile:text-sm"
-            min="0"
-            max="100"
-            step="1"
-            style={styles.input}
-          />
+          <div className="bg-gradient-to-r from-indigo-50 to-slate-50 border-t-2 border-indigo-100 px-5 py-4">
+            <div className="flex justify-end flex-wrap gap-6">
+              <SummaryChip label="Net Rate" value={`₹${parseFloat(calculateNetRate(cart)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} color="#64748b" />
+              <SummaryChip label="You Save" value={`₹${parseFloat(calculateYouSave(cart)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} color="#10b981" />
+              {additionalDiscount > 0 && <SummaryChip label="Extra Discount" value={`${additionalDiscount}%`} color="#f59e0b" />}
+              <SummaryChip label="Processing Fee (1%)" value={`₹${parseFloat(calculateProcessingFee(cart, additionalDiscount)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} color="#94a3b8" />
+              <SummaryChip label="Total" value={`₹${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} color="#6366f1" large />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-gradient-to-br from-slate-50 to-indigo-50 border border-indigo-100 rounded-2xl p-5">
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex-1 min-w-60">
+            <label className="block text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-1.5">
+              Search Product
+            </label>
+            <Select
+              ref={productSelectRef}
+              value={selectedProduct}
+              onChange={setSelectedProduct}
+              options={products.map((p) => ({
+                value: `${p.id}-${p.product_type}`,
+                label: `${p.serial_number ? `[${p.serial_number}] ` : ''}${p.productname} · ${p.product_type} · ₹${getEffectivePrice(p)}`,
+              }))}
+              placeholder="Type to search products..."
+              isClearable
+              isSearchable
+              styles={selectStyles}
+            />
+          </div>
+          <button
+            onClick={() => addToCart(isModal)}
+            disabled={!selectedProduct}
+            className={`h-11 px-6 rounded-xl font-bold text-sm flex items-center gap-2 whitespace-nowrap transition-all duration-200
+              ${selectedProduct
+                ? "bg-gradient-to-br from-indigo-500 to-indigo-400 text-white shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500"
+                : "bg-slate-200 text-slate-400 cursor-not-allowed"}`}
+          >
+            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            Add to Cart
+          </button>
           <button
             onClick={() => openNewProductModal(isModal)}
-            className="h-10 text-white px-4 rounded-lg font-bold shadow bg-green-600 hover:bg-green-700 mobile:px-2 mobile:text-xs"
-            style={styles.button}
+            className="h-11 px-5 rounded-xl font-bold text-sm flex items-center gap-2 whitespace-nowrap bg-gradient-to-br from-emerald-500 to-emerald-400 text-white shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-500 transition-all duration-200"
           >
-            Add New Product
+            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            Custom Product
           </button>
         </div>
       </div>
-
-      {/* Cart Table */}
-      <div className={`overflow-x-auto ${isModal ? "overflow-y-auto max-h-[60vh] pr-2" : ""}`}>
-        <table className="w-full border-collapse dark:bg-gray-800 dark:text-gray-100 bg-white shadow rounded-lg mobile:text-xs">
-          <thead className="border">
-            <tr className="hundred:text-lg mobile:text-sm">
-              <th className="text-center border-r mobile:p-1">Product</th>
-              <th className="text-center border-r mobile:p-1">Type</th>
-              <th className="text-center border-r mobile:p-1">Price</th>
-              <th className="text-center border-r mobile:p-1">Discount (%)</th>
-              <th className="text-center border-r mobile:p-1">Qty</th>
-              <th className="text-center border-r mobile:p-1">Total</th>
-              <th className="text-center border-r mobile:p-1">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cart.length ? (
-              cart.map((item) => (
-                <tr
-                  key={`${item.id}-${item.product_type}`}
-                  className="border border-gray-200 text-gray-900 dark:text-gray-100 mobile:text-sm"
-                >
-                  <td className="text-center border-r mobile:p-1">{item.productname}</td>
-                  <td className="text-center border-r mobile:p-1">{item.product_type}</td>
-                  <td className="text-center border-r mobile:p-1">
-                    <input
-                      type="number"
-                      value={getEffectivePrice(item)}
-                      onChange={(e) =>
-                        updatePrice(item.id, item.product_type, Number.parseFloat(e.target.value) || 0, isModal)
-                      }
-                      min="0"
-                      step="1"
-                      className="w-20 text-center border border-gray-300 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-600 mobile:w-16 mobile:text-xs"
-                    />
-                  </td>
-                  <td className="text-center border-r mobile:p-1">
-                    <input
-                      type="number"
-                      value={item.discount}
-                      onChange={(e) =>
-                        updateDiscount(item.id, item.product_type, Number.parseFloat(e.target.value) || 0, isModal)
-                      }
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      className="w-20 text-center bg-transparent border border-gray-300 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-600 mobile:w-16 mobile:text-xs"
-                    />
-                  </td>
-                  <td className="text-center border-r mobile:p-1">
-                    <input
-                      type="number"
-                      value={item.quantity}
-                      onChange={(e) =>
-                        updateQuantity(item.id, item.product_type, Number.parseInt(e.target.value) || 0, isModal)
-                      }
-                      onKeyDown={(e) => handleQuantityKeyDown(e, item.id, item.product_type)}
-                      min="0"
-                      ref={(el) => (quantityInputRefs.current[`${item.id}-${item.product_type}`] = el)}
-                      className="w-16 text-center border border-gray-300 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-600 mobile:w-12 mobile:text-xs"
-                    />
-                  </td>
-                  <td className="text-center border-r mobile:p-1">
-                    ₹{Math.round(getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity).toFixed(2)}
-                  </td>
-                  <td className="text-center border-r mobile:p-1">
-                    <button
-                      onClick={() => removeFromCart(item.id, item.product_type, isModal)}
-                      className="text-red-600 hover:text-red-800 font-bold mobile:text-xs"
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="7" className="p-4 text-center text-gray-500 dark:text-gray-100 mobile:p-2 mobile:text-xs">
-                  Cart is empty
-                </td>
-              </tr>
-            )}
-          </tbody>
-          {cart.length > 0 && (
-            <tfoot>
-              {[
-                { label: 'Net Rate', value: `₹${calculateNetRate(cart)}` },
-                { label: 'You Save', value: `₹${calculateYouSave(cart)}` },
-                { label: 'Processing Fee (1%)', value: `₹${calculateProcessingFee(cart, additionalDiscount)}` },
-                additionalDiscount > 0 && {
-                  label: 'Additional Discount',
-                  value: `${additionalDiscount.toFixed(2)}%`,
-                },
-                { label: 'Total', value: `₹${calculateTotal(cart, additionalDiscount)}` },
-              ]
-                .filter(Boolean)
-                .map(({ label, value }) => (
-                  <tr key={label} className="dark:text-white">
-                    <td colSpan="5" className="text-center font-bold mobile:p-1 text-xl mobile:text-base">
-                      {label}
-                    </td>
-                    <td colSpan="2" className="text-center font-bold mobile:p-1 text-xl mobile:text-base">
-                      {value}
-                    </td>
-                  </tr>
-                ))}
-            </tfoot>
-          )}
-        </table>
-      </div>
-
-      {/* Camera Capture Modal */}
-      <Modal
-        isOpen={cameraOpen}
-        onRequestClose={handleCloseCamera}
-        className="fixed inset-0 flex items-center justify-center p-4"
-        overlayClassName="fixed inset-0 bg-black/50"
-      >
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full relative mobile:p-4">
-          <button
-            onClick={handleCloseCamera}
-            className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100 mobile:text-sm"
-          >
-            ×
-          </button>
-          <h2 className="text-xl font-semibold text-center mb-4 mobile:text-base">Scan Product Number</h2>
-
-          {scanError && (
-            <div className={`px-4 py-2 rounded mb-4 text-center ${scanError.includes('successfully') ? 'bg-green-100 border border-green-400 text-green-700' : 'bg-red-100 border border-red-400 text-red-700'} mobile:text-sm`}>
-              {scanError}
-            </div>
-          )}
-
-          <div className="flex flex-col items-center space-y-4">
-            {/* Webcam Component */}
-            <div className="relative">
-              <Webcam
-                audio={false}
-                ref={webcamRef}
-                screenshotFormat="image/jpeg"
-                videoConstraints={{
-                  width: 640,
-                  height: 480,
-                  facingMode: 'environment'
-                }}
-                className="w-full h-64 bg-black rounded-lg object-cover mobile:h-48"
-              />
-              {isProcessing && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 rounded-lg">
-                  <div className="text-white text-center">
-                    <svg className="animate-spin h-8 w-8 mx-auto mb-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <p className="text-sm">{isScanning ? 'Scanning...' : 'Processing...'}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Capture Button */}
-            <button
-              onClick={captureImage}
-              disabled={isProcessing || isScanning}
-              className={`px-6 py-2 rounded-lg font-bold text-white ${
-                isProcessing || isScanning 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-blue-600 hover:bg-blue-700'
-              }`}
-              style={styles.button}
-            >
-              {isScanning ? 'Scanning...' : 'Capture & Scan'}
-            </button>
-
-            {/* Manual Input Fallback */}
-            <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Or enter number manually:
-              </label>
-              <input
-                type="text"
-                placeholder="Enter serial number and press Enter"
-                onKeyDown={handleManualNumberInput}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                style={styles.input}
-                disabled={isProcessing || isScanning}
-              />
-            </div>
-
-            {/* Captured Image Preview (if any) */}
-            {capturedImage && (
-              <div className="w-full max-w-xs">
-                <p className="text-sm text-gray-600 mb-2 text-center">Captured Image:</p>
-                <img src={capturedImage} alt="Captured" className="w-full h-32 object-cover rounded-lg" />
-              </div>
-            )}
-          </div>
-
-          {/* Instructions */}
-          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-            <p className="text-sm text-gray-700 dark:text-gray-300 text-center mobile:text-xs">
-              Point camera at product sticker and tap "Capture & Scan"
-            </p>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 };
 
-// FormFields component
 const FormFields = ({
-  isEdit,
-  customers,
-  modalSelectedCustomer,
-  setModalSelectedCustomer,
-  modalCart,
-  setModalCart,
-  products,
-  modalSelectedProduct,
-  setModalSelectedProduct,
-  addToCart,
-  updateQuantity,
-  updateDiscount,
-  updatePrice,
-  removeFromCart,
-  calculateNetRate,
-  calculateYouSave,
-  calculateProcessingFee,
-  calculateTotal,
-  handleSubmit,
-  closeModal,
-  styles,
-  modalAdditionalDiscount,
-  setModalAdditionalDiscount,
-  modalChangeDiscount,
-  setModalChangeDiscount,
-  openNewProductModal,
-  modalLastAddedProduct,
-  setModalLastAddedProduct,
+  isEdit, customers, modalSelectedCustomer, setModalSelectedCustomer,
+  modalCart, setModalCart, products, modalSelectedProduct, setModalSelectedProduct,
+  addToCart, updateQuantity, updateDiscount, updatePrice, removeFromCart,
+  calculateNetRate, calculateYouSave, calculateProcessingFee, calculateTotal,
+  handleSubmit, closeModal, modalAdditionalDiscount, setModalAdditionalDiscount,
+  modalChangeDiscount, setModalChangeDiscount, openNewProductModal,
+  modalLastAddedProduct, setModalLastAddedProduct,
 }) => (
-  <div className="space-y-6">
-    <div className="flex flex-col items-center mobile:w-full">
-      <label
-        htmlFor="modal-customer-select"
-        className="text-lg font-semibold text-gray-700 dark:text-gray-100 mb-2 mobile:text-base"
-      >
-        Select Customer
+  <div className="space-y-5">
+    <div>
+      <label className="block text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2">
+        Customer
       </label>
       <Select
-        id="modal-customer-select"
         value={modalSelectedCustomer}
         onChange={setModalSelectedCustomer}
         options={customers.map((c) => ({
@@ -709,52 +371,42 @@ const FormFields = ({
         }))}
         placeholder="Search for a customer..."
         isClearable
-        className="mobile:w-full onefifty:w-96 hundred:w-96"
-        classNamePrefix="react-select"
         styles={selectStyles}
       />
     </div>
     <QuotationTableErrorBoundary>
       <QuotationTable
-        cart={modalCart}
-        setCart={setModalCart}
-        setModalCart={setModalCart}
-        products={products || []}
-        selectedProduct={modalSelectedProduct}
-        setSelectedProduct={setModalSelectedProduct}
-        addToCart={addToCart}
-        updateQuantity={updateQuantity}
-        updateDiscount={updateDiscount}
-        updatePrice={updatePrice}
-        removeFromCart={removeFromCart}
-        calculateNetRate={calculateNetRate}
-        calculateYouSave={calculateYouSave}
-        calculateProcessingFee={calculateProcessingFee}
-        calculateTotal={calculateTotal}
-        styles={styles}
-        isModal={true}
-        additionalDiscount={modalAdditionalDiscount}
-        setAdditionalDiscount={setModalAdditionalDiscount}
-        changeDiscount={modalChangeDiscount}
-        setChangeDiscount={setModalChangeDiscount}
+        cart={modalCart} setCart={setModalCart} setModalCart={setModalCart}
+        products={products || []} selectedProduct={modalSelectedProduct}
+        setSelectedProduct={setModalSelectedProduct} addToCart={addToCart}
+        updateQuantity={updateQuantity} updateDiscount={updateDiscount}
+        updatePrice={updatePrice} removeFromCart={removeFromCart}
+        calculateNetRate={calculateNetRate} calculateYouSave={calculateYouSave}
+        calculateProcessingFee={calculateProcessingFee} calculateTotal={calculateTotal}
+        styles={styles} isModal={true}
+        additionalDiscount={modalAdditionalDiscount} setAdditionalDiscount={setModalAdditionalDiscount}
+        changeDiscount={modalChangeDiscount} setChangeDiscount={setModalChangeDiscount}
         openNewProductModal={openNewProductModal}
-        lastAddedProduct={modalLastAddedProduct}
-        setLastAddedProduct={setModalLastAddedProduct}
+        lastAddedProduct={modalLastAddedProduct} setLastAddedProduct={setModalLastAddedProduct}
       />
     </QuotationTableErrorBoundary>
-    <div className="flex justify-end space-x-3">
+    <div className="flex justify-end gap-2.5 pt-2">
       <button
-        type="button"
         onClick={closeModal}
-        className="rounded-md bg-gray-600 px-4 py-2 text-sm text-white hover:bg-gray-700"
+        className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors"
       >
         Cancel
       </button>
       <button
-        type="button"
         onClick={handleSubmit}
         disabled={!modalSelectedCustomer || !modalCart.length}
-        className={`rounded-md px-4 py-2 text-sm text-white ${!modalSelectedCustomer || !modalCart.length ? "bg-gray-400 cursor-not-allowed" : isEdit ? "bg-yellow-600 hover:bg-yellow-700" : "bg-green-600 hover:bg-green-700"}`}
+        className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all duration-200
+          ${!modalSelectedCustomer || !modalCart.length
+            ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+            : isEdit
+              ? "bg-gradient-to-br from-amber-500 to-amber-400 shadow-lg shadow-amber-200 hover:from-amber-600 hover:to-amber-500"
+              : "bg-gradient-to-br from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500"
+          }`}
       >
         {isEdit ? "Update Quotation" : "Confirm Booking"}
       </button>
@@ -762,22 +414,17 @@ const FormFields = ({
   </div>
 );
 
-// New Product Modal
 const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProductData }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localProductData, setLocalProductData] = useState(newProductData);
 
-  useEffect(() => {
-    setLocalProductData(newProductData);
-  }, [newProductData]);
+  useEffect(() => { setLocalProductData(newProductData); }, [newProductData]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     const updatedData = {
       ...localProductData,
-      [name]: ['price', 'discount', 'quantity'].includes(name)
-        ? value === '' ? '' : Number.parseFloat(value) || 0
-        : value,
+      [name]: ['price', 'discount', 'quantity'].includes(name) ? (value === '' ? '' : parseFloat(value) || 0) : value,
     };
     setLocalProductData(updatedData);
     setNewProductData(updatedData);
@@ -785,63 +432,57 @@ const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProd
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    try {
-      await onSubmit(localProductData);
-      onClose();
-    } catch (err) {
-      console.error('NewProductModal: Submission error:', err);
-    } finally {
-      setIsSubmitting(false);
-    }
+    try { await onSubmit(localProductData); onClose(); }
+    catch (err) { console.error('NewProductModal error:', err); }
+    finally { setIsSubmitting(false); }
   };
 
+  const fields = [
+    { name: "productname", label: "Product Name", type: "text", placeholder: "e.g. Ground Chakkar", required: true, full: true },
+    { name: "price", label: "Price (₹)", type: "number", placeholder: "0", min: 0, step: 1, required: true },
+    { name: "discount", label: "Discount (%)", type: "number", placeholder: "0", min: 0, max: 100, step: 0.01 },
+    { name: "quantity", label: "Quantity", type: "number", placeholder: "1", min: 1, step: 1, required: true },
+    { name: "per", label: "Unit", type: "text", placeholder: "Box / Piece" },
+    { name: "product_type", label: "Product Type", type: "text", placeholder: "custom", required: true },
+  ];
+
+  const isValid = localProductData.productname && localProductData.price !== '' && localProductData.quantity !== '' && localProductData.product_type;
+
   return (
-    <Modal
-      isOpen={isOpen}
-      onRequestClose={onClose}
-      className="fixed inset-0 flex items-center justify-center p-4"
-      overlayClassName="fixed inset-0 bg-black/50"
-    >
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full mobile:p-4">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6 text-center">Add New Product</h2>
-        <div className="space-y-4">
-          {[
-            { name: "productname", label: "Product Name *", type: "text", placeholder: "Enter product name", required: true },
-            { name: "price", label: "Price (₹) *", type: "number", placeholder: "Enter price", min: 0, step: 1, required: true },
-            { name: "discount", label: "Discount (%)", type: "number", placeholder: "Enter discount", min: 0, max: 100, step: 0.01 },
-            { name: "quantity", label: "Quantity *", type: "number", placeholder: "Enter quantity", min: 1, step: 1, required: true },
-            { name: "per", label: "Unit (e.g., Box, Unit)", type: "text", placeholder: "Enter unit" },
-            { name: "product_type", label: "Product Type *", type: "text", placeholder: "Enter product type", required: true },
-          ].map(({ name, label, type, placeholder, min, max, step, required }) => (
-            <div key={name} className="flex flex-col">
-              <label className="text-sm font-semibold text-gray-700 dark:text-gray-100 mb-1">{label}</label>
+    <Modal isOpen={isOpen} onRequestClose={onClose} className="fixed inset-0 flex items-center justify-center p-4" overlayClassName="fixed inset-0 bg-black/50">
+      <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl">
+        <h2 className="text-xl font-extrabold text-slate-800 mb-6 text-center">✦ Add Custom Product</h2>
+        <div className="grid grid-cols-2 gap-3.5">
+          {fields.map(({ name, label, type, placeholder, min, max, step, required, full }) => (
+            <div key={name} className={full ? "col-span-2" : "col-span-1"}>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+              </label>
               <input
-                name={name}
-                type={type}
-                value={localProductData[name] || ''}
-                onChange={handleInputChange}
+                name={name} type={type} value={localProductData[name] || ''} onChange={handleInputChange}
                 placeholder={placeholder}
-                className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                style={styles.input}
-                {...{ min, max, step, required }}
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+                {...(min !== undefined ? { min } : {})} {...(max !== undefined ? { max } : {})} {...(step !== undefined ? { step } : {})}
               />
             </div>
           ))}
         </div>
-        <div className="flex justify-end space-x-3 mt-6">
+        <div className="flex gap-2.5 mt-6 justify-end">
           <button
-            onClick={onClose}
-            disabled={isSubmitting}
-            className={`rounded-md px-4 py-2 text-sm text-white ${isSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-gray-600 hover:bg-gray-700"}`}
+            onClick={onClose} disabled={isSubmitting}
+            className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors"
           >
             Cancel
           </button>
           <button
-            onClick={handleSubmit}
-            disabled={isSubmitting || !localProductData.productname || localProductData.price === '' || localProductData.quantity === '' || !localProductData.product_type}
-            className={`rounded-md px-4 py-2 text-sm text-white ${isSubmitting || !localProductData.productname || localProductData.price === '' || localProductData.quantity === '' || !localProductData.product_type ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`}
+            onClick={handleSubmit} disabled={isSubmitting || !isValid}
+            className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all duration-200
+              ${isSubmitting || !isValid
+                ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                : "bg-gradient-to-br from-emerald-500 to-emerald-400 shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-500"
+              }`}
           >
-            Add Product
+            Add to Cart
           </button>
         </div>
       </div>
@@ -849,32 +490,24 @@ const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProd
   );
 };
 
-// Cancel Confirmation Modal
 const CancelConfirmModal = ({ isOpen, onClose, onConfirm, quotationId }) => (
-  <Modal
-    isOpen={isOpen}
-    onRequestClose={onClose}
-    className="fixed inset-0 flex items-center justify-center p-4"
-    overlayClassName="fixed inset-0 bg-black/50"
-  >
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mobile:p-4">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-        Confirm Cancellation
-      </h3>
-      <p className="text-gray-700 dark:text-gray-200 mb-6">
-        Are you sure you want to cancel quotation <strong>{quotationId}</strong>?
-        This action cannot be undone.
+  <Modal isOpen={isOpen} onRequestClose={onClose} className="fixed inset-0 flex items-center justify-center p-4" overlayClassName="fixed inset-0 bg-black/50">
+    <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl text-center">
+      <div className="text-5xl mb-4">⚠️</div>
+      <h3 className="text-lg font-extrabold text-slate-800 mb-2.5">Cancel Quotation?</h3>
+      <p className="text-slate-500 text-sm mb-6">
+        Are you sure you want to cancel <strong className="text-slate-800">{quotationId}</strong>? This cannot be undone.
       </p>
-      <div className="flex justify-end gap-3">
+      <div className="flex gap-2.5 justify-center">
         <button
           onClick={onClose}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+          className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors"
         >
-          No, Keep It
+          Keep It
         </button>
         <button
           onClick={onConfirm}
-          className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+          className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-red-500 to-red-400 shadow-lg shadow-red-200 hover:from-red-600 hover:to-red-500 transition-all duration-200"
         >
           Yes, Cancel
         </button>
@@ -883,33 +516,24 @@ const CancelConfirmModal = ({ isOpen, onClose, onConfirm, quotationId }) => (
   </Modal>
 );
 
-// PDF Download Confirm Modal
 const PDFDownloadConfirmModal = ({ isOpen, onClose, onYes, fileName }) => (
-  <Modal
-    isOpen={isOpen}
-    onRequestClose={onClose}
-    className="fixed inset-0 flex items-center justify-center p-4"
-    overlayClassName="fixed inset-0 bg-black/50"
-  >
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mobile:p-4">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-        Download PDF
-      </h3>
-      <p className="text-gray-700 dark:text-gray-200 mb-6">
-        Quotation created/updated successfully. Do you want to download the PDF now?
-      </p>
-      <div className="flex justify-end gap-3">
+  <Modal isOpen={isOpen} onRequestClose={onClose} className="fixed inset-0 flex items-center justify-center p-4" overlayClassName="fixed inset-0 bg-black/50">
+    <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl text-center">
+      <div className="text-5xl mb-4">📄</div>
+      <h3 className="text-lg font-extrabold text-slate-800 mb-2.5">Download PDF?</h3>
+      <p className="text-slate-500 text-sm mb-6">Quotation created successfully. Would you like to download the PDF now?</p>
+      <div className="flex gap-2.5 justify-center">
         <button
           onClick={onClose}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+          className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors"
         >
-          No
+          No Thanks
         </button>
         <button
           onClick={onYes}
-          className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
+          className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500 transition-all duration-200"
         >
-          Yes, Download
+          Download PDF
         </button>
       </div>
     </div>
@@ -943,14 +567,7 @@ export default function Direct() {
   const [modalAdditionalDiscount, setModalAdditionalDiscount] = useState(0);
   const [modalChangeDiscount, setModalChangeDiscount] = useState(0);
   const [newProductModalIsOpen, setNewProductModalIsOpen] = useState(false);
-  const [newProductData, setNewProductData] = useState({
-    productname: '',
-    price: '',
-    discount: 0,
-    quantity: 1,
-    per: '',
-    product_type: 'custom',
-  });
+  const [newProductData, setNewProductData] = useState({ productname: '', price: '', discount: 0, quantity: 1, per: '', product_type: 'custom' });
   const [newProductIsForModal, setNewProductIsForModal] = useState(false);
   const [lastAddedProduct, setLastAddedProduct] = useState(null);
   const [modalLastAddedProduct, setModalLastAddedProduct] = useState(null);
@@ -963,48 +580,24 @@ export default function Direct() {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [pdfFileName, setPdfFileName] = useState("");
 
-  // PDF download helper
   const triggerPdfDownload = (url, fileName) => {
     const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    link.href = url; link.setAttribute('download', fileName);
+    document.body.appendChild(link); link.click();
+    document.body.removeChild(link); window.URL.revokeObjectURL(url);
   };
+  const handlePdfYes = () => { if (pdfUrl && pdfFileName) triggerPdfDownload(pdfUrl, pdfFileName); setPdfConfirmOpen(false); setPdfUrl(null); setPdfFileName(""); };
+  const handlePdfNo = () => { if (pdfUrl) window.URL.revokeObjectURL(pdfUrl); setPdfConfirmOpen(false); setPdfUrl(null); setPdfFileName(""); };
 
-  const handlePdfYes = () => {
-    if (pdfUrl && pdfFileName) triggerPdfDownload(pdfUrl, pdfFileName);
-    setPdfConfirmOpen(false);
-    setPdfUrl(null);
-    setPdfFileName("");
-  };
-
-  const handlePdfNo = () => {
-    if (pdfUrl) window.URL.revokeObjectURL(pdfUrl);
-    setPdfConfirmOpen(false);
-    setPdfUrl(null);
-    setPdfFileName("");
-  };
-
-  // Fetch quotations
   const fetchQuotations = async () => {
     try {
       const quotationsResponse = await axios.get(`${API_BASE_URL}/api/direct/quotations`);
       const data = Array.isArray(quotationsResponse.data) ? quotationsResponse.data : [];
-      const validQuotations = data.filter(
-        (q) => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id)
-      );
-      setQuotations(validQuotations);
-      setFilteredQuotations(validQuotations);
-    } catch (err) {
-      console.error("Failed to fetch quotations:", err.message);
-      setError(`Failed to fetch quotations: ${err.message}`);
-    }
+      const validQuotations = data.filter(q => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id));
+      setQuotations(validQuotations); setFilteredQuotations(validQuotations);
+    } catch (err) { console.error("Failed to fetch quotations:", err.message); setError(`Failed to fetch quotations: ${err.message}`); }
   };
 
-  // Initial data fetch
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -1014,110 +607,83 @@ export default function Direct() {
           axios.get(`${API_BASE_URL}/api/direct/aproducts`),
           axios.get(`${API_BASE_URL}/api/direct/quotations`),
         ]);
-
-        const sortedCustomers = Array.isArray(customersResponse.data)
-          ? customersResponse.data.sort((a, b) => (b.id || 0) - (a.id || 0))
-          : [];
-
-        const validProducts = Array.isArray(productsResponse.data)
-          ? productsResponse.data.filter(
-              (p) =>
-                p != null &&
-                typeof p === 'object' &&
-                typeof p.id !== 'undefined' &&
-                typeof p.product_type === 'string' &&
-                typeof p.productname === 'string'
-            )
-          : [];
-
-        setCustomers(sortedCustomers);
-        setProducts(validProducts);
+        const sortedCustomers = Array.isArray(customersResponse.data) ? customersResponse.data.sort((a, b) => (b.id || 0) - (a.id || 0)) : [];
+        const validProducts = Array.isArray(productsResponse.data) ? productsResponse.data.filter(p => p != null && typeof p === 'object' && typeof p.id !== 'undefined' && typeof p.product_type === 'string' && typeof p.productname === 'string') : [];
+        setCustomers(sortedCustomers); setProducts(validProducts);
         const data = Array.isArray(quotationsResponse.data) ? quotationsResponse.data : [];
-        const validQuotations = data.filter(
-          (q) => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id)
-        );
-        setQuotations(validQuotations);
-        setFilteredQuotations(validQuotations);
-      } catch (err) {
-        console.error('Fetch data error:', err);
-        setError(`Failed to fetch data: ${err.message}`);
-        setProducts([]);
-      } finally {
-        setLoading(false);
-      }
+        const validQuotations = data.filter(q => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id));
+        setQuotations(validQuotations); setFilteredQuotations(validQuotations);
+      } catch (err) { console.error('Fetch data error:', err); setError(`Failed to fetch data: ${err.message}`); setProducts([]); }
+      finally { setLoading(false); }
     };
     fetchData();
     const intervalId = setInterval(fetchQuotations, 30000);
     return () => clearInterval(intervalId);
   }, []);
 
-  // Search
-  const handleSearch = useCallback(
-    debounce((query) => {
-      const lowerQuery = query.toLowerCase();
-      const filtered = quotations.filter(
-        (q) =>
-          q.quotation_id.toLowerCase().includes(lowerQuery) ||
-          (q.customer_name || '').toLowerCase().includes(lowerQuery) ||
-          q.status.toLowerCase().includes(lowerQuery)
-      );
-      setFilteredQuotations(filtered);
-      setCurrentPage(1);
-    }, 300),
-    [quotations]
-  );
+  const handleSearch = useCallback(debounce((query) => {
+    const lowerQuery = query.toLowerCase();
+    const filtered = quotations.filter(q => q.quotation_id.toLowerCase().includes(lowerQuery) || (q.customer_name || '').toLowerCase().includes(lowerQuery) || q.status.toLowerCase().includes(lowerQuery));
+    setFilteredQuotations(filtered); setCurrentPage(1);
+  }, 300), [quotations]);
 
-  const handleSearchChange = (e) => {
-    const query = e.target.value;
-    setSearchQuery(query);
-    handleSearch(query);
-  };
+  const handleSearchChange = (e) => { const query = e.target.value; setSearchQuery(query); handleSearch(query); };
 
   const downloadCustomersExcel = () => {
     try {
       const workbook = XLSX.utils.book_new();
-      const customerGroups = {
-        Customer: customers.filter(c => c.customer_type === 'Customer'),
-        Agent: customers.filter(c => c.customer_type === 'Agent'),
-        'Customer of Agent': customers.filter(c => c.customer_type === 'Customer of Selected Agent'),
-      };
-
+      const customerGroups = { Customer: customers.filter(c => c.customer_type === 'Customer'), Agent: customers.filter(c => c.customer_type === 'Agent'), 'Customer of Agent': customers.filter(c => c.customer_type === 'Customer of Selected Agent') };
       for (const [type, group] of Object.entries(customerGroups)) {
         if (group.length === 0) continue;
-        const data = group.map(customer => ({
-          ID: customer.id || 'N/A',
-          Name: customer.name || 'N/A',
-          'Customer Type': customer.customer_type || 'User',
-          ...(type === 'Customer of Agent' ? { 'Agent Name': customer.agent_name || 'N/A' } : {}),
-          'Mobile Number': customer.mobile_number || 'N/A',
-          Email: customer.email || 'N/A',
-          Address: customer.address || 'N/A',
-          District: customer.district || 'N/A',
-          State: customer.state || 'N/A',
-        }));
+        const data = group.map(customer => ({ ID: customer.id || 'N/A', Name: customer.name || 'N/A', 'Customer Type': customer.customer_type || 'User', ...(type === 'Customer of Agent' ? { 'Agent Name': customer.agent_name || 'N/A' } : {}), 'Mobile Number': customer.mobile_number || 'N/A', Email: customer.email || 'N/A', Address: customer.address || 'N/A', District: customer.district || 'N/A', State: customer.state || 'N/A' }));
         const worksheet = XLSX.utils.json_to_sheet(data);
         XLSX.utils.book_append_sheet(workbook, worksheet, type);
       }
       XLSX.writeFile(workbook, 'customers_export.xlsx');
+    } catch (err) { console.error('Failed to download customers Excel:', err); setError(`Failed to download customers Excel: ${err.message}`); }
+  };
+
+  const exportToExcel = () => {
+    try {
+      const workbook = XLSX.utils.book_new();
+      const customerGroups = { Customer: customers.filter(c => c.customer_type === "Customer"), Agent: customers.filter(c => c.customer_type === "Agent"), "Customer of Agent": customers.filter(c => c.customer_type === "Customer of Selected Agent") };
+      let hasAnyData = false;
+      for (const [type, group] of Object.entries(customerGroups)) {
+        if (group.length === 0) continue; hasAnyData = true;
+        const data = group.map(customer => ({ ID: customer.id || "N/A", Name: customer.name || "N/A", "Customer Type": customer.customer_type || "User", ...(type === "Customer of Agent" ? { "Agent Name": customer.agent_name || "N/A" } : {}), "Mobile Number": customer.mobile_number || "N/A", Email: customer.email || "N/A", Address: customer.address || "N/A", District: customer.district || "N/A", State: customer.state || "N/A" }));
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(workbook, worksheet, type);
+      }
+      if (!hasAnyData) { setError("No customer data available to export"); return; }
+      XLSX.writeFile(workbook, "customers_export.xlsx");
+      setSuccessMessage("Customers exported successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 4000);
+    } catch (err) { console.error("Failed to export customers:", err); setError(`Failed to export customers: ${err.message}`); }
+  };
+
+  const exportQuotationsToExcel = async () => {
+    setError(""); setSuccessMessage("");
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/direct/export-quotations-excel`, { responseType: "blob", timeout: 300000 });
+      const contentDisposition = response.headers["content-disposition"];
+      const filename = contentDisposition?.split("filename=")[1]?.replace(/["']/g, "") || `MadhunishaCrackers_Quotations_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a"); link.href = url; link.setAttribute("download", filename); document.body.appendChild(link); link.click(); document.body.removeChild(link); window.URL.revokeObjectURL(url);
+      setSuccessMessage("Quotations exported successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 4000);
     } catch (err) {
-      console.error('Failed to download customers Excel:', err);
-      setError(`Failed to download customers Excel: ${err.message}`);
+      console.error("Export quotations failed:", err);
+      let message = "Failed to export quotations. Please try again.";
+      if (err.code === "ECONNABORTED") message = "Export timed out. The file may be very large.";
+      else if (err.response?.status === 500) message = "Server error during export.";
+      setError(message);
     }
   };
 
-  // Pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentQuotations = filteredQuotations.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredQuotations.length / itemsPerPage);
+  const paginate = (pageNumber) => { if (pageNumber >= 1 && pageNumber <= totalPages) setCurrentPage(pageNumber); };
 
-  const paginate = (pageNumber) => {
-    if (pageNumber >= 1 && pageNumber <= totalPages) {
-      setCurrentPage(pageNumber);
-    }
-  };
-
-  // Cart helpers
   const addToCart = (isModal = false, customProduct = null, directProduct = null) => {
     const targetCart = isModal ? modalCart : cart;
     const setTargetCart = isModal ? setModalCart : setCart;
@@ -1125,848 +691,388 @@ export default function Direct() {
     const setTargetSelectedProduct = isModal ? setModalSelectedProduct : setSelectedProduct;
     const targetDiscount = isModal ? modalChangeDiscount : changeDiscount;
     const setTargetLastAddedProduct = isModal ? setModalLastAddedProduct : setLastAddedProduct;
-
-    if (!customProduct && !targetSelectedProduct && !directProduct) {
-      setError("Please select a product");
-      return;
-    }
-
+    if (!customProduct && !targetSelectedProduct && !directProduct) { setError("Please select a product"); return; }
     let product;
     if (customProduct) {
-      // Handle custom products (from New Product Modal)
-      product = {
-        ...customProduct,
-        id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        product_type: customProduct.product_type || 'custom',
-        price: Math.round(Number(customProduct.price) || 0),
-        quantity: Number.parseInt(customProduct.quantity) || 1,
-        discount: Number.parseFloat(customProduct.discount) || targetDiscount,
-        initialDiscount: Number.parseFloat(customProduct.discount) || targetDiscount,
-        per: customProduct.per || 'Unit',
-      };
+      product = { ...customProduct, id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, product_type: customProduct.product_type || 'custom', price: Math.round(Number(customProduct.price) || 0), quantity: parseInt(customProduct.quantity) || 1, discount: parseFloat(customProduct.discount) || targetDiscount, initialDiscount: parseFloat(customProduct.discount) || targetDiscount, per: customProduct.per || 'Unit' };
     } else if (directProduct) {
-      // Handle products from scanning or grid selection
-      product = {
-        ...directProduct,
-        id: directProduct.id, // Use the existing integer ID
-        price: Math.round(Number(directProduct.price) || 0),
-        quantity: 1,
-        discount: Number.parseFloat(directProduct.discount) || targetDiscount,
-        initialDiscount: Number.parseFloat(directProduct.discount) || 0,
-        per: directProduct.per || 'Unit',
-      };
+      product = { ...directProduct, id: directProduct.id, price: Math.round(Number(directProduct.price) || 0), quantity: 1, discount: parseFloat(directProduct.discount) || targetDiscount, initialDiscount: parseFloat(directProduct.discount) || 0, per: directProduct.per || 'Unit' };
     } else {
-      // Handle products selected via dropdown
       const [id, type] = targetSelectedProduct.value.split("-");
-      product = products.find((p) => p.id.toString() === id && p.product_type === type);
-      if (!product) {
-        setError("Product not found");
-        return;
-      }
-      product = {
-        ...product,
-        id: product.id, // Use the existing integer ID
-        price: Math.round(Number(product.price) || 0),
-        quantity: 1,
-        discount: Number.parseFloat(product.discount) || targetDiscount,
-        initialDiscount: Number.parseFloat(product.discount) || 0,
-        per: product.per || 'Unit',
-      };
+      product = products.find(p => p.id.toString() === id && p.product_type === type);
+      if (!product) { setError("Product not found"); return; }
+      product = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: 1, discount: parseFloat(product.discount) || targetDiscount, initialDiscount: parseFloat(product.discount) || 0, per: product.per || 'Unit' };
     }
-
-    setTargetCart((prev) => {
-      const exists = prev.find((item) => item.id === product.id && item.product_type === product.product_type);
-      return exists
-        ? prev.map((item) =>
-            item.id === product.id && item.product_type === product.product_type
-              ? { ...item, quantity: item.quantity + 1 }
-              : item
-          )
-        : [product, ...prev];
+    setTargetCart(prev => {
+      const exists = prev.find(item => item.id === product.id && item.product_type === product.product_type);
+      return exists ? prev.map(item => item.id === product.id && item.product_type === product.product_type ? { ...item, quantity: item.quantity + 1 } : item) : [product, ...prev];
     });
     setTargetSelectedProduct(null);
     setTargetLastAddedProduct({ id: product.id, product_type: product.product_type });
     setError("");
   };
 
-  const updateQuantity = (id, type, quantity, isModal = false) => {
-    const setTargetCart = isModal ? setModalCart : setCart;
-    setTargetCart((prev) =>
-      prev.map((item) =>
-        item.id === id && item.product_type === type ? { ...item, quantity: quantity < 0 ? 0 : quantity } : item
-      )
-    );
-  };
+  const updateQuantity = (id, type, quantity, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, quantity: quantity < 0 ? 0 : quantity } : item)); };
+  const updateDiscount = (id, type, discount, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, discount: discount < 0 ? 0 : discount > 100 ? 100 : discount } : item)); };
+  const updatePrice = (id, type, price, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, price: price < 0 ? 0 : price } : item)); };
+  const removeFromCart = (id, type, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.filter(item => !(item.id === id && item.product_type === type))); };
 
-  const updateDiscount = (id, type, discount, isModal = false) => {
-    const setTargetCart = isModal ? setModalCart : setCart;
-    setTargetCart((prev) =>
-      prev.map((item) =>
-        item.id === id && item.product_type === type
-          ? { ...item, discount: discount < 0 ? 0 : discount > 100 ? 100 : discount }
-          : item
-      )
-    );
-  };
+  const calculateNetRate = (targetCart = []) => targetCart.reduce((total, item) => total + getEffectivePrice(item) * item.quantity, 0).toFixed(2);
+  const calculateYouSave = (targetCart = []) => targetCart.reduce((total, item) => total + getEffectivePrice(item) * (item.discount / 100) * item.quantity, 0).toFixed(2);
+  const calculateProcessingFee = (targetCart = [], additionalDiscount = 0) => { const subtotal = targetCart.reduce((total, item) => total + getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity, 0); return (subtotal * (1 - additionalDiscount / 100) * 0.03).toFixed(2); };
+  const calculateTotal = (targetCart = [], additionalDiscount = 0) => { const subtotal = targetCart.reduce((total, item) => total + getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity, 0); const discountedSubtotal = subtotal * (1 - additionalDiscount / 100); return (discountedSubtotal + discountedSubtotal * 0.01).toFixed(2); };
 
-  const updatePrice = (id, type, price, isModal = false) => {
-    const setTargetCart = isModal ? setModalCart : setCart;
-    setTargetCart((prev) =>
-      prev.map((item) =>
-        item.id === id && item.product_type === type ? { ...item, price: price < 0 ? 0 : price } : item
-      )
-    );
-  };
-
-  const removeFromCart = (id, type, isModal = false) => {
-    const setTargetCart = isModal ? setModalCart : setCart;
-    setTargetCart((prev) => prev.filter((item) => !(item.id === id && item.product_type === type)));
-  };
-
-  const calculateNetRate = (targetCart = []) =>
-    targetCart.reduce((total, item) => total + getEffectivePrice(item) * item.quantity, 0).toFixed(2);
-
-  const calculateYouSave = (targetCart = []) =>
-    targetCart.reduce((total, item) => total + getEffectivePrice(item) * (item.discount / 100) * item.quantity, 0).toFixed(2);
-
-  const calculateProcessingFee = (targetCart = [], additionalDiscount = 0) => {
-    const subtotal = targetCart.reduce(
-      (total, item) => total + getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity,
-      0
-    );
-    const discountedSubtotal = subtotal * (1 - additionalDiscount / 100);
-    return (discountedSubtotal * 0.03).toFixed(2);
-  };
-
-  const calculateTotal = (targetCart = [], additionalDiscount = 0) => {
-    const subtotal = targetCart.reduce(
-      (total, item) => total + getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity,
-      0
-    );
-    const discountedSubtotal = subtotal * (1 - additionalDiscount / 100);
-    const processingFee = discountedSubtotal * 0.01;
-    return (discountedSubtotal + processingFee).toFixed(2);
-  };
-
-  // CREATE QUOTATION
   const createQuotation = async () => {
     if (!selectedCustomer || !cart.length) return setError("Customer and products are required");
     if (cart.some(i => i.quantity === 0)) return setError("Please remove products with zero quantity");
-
-    setCreateLoading(true);
-    setError("");
-
+    setCreateLoading(true); setError("");
     const customer = customers.find(c => c.id.toString() === selectedCustomer.value);
     if (!customer) { setCreateLoading(false); return setError("Invalid customer"); }
-
     const quotation_id = `QUO-${Date.now()}`;
     try {
       const subtotal = parseFloat(calculateNetRate(cart)) - parseFloat(calculateYouSave(cart));
       const discountedSubtotal = subtotal * (1 - additionalDiscount / 100);
       const processingFee = discountedSubtotal * 0.03;
-
-      const payload = {
-        customer_id: Number(selectedCustomer.value),
-        quotation_id,
-        products: cart.map(item => ({
-          id: item.id,
-          product_type: item.product_type,
-          productname: item.productname,
-          price: getEffectivePrice(item),
-          discount: parseFloat(item.discount) || 0,
-          quantity: parseInt(item.quantity) || 0,
-          per: item.per || 'Unit',
-          serial_number: item.serial_number || undefined, // Include if backend expects it
-        })),
-        net_rate: parseFloat(calculateNetRate(cart)),
-        you_save: parseFloat(calculateYouSave(cart)),
-        processing_fee: processingFee,
-        total: parseFloat(calculateTotal(cart, additionalDiscount)),
-        promo_discount: 0,
-        additional_discount: parseFloat(additionalDiscount.toFixed(2)),
-        customer_type: customer.customer_type || "User",
-        customer_name: customer.name,
-        address: customer.address,
-        mobile_number: customer.mobile_number,
-        email: customer.email,
-        district: customer.district,
-        state: customer.state,
-        status: "pending",
-      };
-
+      const payload = { customer_id: Number(selectedCustomer.value), quotation_id, products: cart.map(item => ({ id: item.id, product_type: item.product_type, productname: item.productname, price: getEffectivePrice(item), discount: parseFloat(item.discount) || 0, quantity: parseInt(item.quantity) || 0, per: item.per || 'Unit', serial_number: item.serial_number || undefined })), net_rate: parseFloat(calculateNetRate(cart)), you_save: parseFloat(calculateYouSave(cart)), processing_fee: processingFee, total: parseFloat(calculateTotal(cart, additionalDiscount)), promo_discount: 0, additional_discount: parseFloat(additionalDiscount.toFixed(2)), customer_type: customer.customer_type || "User", customer_name: customer.name, address: customer.address, mobile_number: customer.mobile_number, email: customer.email, district: customer.district, state: customer.state, status: "pending" };
       const response = await axios.post(`${API_BASE_URL}/api/direct/quotations`, payload);
       const newQuotationId = response.data.quotation_id;
-      if (!newQuotationId || newQuotationId === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(newQuotationId))
-        throw new Error("Invalid quotation ID returned from server");
-
-      setQuotationId(newQuotationId);
-      setIsQuotationCreated(true);
-      setSuccessMessage("Quotation created successfully!");
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-
+      if (!newQuotationId || newQuotationId === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(newQuotationId)) throw new Error("Invalid quotation ID returned from server");
+      setQuotationId(newQuotationId); setIsQuotationCreated(true);
+      setSuccessMessage("Quotation created successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000);
       setQuotations(prev => [{ ...payload, created_at: new Date().toISOString(), customer_name: customer.name, total: payload.total }, ...prev]);
       setFilteredQuotations(prev => [{ ...payload, created_at: new Date().toISOString(), customer_name: customer.name, total: payload.total }, ...prev]);
-
       const pdfRes = await axios.get(`${API_BASE_URL}/api/direct/quotation/${newQuotationId}`, { responseType: "blob" });
       const blobUrl = window.URL.createObjectURL(new Blob([pdfRes.data]));
       const safeName = (customer.name || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-      const fileName = `${safeName}-${newQuotationId}-quotation.pdf`;
-
-      setPdfUrl(blobUrl);
-      setPdfFileName(fileName);
-      setPdfConfirmOpen(true);
-
-      setCart([]);
-      setSelectedCustomer(null);
-      setSelectedProduct(null);
-      setAdditionalDiscount(0);
-      setChangeDiscount(0);
-      setLastAddedProduct(null);
-      setQuotationId(null);
-      setIsQuotationCreated(false);
-    } catch (err) {
-      console.error("Create quotation error:", err);
-      setError(`Failed to create quotation: ${err.message}`);
-    } finally {
-      setCreateLoading(false);
-    }
+      setPdfUrl(blobUrl); setPdfFileName(`${safeName}-${newQuotationId}-quotation.pdf`); setPdfConfirmOpen(true);
+      setCart([]); setSelectedCustomer(null); setSelectedProduct(null); setAdditionalDiscount(0); setChangeDiscount(0); setLastAddedProduct(null); setQuotationId(null); setIsQuotationCreated(false);
+    } catch (err) { console.error("Create quotation error:", err); setError(`Failed to create quotation: ${err.message}`); }
+    finally { setCreateLoading(false); }
   };
 
-  // EDIT QUOTATION
   const editQuotation = async (quotation = null) => {
     if (quotation) {
-      if (!quotation.quotation_id || quotation.quotation_id === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotation.quotation_id)) {
-        setError("Invalid or missing quotation ID");
-        return;
-      }
-
+      if (!quotation.quotation_id || quotation.quotation_id === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotation.quotation_id)) { setError("Invalid or missing quotation ID"); return; }
       setModalMode("edit");
-      setModalSelectedCustomer({
-        value: quotation.customer_id?.toString(),
-        label: `${quotation.customer_name} (${quotation.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : quotation.customer_type || "User"} - ${quotation.district || "N/A"})`
-      });
-      setQuotationId(quotation.quotation_id);
-      setModalAdditionalDiscount(Number.parseFloat(quotation.additional_discount) || 0);
-      setModalChangeDiscount(0);
+      setModalSelectedCustomer({ value: quotation.customer_id?.toString(), label: `${quotation.customer_name} (${quotation.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : quotation.customer_type || "User"} - ${quotation.district || "N/A"})` });
+      setQuotationId(quotation.quotation_id); setModalAdditionalDiscount(parseFloat(quotation.additional_discount) || 0); setModalChangeDiscount(0);
       try {
         const products = typeof quotation.products === "string" ? JSON.parse(quotation.products) : quotation.products;
-        setModalCart(
-          Array.isArray(products)
-            ? products.map((p) => ({
-                ...p,
-                id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                price: Number.parseFloat(p.price) || 0,
-                discount: Number.parseFloat(p.discount) || 0,
-                initialDiscount: Number.parseFloat(p.discount) || 0,
-                quantity: Number.parseInt(p.quantity) || 0,
-                per: p.per || 'Unit',
-                product_type: p.product_type || 'custom',
-              }))
-            : []
-        );
-      } catch (e) {
-        setModalCart([]);
-        setError("Failed to parse quotation products");
-        return;
-      }
-      setModalIsOpen(true);
-      return;
+        setModalCart(Array.isArray(products) ? products.map(p => ({ ...p, id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, price: parseFloat(p.price) || 0, discount: parseFloat(p.discount) || 0, initialDiscount: parseFloat(p.discount) || 0, quantity: parseInt(p.quantity) || 0, per: p.per || 'Unit', product_type: p.product_type || 'custom' })) : []);
+      } catch (e) { setModalCart([]); setError("Failed to parse quotation products"); return; }
+      setModalIsOpen(true); return;
     }
-
     if (!modalSelectedCustomer || !modalCart.length) return setError("Customer and products are required");
-    if (modalCart.some((item) => item.quantity === 0)) return setError("Please remove products with zero quantity");
-    if (!quotationId || quotationId === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotationId)) {
-      setError("Invalid or missing quotation ID");
-      return;
-    }
-
+    if (modalCart.some(item => item.quantity === 0)) return setError("Please remove products with zero quantity");
+    if (!quotationId || quotationId === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotationId)) { setError("Invalid or missing quotation ID"); return; }
     setModalSubmitLoading(true);
     try {
-      const customer = customers.find((c) => c.id.toString() === modalSelectedCustomer.value);
+      const customer = customers.find(c => c.id.toString() === modalSelectedCustomer.value);
       if (!customer) throw new Error("Invalid customer");
-
       const subtotal = parseFloat(calculateNetRate(modalCart)) - parseFloat(calculateYouSave(modalCart));
       const discountedSubtotal = subtotal * (1 - modalAdditionalDiscount / 100);
       const processingFee = discountedSubtotal * 0.01;
-
-      const payload = {
-        customer_id: Number(modalSelectedCustomer.value),
-        products: modalCart.map(item => ({
-          id: item.id,
-          product_type: item.product_type,
-          productname: item.productname,
-          price: parseFloat(item.price) || 0,
-          discount: parseFloat(item.discount) || 0,
-          quantity: parseInt(item.quantity) || 0,
-          per: item.per || 'Unit',
-        })),
-        net_rate: parseFloat(calculateNetRate(modalCart)) || 0,
-        you_save: parseFloat(calculateYouSave(modalCart)) || 0,
-        processing_fee: parseFloat(processingFee) || 0,
-        total: parseFloat(calculateTotal(modalCart, modalAdditionalDiscount)) || 0,
-        promo_discount: 0,
-        additional_discount: parseFloat(modalAdditionalDiscount.toFixed(2)) || 0,
-        status: "pending",
-      };
-
+      const payload = { customer_id: Number(modalSelectedCustomer.value), products: modalCart.map(item => ({ id: item.id, product_type: item.product_type, productname: item.productname, price: parseFloat(item.price) || 0, discount: parseFloat(item.discount) || 0, quantity: parseInt(item.quantity) || 0, per: item.per || 'Unit' })), net_rate: parseFloat(calculateNetRate(modalCart)) || 0, you_save: parseFloat(calculateYouSave(modalCart)) || 0, processing_fee: parseFloat(processingFee) || 0, total: parseFloat(calculateTotal(modalCart, modalAdditionalDiscount)) || 0, promo_discount: 0, additional_discount: parseFloat(modalAdditionalDiscount.toFixed(2)) || 0, status: "pending" };
       const response = await axios.put(`${API_BASE_URL}/api/direct/quotations/${quotationId}`, payload);
       const updatedId = response.data.quotation_id || quotationId;
       if (!updatedId) throw new Error("Invalid quotation ID returned");
-
-      setSuccessMessage("Quotation updated successfully!");
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-
+      setSuccessMessage("Quotation updated successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000);
       setQuotations(prev => prev.map(q => q.quotation_id === quotationId ? { ...q, ...payload, customer_name: customer.name, total: payload.total } : q));
       setFilteredQuotations(prev => prev.map(q => q.quotation_id === quotationId ? { ...q, ...payload, customer_name: customer.name, total: payload.total } : q));
-
       const pdfRes = await axios.get(`${API_BASE_URL}/api/direct/quotation/${updatedId}`, { responseType: "blob" });
       const blobUrl = window.URL.createObjectURL(new Blob([pdfRes.data]));
       const safeName = (customer.name || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-      const fileName = `${safeName}-${updatedId}-quotation.pdf`;
-
-      setPdfUrl(blobUrl);
-      setPdfFileName(fileName);
-      setPdfConfirmOpen(true);
-
+      setPdfUrl(blobUrl); setPdfFileName(`${safeName}-${updatedId}-quotation.pdf`); setPdfConfirmOpen(true);
       closeModal();
-    } catch (err) {
-      console.error("Edit quotation error:", err);
-      setError(`Failed to update quotation: ${err.message}`);
-    } finally {
-      setModalSubmitLoading(false);
-    }
+    } catch (err) { console.error("Edit quotation error:", err); setError(`Failed to update quotation: ${err.message}`); }
+    finally { setModalSubmitLoading(false); }
   };
 
-  // CONVERT TO BOOKING
   const convertToBooking = async (quotation = null) => {
     if (quotation) {
-      if (!quotation.quotation_id || quotation.quotation_id === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotation.quotation_id)) {
-        setError("Invalid or missing quotation ID");
-        return;
-      }
-
+      if (!quotation.quotation_id || quotation.quotation_id === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotation.quotation_id)) { setError("Invalid or missing quotation ID"); return; }
       setModalMode("book");
-      setModalSelectedCustomer({
-        value: quotation.customer_id?.toString(),
-        label: `${quotation.customer_name} (${quotation.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : quotation.customer_type || "User"} - ${quotation.district || "N/A"})`
-      });
-      setQuotationId(quotation.quotation_id);
-      setOrderId(`ORD-${Date.now()}`);
-      setModalAdditionalDiscount(Number.parseFloat(quotation.additional_discount) || 0);
-      setModalChangeDiscount(0);
+      setModalSelectedCustomer({ value: quotation.customer_id?.toString(), label: `${quotation.customer_name} (${quotation.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : quotation.customer_type || "User"} - ${quotation.district || "N/A"})` });
+      setQuotationId(quotation.quotation_id); setOrderId(`ORD-${Date.now()}`); setModalAdditionalDiscount(parseFloat(quotation.additional_discount) || 0); setModalChangeDiscount(0);
       try {
         const products = typeof quotation.products === "string" ? JSON.parse(quotation.products) : quotation.products;
-        setModalCart(
-          Array.isArray(products)
-            ? products.map((p) => ({
-                ...p,
-                id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                price: Number.parseFloat(p.price) || 0,
-                discount: Number.parseFloat(p.discount) || 0,
-                initialDiscount: Number.parseFloat(p.discount) || 0,
-                quantity: Number.parseInt(p.quantity) || 0,
-                per: p.per || 'Unit',
-                product_type: p.product_type || 'custom',
-              }))
-            : []
-        );
-      } catch (e) {
-        setModalCart([]);
-        setError("Failed to parse quotation products");
-        return;
-      }
-      setModalIsOpen(true);
-      return;
+        setModalCart(Array.isArray(products) ? products.map(p => ({ ...p, id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, price: parseFloat(p.price) || 0, discount: parseFloat(p.discount) || 0, initialDiscount: parseFloat(p.discount) || 0, quantity: parseInt(p.quantity) || 0, per: p.per || 'Unit', product_type: p.product_type || 'custom' })) : []);
+      } catch (e) { setModalCart([]); setError("Failed to parse quotation products"); return; }
+      setModalIsOpen(true); return;
     }
-
-    if (!modalSelectedCustomer || !modalCart.length || !orderId)
-      return setError("Customer, products, and order ID are required");
-    if (modalCart.some((item) => item.quantity === 0)) return setError("Please remove products with zero quantity");
-    if (!quotationId || quotationId === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotationId)) {
-      setError("Invalid or missing quotation ID");
-      return;
-    }
-
+    if (!modalSelectedCustomer || !modalCart.length || !orderId) return setError("Customer, products, and order ID are required");
+    if (modalCart.some(item => item.quantity === 0)) return setError("Please remove products with zero quantity");
+    if (!quotationId || quotationId === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotationId)) { setError("Invalid or missing quotation ID"); return; }
     setModalSubmitLoading(true);
     try {
-      const customer = customers.find((c) => c.id.toString() === modalSelectedCustomer.value);
+      const customer = customers.find(c => c.id.toString() === modalSelectedCustomer.value);
       if (!customer) throw new Error("Invalid customer");
-
       const subtotal = parseFloat(calculateNetRate(modalCart)) - parseFloat(calculateYouSave(modalCart));
       const discountedSubtotal = subtotal * (1 - modalAdditionalDiscount / 100);
       const processingFee = discountedSubtotal * 0.03;
-
-      const payload = {
-        customer_id: Number(modalSelectedCustomer.value),
-        order_id: orderId,
-        quotation_id: quotationId,
-        products: modalCart.map(item => ({
-          id: item.id,
-          product_type: item.product_type,
-          productname: item.productname,
-          price: getEffectivePrice(item),
-          discount: parseFloat(item.discount) || 0,
-          quantity: parseInt(item.quantity) || 0,
-          per: item.per || 'Unit',
-          serial_number: item.serial_number || undefined,
-        })),
-        net_rate: parseFloat(calculateNetRate(modalCart)),
-        you_save: parseFloat(calculateYouSave(modalCart)),
-        processing_fee: processingFee,
-        total: parseFloat(calculateTotal(modalCart, modalAdditionalDiscount)),
-        promo_discount: 0,
-        additional_discount: parseFloat(modalAdditionalDiscount.toFixed(2)),
-        customer_type: customer.customer_type || "User",
-        customer_name: customer.name,
-        address: customer.address,
-        mobile_number: customer.mobile_number,
-        email: customer.email,
-        district: customer.district,
-        state: customer.state,
-      };
-
+      const payload = { customer_id: Number(modalSelectedCustomer.value), order_id: orderId, quotation_id: quotationId, products: modalCart.map(item => ({ id: item.id, product_type: item.product_type, productname: item.productname, price: getEffectivePrice(item), discount: parseFloat(item.discount) || 0, quantity: parseInt(item.quantity) || 0, per: item.per || 'Unit', serial_number: item.serial_number || undefined })), net_rate: parseFloat(calculateNetRate(modalCart)), you_save: parseFloat(calculateYouSave(modalCart)), processing_fee: processingFee, total: parseFloat(calculateTotal(modalCart, modalAdditionalDiscount)), promo_discount: 0, additional_discount: parseFloat(modalAdditionalDiscount.toFixed(2)), customer_type: customer.customer_type || "User", customer_name: customer.name, address: customer.address, mobile_number: customer.mobile_number, email: customer.email, district: customer.district, state: customer.state };
       const response = await axios.post(`${API_BASE_URL}/api/direct/bookings`, payload);
-      setSuccessMessage("Booking created successfully!");
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-
+      setSuccessMessage("Booking created successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000);
       setQuotations(prev => prev.map(q => q.quotation_id === quotationId ? { ...q, status: "booked" } : q));
       setFilteredQuotations(prev => prev.map(q => q.quotation_id === quotationId ? { ...q, status: "booked" } : q));
-
       const pdfRes = await axios.get(`${API_BASE_URL}/api/direct/invoice/${response.data.order_id}`, { responseType: "blob" });
       const blobUrl = window.URL.createObjectURL(new Blob([pdfRes.data]));
       const safeName = (customer.name || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-      const fileName = `${safeName}-${response.data.order_id}-invoice.pdf`;
-
-      setPdfUrl(blobUrl);
-      setPdfFileName(fileName);
-      setPdfConfirmOpen(true);
-
+      setPdfUrl(blobUrl); setPdfFileName(`${safeName}-${response.data.order_id}-invoice.pdf`); setPdfConfirmOpen(true);
       closeModal();
-    } catch (err) {
-      console.error("Convert to booking error:", err);
-      setError(`Failed to create booking: ${err.message}`);
-    } finally {
-      setModalSubmitLoading(false);
-    }
+    } catch (err) { console.error("Convert to booking error:", err); setError(`Failed to create booking: ${err.message}`); }
+    finally { setModalSubmitLoading(false); }
   };
 
-  // CANCEL QUOTATION
   const cancelQuotation = async () => {
     const target = quotationToCancel;
-    if (!target || target === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(target)) {
-      setError("Invalid quotation ID");
-      setCancelConfirmOpen(false);
-      return;
-    }
-
+    if (!target || target === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(target)) { setError("Invalid quotation ID"); setCancelConfirmOpen(false); return; }
     try {
       await axios.put(`${API_BASE_URL}/api/direct/quotations/cancel/${target}`);
-      setSuccessMessage("Quotation cancelled successfully!");
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-
+      setSuccessMessage("Quotation cancelled successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000);
       setQuotations(prev => prev.map(q => q.quotation_id === target ? { ...q, status: "cancelled" } : q));
       setFilteredQuotations(prev => prev.map(q => q.quotation_id === target ? { ...q, status: "cancelled" } : q));
-
-      if (!quotationToCancel) {
-        setCart([]);
-        setSelectedCustomer(null);
-        setSelectedProduct(null);
-        setQuotationId(null);
-        setIsQuotationCreated(false);
-        setAdditionalDiscount(0);
-        setChangeDiscount(0);
-        setLastAddedProduct(null);
-      }
-    } catch (err) {
-      setError(`Failed to cancel: ${err.response?.data?.message || err.message}`);
-    } finally {
-      setCancelConfirmOpen(false);
-      setQuotationToCancel(null);
-    }
+      if (!quotationToCancel) { setCart([]); setSelectedCustomer(null); setSelectedProduct(null); setQuotationId(null); setIsQuotationCreated(false); setAdditionalDiscount(0); setChangeDiscount(0); setLastAddedProduct(null); }
+    } catch (err) { setError(`Failed to cancel: ${err.response?.data?.message || err.message}`); }
+    finally { setCancelConfirmOpen(false); setQuotationToCancel(null); }
   };
 
-  const openCancelConfirm = (id) => {
-    setQuotationToCancel(id);
-    setCancelConfirmOpen(true);
-  };
-
-  const openNewProductModal = (isModal = false) => {
-    setNewProductIsForModal(isModal);
-    setNewProductModalIsOpen(true);
-    setNewProductData({
-      productname: '',
-      price: '',
-      discount: isModal ? modalChangeDiscount : changeDiscount,
-      quantity: 1,
-      per: '',
-      product_type: 'custom',
-    });
-  };
-
-  const closeNewProductModal = () => {
-    setNewProductModalIsOpen(false);
-    setNewProductData({ productname: '', price: '', discount: 0, quantity: 1, per: '', product_type: 'custom' });
-    setError("");
-  };
-
+  const openCancelConfirm = (id) => { setQuotationToCancel(id); setCancelConfirmOpen(true); };
+  const openNewProductModal = (isModal = false) => { setNewProductIsForModal(isModal); setNewProductModalIsOpen(true); setNewProductData({ productname: '', price: '', discount: isModal ? modalChangeDiscount : changeDiscount, quantity: 1, per: '', product_type: 'custom' }); };
+  const closeNewProductModal = () => { setNewProductModalIsOpen(false); setNewProductData({ productname: '', price: '', discount: 0, quantity: 1, per: '', product_type: 'custom' }); setError(""); };
   const handleAddNewProduct = (productData) => {
     if (!productData.productname) return setError("Product name is required");
     if (productData.price === '' || productData.price < 0) return setError("Price must be a non-negative number");
     if (productData.quantity === '' || productData.quantity < 1) return setError("Quantity must be at least 1");
     if (productData.discount < 0 || productData.discount > 100) return setError("Discount must be between 0 and 100");
     if (!productData.product_type) return setError("Product type is required");
-
-    addToCart(newProductIsForModal, productData); // Pass as customProduct
-    closeNewProductModal();
+    addToCart(newProductIsForModal, productData); closeNewProductModal();
   };
-
-  const closeModal = () => {
-    setModalIsOpen(false);
-    setModalMode(null);
-    setModalCart([]);
-    setModalSelectedCustomer(null);
-    setModalSelectedProduct(null);
-    setOrderId("");
-    setModalAdditionalDiscount(0);
-    setModalChangeDiscount(0);
-    setModalLastAddedProduct(null);
-    setError("");
-    setSuccessMessage("");
-  };
+  const closeModal = () => { setModalIsOpen(false); setModalMode(null); setModalCart([]); setModalSelectedCustomer(null); setModalSelectedProduct(null); setOrderId(""); setModalAdditionalDiscount(0); setModalChangeDiscount(0); setModalLastAddedProduct(null); setError(""); setSuccessMessage(""); };
 
   return (
     <DirectErrorBoundary>
-      <div className="flex min-h-screen dark:bg-gray-800 bg-gray-50 mobile:flex-col">
+      <div className="min-h-screen bg-slate-50">
         <Sidebar />
         <Logout />
-        <div className="flex-1 hundred:ml-64 p-6 pt-16 mobile:p-2">
-          <div className="w-full max-w-5xl mx-auto">
-            <h1 className="text-4xl font-bold mb-8 text-center text-gray-800 mobile:text-2xl dark:text-gray-100">
-              Direct Booking
-            </h1>
-            {loading && <div className="text-center text-gray-500">Loading...</div>}
+        <div className="hundred:ml-64 mobile:ml-0 mobile:px-3 w-auto hundred:max-w-screen">
+          <div className="mx-auto px-6 py-8 w-full">
+
+            <div className="mb-8 text-center">
+              <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Direct Booking</h1>
+              <p className="text-slate-400 mt-1.5 text-sm">Create quotations and convert them to bookings</p>
+            </div>
+
+            {loading && (
+              <div className="text-center py-5 text-indigo-500 font-semibold text-sm">
+                <span className="inline-block w-5 h-5 border-[3px] border-indigo-100 border-t-indigo-500 rounded-full animate-spin mr-2.5 align-middle" />
+                Loading...
+              </div>
+            )}
             {error && (
-              <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
-                {error}
+              <div className="bg-red-50 border border-red-200 border-l-4 border-l-red-500 text-red-700 px-4 py-3.5 rounded-xl mb-5 text-sm font-medium">
+                ⚠️ {error}
               </div>
             )}
             {showSuccess && (
-              <div className="bg-green-100 border border-green-400 text-green-700 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
-                {successMessage}
+              <div className="bg-emerald-50 border border-emerald-200 border-l-4 border-l-emerald-500 text-emerald-800 px-4 py-3.5 rounded-xl mb-5 text-sm font-medium">
+                ✓ {successMessage}
               </div>
             )}
 
-            {/* CUSTOMER SELECTOR */}
-            <div className="flex flex-col items-center mb-6 mobile:w-full">
-              <label className="text-lg font-semibold text-gray-700 dark:text-gray-100 mb-2 mobile:text-base">
-                Select Customer
-              </label>
-              <Select
-                value={selectedCustomer}
-                onChange={setSelectedCustomer}
-                options={customers.map((c) => ({
-                  value: c.id.toString(),
-                  label: `${c.name} (${c.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : c.customer_type || "User"} - ${c.district || "N/A"})`,
-                }))}
-                placeholder="Search for a customer..."
-                isClearable
-                className="mobile:w-full onefifty:w-96 hundred:w-96"
-                classNamePrefix="react-select"
-                styles={selectStyles}
-              />
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-8 py-7 mb-8 mobile:p-4 w-full">
+              <div className="mb-6">
+                <label className="block text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2">
+                  Select Customer
+                </label>
+                <Select
+                  value={selectedCustomer}
+                  onChange={setSelectedCustomer}
+                  options={customers.map(c => ({ value: c.id.toString(), label: `${c.name} (${c.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : c.customer_type || "User"} - ${c.district || "N/A"})` }))}
+                  placeholder="Search customer by name, type, or district..."
+                  isClearable
+                  styles={selectStyles}
+                />
+              </div>
+
+              <div className="h-px bg-slate-100 -mx-8 mobile:-mx-4 mb-6" />
+
+              <QuotationTableErrorBoundary>
+                <QuotationTable
+                  cart={cart} setCart={setCart} setModalCart={setModalCart}
+                  products={products} selectedProduct={selectedProduct} setSelectedProduct={setSelectedProduct}
+                  addToCart={addToCart} updateQuantity={updateQuantity} updateDiscount={updateDiscount}
+                  updatePrice={updatePrice} removeFromCart={removeFromCart}
+                  calculateNetRate={calculateNetRate} calculateYouSave={calculateYouSave}
+                  calculateProcessingFee={calculateProcessingFee} calculateTotal={calculateTotal}
+                  styles={styles} additionalDiscount={additionalDiscount} setAdditionalDiscount={setAdditionalDiscount}
+                  changeDiscount={changeDiscount} setChangeDiscount={setChangeDiscount}
+                  openNewProductModal={openNewProductModal}
+                  lastAddedProduct={lastAddedProduct} setLastAddedProduct={setLastAddedProduct}
+                />
+              </QuotationTableErrorBoundary>
+
+              <div className="flex justify-center mt-7">
+                <button
+                  onClick={createQuotation}
+                  disabled={!selectedCustomer || !cart.length || createLoading}
+                  className={`flex items-center gap-2.5 px-10 py-3.5 rounded-xl font-extrabold text-sm tracking-wide transition-all duration-200
+                    ${!selectedCustomer || !cart.length || createLoading
+                      ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                      : "bg-gradient-to-br from-indigo-500 to-indigo-400 text-white shadow-xl shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500"
+                    }`}
+                >
+                  {createLoading ? (
+                    <>
+                      <span className="inline-block w-4 h-4 border-[3px] border-white/30 border-t-white rounded-full animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><path d="M3 12a9 9 0 1018 0A9 9 0 003 12z"/></svg>
+                      Create Quotation
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
-            {/* QUOTATION TABLE */}
-            <QuotationTableErrorBoundary>
-              <QuotationTable
-                cart={cart}
-                setCart={setCart}
-                setModalCart={setModalCart}
-                products={products}
-                selectedProduct={selectedProduct}
-                setSelectedProduct={setSelectedProduct}
-                addToCart={addToCart}
-                updateQuantity={updateQuantity}
-                updateDiscount={updateDiscount}
-                updatePrice={updatePrice}
-                removeFromCart={removeFromCart}
-                calculateNetRate={calculateNetRate}
-                calculateYouSave={calculateYouSave}
-                calculateProcessingFee={calculateProcessingFee}
-                calculateTotal={calculateTotal}
-                styles={styles}
-                additionalDiscount={additionalDiscount}
-                setAdditionalDiscount={setAdditionalDiscount}
-                changeDiscount={changeDiscount}
-                setChangeDiscount={setChangeDiscount}
-                openNewProductModal={openNewProductModal}
-                lastAddedProduct={lastAddedProduct}
-                setLastAddedProduct={setLastAddedProduct}
-              />
-            </QuotationTableErrorBoundary>
-
-            {/* CREATE QUOTATION BUTTON */}
-            <div className="flex justify-center gap-4 mt-8 mobile:mt-4 mobile:flex-col">
-              <button
-                onClick={createQuotation}
-                disabled={!selectedCustomer || !cart.length || createLoading}
-                className={`onefifty:w-50 hundred:w-50 h-10 text-white px-8 rounded-lg font-bold shadow flex items-center justify-center gap-2
-                  ${(!selectedCustomer || !cart.length || createLoading) ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`}
-                style={styles.button}
-              >
-                {createLoading ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Creating...
-                  </>
-                ) : error && error.includes("Try again") ? "Try Again" : "Create Quotation"}
-              </button>
-            </div>
-
-            {/* QUOTATIONS LIST */}
-            <div className="mt-12">
-              <h2 className="text-2xl font-semibold mb-4 text-center text-gray-800 mobile:text-xl">All Quotations</h2>
-              <div className="flex justify-center mb-6">
-                <div className="flex items-center gap-2 mobile:w-full onefifty:w-96">
-                  <FaSearch className="text-gray-500" />
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+                <h2 className="text-xl font-extrabold text-slate-800">All Quotations</h2>
+                <div className="relative min-w-[280px]">
+                  <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
                   <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={handleSearchChange}
-                    placeholder="Search by Quotation ID, Customer, or Status"
-                    className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    style={styles.input}
+                    type="text" value={searchQuery} onChange={handleSearchChange}
+                    placeholder="Search quotations..."
+                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white outline-none focus:border-indigo-400 transition-colors box-border"
                   />
                 </div>
               </div>
+
               {currentQuotations.length ? (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mobile:gap-4">
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
                     {currentQuotations.map((quotation) => (
-                      <div key={quotation.quotation_id} className="p-6 rounded-lg shadow-lg" style={styles.card}>
-                        <h3 className="text-lg font-bold mb-2 mobile:text-base text-gray-900">{quotation.quotation_id}</h3>
-                        <p className="text-sm mb-1 mobile:text-xs text-gray-900">
-                          <span className="font-semibold">Customer:</span> {quotation.customer_name || "N/A"}
-                        </p>
-                        <p className="text-sm mb-1 mobile:text-xs text-gray-900">
-                          <span className="font-semibold">Location:</span> {quotation.district || "N/A"}
-                        </p>
-                        <p className="text-sm mb-1 mobile:text-xs text-gray-900">
-                          <span className="font-semibold">Total:</span> ₹{Number.parseFloat(quotation.total).toFixed(2)}
-                        </p>
-                        <p className="text-sm mb-1 mobile:text-xs text-gray-900">
-                          <span className="font-semibold">Status:</span>
-                          <span
-                            className={`capitalize ${quotation.status === "pending" ? "text-yellow-600" : quotation.status === "booked" ? "text-green-600" : "text-red-600"}`}
-                          >
-                            {quotation.status}
-                          </span>
-                        </p>
-                        <p className="text-sm mb-4 mobile:text-xs text-gray-900">
-                          <span className="font-semibold">Created At:</span>
-                          {new Date(quotation.created_at).toLocaleDateString("en-GB", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                          })}
-                        </p>
-                        <div className="flex gap-2 mobile:flex-col">
-                          <button
-                            onClick={() => editQuotation(quotation)}
-                            disabled={quotation.status !== "pending"}
-                            className={`flex-1 text-white px-4 py-2 rounded-lg font-bold text-sm ${quotation.status !== "pending" ? "bg-gray-400 cursor-not-allowed" : "bg-yellow-600 hover:bg-yellow-700"}`}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => convertToBooking(quotation)}
-                            disabled={quotation.status !== "pending"}
-                            className={`flex-1 text-white px-4 py-2 rounded-lg font-bold text-sm ${quotation.status !== "pending" ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`}
-                          >
-                            Convert to Booking
-                          </button>
-                          <button
-                            onClick={() => openCancelConfirm(quotation.quotation_id)}
-                            disabled={quotation.status !== "pending"}
-                            className={`flex-1 text-white px-4 py-2 rounded-lg font-bold text-sm ${quotation.status !== "pending" ? "bg-gray-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"}`}
-                          >
-                            Cancel
-                          </button>
+                      <div
+                        key={quotation.quotation_id}
+                        className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <div className="text-xs font-extrabold text-indigo-500 tracking-wide">{quotation.quotation_id}</div>
+                            <div className="text-base font-bold text-slate-800 mt-0.5">{quotation.customer_name || "N/A"}</div>
+                          </div>
+                          <StatusBadge status={quotation.status} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mb-3.5">
+                          {[
+                            ["📍 Location", quotation.district || "N/A"],
+                            ["💰 Total", `₹${parseFloat(quotation.total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
+                            ["📅 Created", new Date(quotation.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })],
+                          ].map(([label, value]) => (
+                            <div key={label} className="bg-slate-50 rounded-lg px-2.5 py-2">
+                              <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">{label}</div>
+                              <div className="text-xs font-semibold text-slate-700 mt-0.5">{value}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <QuotActionBtn label="Edit" onClick={() => editQuotation(quotation)} disabled={quotation.status !== "pending"} color="#f59e0b" />
+                          <QuotActionBtn label="Book" onClick={() => convertToBooking(quotation)} disabled={quotation.status !== "pending"} color="#10b981" />
+                          <QuotActionBtn label="Cancel" onClick={() => openCancelConfirm(quotation.quotation_id)} disabled={quotation.status !== "pending"} color="#ef4444" />
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div className="flex justify-center mt-6 space-x-2">
-                    <button
-                      onClick={() => paginate(currentPage - 1)}
-                      disabled={currentPage === 1}
-                      className={`px-4 py-2 rounded-lg text-sm ${
-                        currentPage === 1 ? "bg-gray-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white"
-                      }`}
-                      style={styles.button}
-                    >
-                      Previous
-                    </button>
 
-                    {(() => {
+                  <div className="flex justify-center gap-1.5 mt-6 flex-wrap">
+                    <PaginBtn key="prev" label="← Prev" onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} />
+                    {Array.from({ length: Math.min(4, totalPages) }, (_, i) => {
                       const maxPagesToShow = 4;
                       let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
                       let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
-
-                      // Adjust startPage if endPage is at the totalPages limit
-                      if (endPage === totalPages) {
-                        startPage = Math.max(1, totalPages - maxPagesToShow + 1);
-                      }
-
-                      const pageButtons = [];
-
-                      // Generate page buttons
-                      for (let page = startPage; page <= endPage; page++) {
-                        pageButtons.push(
-                          <button
-                            key={page}
-                            onClick={() => paginate(page)}
-                            className={`px-4 py-2 rounded-lg text-sm ${
-                              currentPage === page ? "bg-blue-800 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
-                            }`}
-                            style={styles.button}
-                          >
-                            {page}
-                          </button>
-                        );
-                      }
-                      return pageButtons;
-                    })()}
-
-                    <button
-                      onClick={() => paginate(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                      className={`px-4 py-2 rounded-lg text-sm ${
-                        currentPage === totalPages ? "bg-gray-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white"
-                      }`}
-                      style={styles.button}
-                    >
-                      Next
-                    </button>
+                      if (endPage === totalPages) startPage = Math.max(1, totalPages - maxPagesToShow + 1);
+                      const page = startPage + i;
+                      if (page > endPage) return null;
+                      return <PaginBtn key={page} label={page} onClick={() => paginate(page)} active={currentPage === page} />;
+                    }).filter(Boolean)}
+                    <PaginBtn key="next" label="Next →" onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages} />
                   </div>
                 </>
               ) : (
-                <div className="p-4 text-center text-gray-500 mobile:p-2 mobile:text-xs">
-                  {searchQuery ? "No quotations match your search" : "No quotations available"}
+                <div className="text-center py-12 text-slate-400 font-medium bg-white border border-slate-200 rounded-2xl">
+                  {searchQuery ? "No quotations match your search" : "No quotations yet — create your first one above"}
                 </div>
               )}
             </div>
 
-            {/* DOWNLOAD EXCEL */}
-            <div className="flex justify-center mt-5 mb-20">
-              <button
-                onClick={downloadCustomersExcel}
-                className="h-10 text-white px-6 rounded-lg font-bold shadow bg-blue-600 hover:bg-blue-700 flex items-center gap-2"
-                style={styles.button}
-              >
-                <FaDownload /> Download Customers Excel
-              </button>
+            <div className="flex gap-3 justify-center flex-wrap mb-4">
+              {[
+                { label: "Export Customers", onClick: exportToExcel, cls: "bg-emerald-500 shadow-emerald-200", icon: "📊" },
+                { label: "Export Quotations", onClick: exportQuotationsToExcel, cls: "bg-violet-500 shadow-violet-200", icon: "📋" },
+                { label: "Download Customers Excel", onClick: downloadCustomersExcel, cls: "bg-blue-500 shadow-blue-200", icon: "⬇️" },
+              ].map(({ label, onClick, cls, icon }) => (
+                <button
+                  key={label} onClick={onClick}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border-none font-bold text-sm text-white cursor-pointer shadow-lg hover:opacity-85 transition-opacity ${cls}`}
+                >
+                  {icon} {label}
+                </button>
+              ))}
             </div>
-
-            {/* MAIN MODAL */}
-            <Modal
-              isOpen={modalIsOpen}
-              onRequestClose={closeModal}
-              className="fixed inset-0 flex items-center justify-center p-4"
-              overlayClassName="fixed inset-0 bg-black/50"
-              key="quotation-modal"
-            >
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full mobile:p-4 max-h-[90vh] overflow-y-auto">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6 text-center">
-                  {modalMode === "edit" ? "Edit Quotation" : "Convert to Booking"}
-                </h2>
-                {error && (
-                  <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
-                    {error}
-                  </div>
-                )}
-                {modalMode === "book" && (
-                  <div className="flex flex-col items-center mobile:w-full mb-6">
-                    <label
-                      htmlFor="order-id"
-                      className="text-lg font-semibold dark:text-gray-100 text-gray-700 mb-2 mobile:text-base"
-                    >
-                      Order ID
-                    </label>
-                    <input
-                      id="order-id"
-                      type="text"
-                      value={orderId}
-                      onChange={(e) => setOrderId(e.target.value)}
-                      className="onefifty:w-96 hundred:w-96 p-3 rounded-lg bg-white text-gray-900 border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-600 mobile:w-full mobile:p-2 mobile:text-sm"
-                      style={styles.input}
-                      placeholder="Enter Order ID"
-                    />
-                  </div>
-                )}
-                <FormFields
-                  isEdit={modalMode === "edit"}
-                  customers={customers}
-                  modalSelectedCustomer={modalSelectedCustomer}
-                  setModalSelectedCustomer={setModalSelectedCustomer}
-                  modalCart={modalCart}
-                  setModalCart={setModalCart}
-                  products={products}
-                  modalSelectedProduct={modalSelectedProduct}
-                  setModalSelectedProduct={setModalSelectedProduct}
-                  addToCart={addToCart}
-                  updateQuantity={updateQuantity}
-                  updateDiscount={updateDiscount}
-                  updatePrice={updatePrice}
-                  removeFromCart={removeFromCart}
-                  calculateNetRate={calculateNetRate}
-                  calculateYouSave={calculateYouSave}
-                  calculateProcessingFee={calculateProcessingFee}
-                  calculateTotal={calculateTotal}
-                  handleSubmit={modalMode === "edit" ? () => editQuotation() : () => convertToBooking()}
-                  closeModal={closeModal}
-                  styles={styles}
-                  modalAdditionalDiscount={modalAdditionalDiscount}
-                  setModalAdditionalDiscount={setModalAdditionalDiscount}
-                  modalChangeDiscount={modalChangeDiscount}
-                  setModalChangeDiscount={setModalChangeDiscount}
-                  openNewProductModal={openNewProductModal}
-                  modalLastAddedProduct={modalLastAddedProduct}
-                  setModalLastAddedProduct={setModalLastAddedProduct}
-                />
-              </div>
-            </Modal>
-
-            {/* MODALS */}
-            <CancelConfirmModal
-              isOpen={cancelConfirmOpen}
-              onClose={() => setCancelConfirmOpen(false)}
-              onConfirm={cancelQuotation}
-              quotationId={quotationToCancel}
-            />
-            <PDFDownloadConfirmModal
-              isOpen={pdfConfirmOpen}
-              onClose={handlePdfNo}
-              onYes={handlePdfYes}
-              fileName={pdfFileName}
-            />
-            <NewProductModal
-              isOpen={newProductModalIsOpen}
-              onClose={closeNewProductModal}
-
-              onSubmit={handleAddNewProduct}
-              newProductData={newProductData}
-              setNewProductData={setNewProductData}
-            />
           </div>
         </div>
+
+        <Modal isOpen={modalIsOpen} onRequestClose={closeModal} className="fixed inset-0 flex items-center justify-center p-4" overlayClassName="fixed inset-0 bg-black/60" key="quotation-modal">
+          <div className="bg-white rounded-2xl px-8 py-7 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-extrabold text-slate-800">
+                {modalMode === "edit" ? "✏️ Edit Quotation" : "🚀 Convert to Booking"}
+              </h2>
+              <button
+                onClick={closeModal}
+                className="bg-slate-100 border-none rounded-lg px-3 py-1.5 cursor-pointer font-bold text-slate-500 text-xs hover:bg-slate-200 transition-colors"
+              >
+                ✕ Close
+              </button>
+            </div>
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-xs">⚠️ {error}</div>
+            )}
+            {modalMode === "book" && (
+              <div className="mb-5">
+                <label className="block text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2">Order ID</label>
+                <input
+                  type="text" value={orderId} onChange={e => setOrderId(e.target.value)} placeholder="Enter Order ID"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+                />
+              </div>
+            )}
+            <FormFields
+              isEdit={modalMode === "edit"} customers={customers}
+              modalSelectedCustomer={modalSelectedCustomer} setModalSelectedCustomer={setModalSelectedCustomer}
+              modalCart={modalCart} setModalCart={setModalCart} products={products}
+              modalSelectedProduct={modalSelectedProduct} setModalSelectedProduct={setModalSelectedProduct}
+              addToCart={addToCart} updateQuantity={updateQuantity} updateDiscount={updateDiscount}
+              updatePrice={updatePrice} removeFromCart={removeFromCart}
+              calculateNetRate={calculateNetRate} calculateYouSave={calculateYouSave}
+              calculateProcessingFee={calculateProcessingFee} calculateTotal={calculateTotal}
+              handleSubmit={modalMode === "edit" ? () => editQuotation() : () => convertToBooking()}
+              closeModal={closeModal} styles={styles}
+              modalAdditionalDiscount={modalAdditionalDiscount} setModalAdditionalDiscount={setModalAdditionalDiscount}
+              modalChangeDiscount={modalChangeDiscount} setModalChangeDiscount={setModalChangeDiscount}
+              openNewProductModal={openNewProductModal}
+              modalLastAddedProduct={modalLastAddedProduct} setModalLastAddedProduct={setModalLastAddedProduct}
+            />
+          </div>
+        </Modal>
+
+        <CancelConfirmModal isOpen={cancelConfirmOpen} onClose={() => setCancelConfirmOpen(false)} onConfirm={cancelQuotation} quotationId={quotationToCancel} />
+        <PDFDownloadConfirmModal isOpen={pdfConfirmOpen} onClose={handlePdfNo} onYes={handlePdfYes} fileName={pdfFileName} />
+        <NewProductModal isOpen={newProductModalIsOpen} onClose={closeNewProductModal} onSubmit={handleAddNewProduct} newProductData={newProductData} setNewProductData={setNewProductData} />
+
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     </DirectErrorBoundary>
   );

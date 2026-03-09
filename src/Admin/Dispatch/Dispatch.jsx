@@ -1,10 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaDownload } from 'react-icons/fa';
-import { toast } from 'react-toastify'; // Added for toast notifications
+import { FaDownload, FaSearch } from 'react-icons/fa';
+import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../../Config';
 import Sidebar from '../Sidebar/Sidebar';
 import Logout from '../Logout';
+
+const PaginBtn = ({ label, onClick, disabled, active }) => (
+  <button onClick={onClick} disabled={disabled}
+    className={`px-4 py-2 rounded-lg border text-sm font-bold transition-all duration-150
+      ${active ? "bg-indigo-600 border-indigo-600 text-white"
+      : disabled ? "bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed"
+      : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:text-indigo-600"}`}>
+    {label}
+  </button>
+)
+
+const inputCls = "w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+
+const statusColors = {
+  paid: "text-amber-600 bg-amber-50 border-amber-200",
+  packed: "text-sky-600 bg-sky-50 border-sky-200",
+  dispatched: "text-indigo-600 bg-indigo-50 border-indigo-200",
+  delivered: "text-emerald-600 bg-emerald-50 border-emerald-200",
+}
 
 export default function Dispatch() {
   const [bookings, setBookings] = useState([]);
@@ -15,46 +34,19 @@ export default function Dispatch() {
   const [selectedBookingId, setSelectedBookingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [transportDetails, setTransportDetails] = useState({
-    transportName: '',
-    lrNumber: '',
-    transportContact: ''
-  });
+  const [transportDetails, setTransportDetails] = useState({ transportName: '', lrNumber: '', transportContact: '' });
   const ordersPerPage = 9;
-
-  const styles = {
-    input: { 
-      background: "linear-gradient(135deg, rgba(255,255,255,0.8), rgba(240,249,255,0.6))", 
-      backgroundDark: "linear-gradient(135deg, rgba(55,65,81,0.8), rgba(75,85,99,0.6))",
-      backdropFilter: "blur(10px)", 
-      border: "1px solid rgba(2,132,199,0.3)", 
-      borderDark: "1px solid rgba(59,130,246,0.4)"
-    },
-    button: { 
-      background: "linear-gradient(135deg, rgba(2,132,199,0.9), rgba(14,165,233,0.95))", 
-      backgroundDark: "linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.95))",
-      backdropFilter: "blur(15px)", 
-      border: "1px solid rgba(125,211,252,0.4)", 
-      borderDark: "1px solid rgba(147,197,253,0.4)",
-      boxShadow: "0 15px 35px rgba(2,132,199,0.3), inset 0 1px 0 rgba(255,255,255,0.2)",
-      boxShadowDark: "0 15px 35px rgba(59,130,246,0.4), inset 0 1px 0 rgba(255,255,255,0.1)"
-    }
-  };
 
   useEffect(() => {
     const fetchBookings = async () => {
       try {
         const allowedStatuses = ['paid', 'packed', 'dispatched', 'delivered'];
         const statuses = filterStatus ? [filterStatus] : allowedStatuses;
-        const response = await axios.get(`${API_BASE_URL}/api/tracking/filtered-bookings`, {
-          params: { status: statuses.join(',') }
-        });
+        const response = await axios.get(`${API_BASE_URL}/api/tracking/filtered-bookings`, { params: { status: statuses.join(',') } });
         setBookings(response.data);
         setError('');
         setCurrentPage(1);
-      } catch {
-        setError('Failed to fetch bookings');
-      }
+      } catch { setError('Failed to fetch bookings'); }
     };
     fetchBookings();
     const interval = setInterval(fetchBookings, 10000);
@@ -62,39 +54,26 @@ export default function Dispatch() {
   }, [filterStatus]);
 
   const handleStatusChange = (id, newStatus) => {
-    if (newStatus === 'dispatched') {
-      setSelectedBookingId(id);
-      setIsModalOpen(true);
-    } else {
-      updateStatus(id, newStatus);
-    }
+    if (newStatus === 'dispatched') { setSelectedBookingId(id); setIsModalOpen(true); }
+    else updateStatus(id, newStatus);
   };
 
   const updateStatus = async (id, newStatus, transportInfo = null) => {
     try {
       const payload = { status: newStatus, ...transportInfo };
       await axios.put(`${API_BASE_URL}/api/tracking/fbookings/${id}/status`, payload);
-      setBookings(prev =>
-        prev.map(booking =>
-          booking.id === id ? { ...booking, status: newStatus, ...transportInfo } : booking
-        )
-      );
+      setBookings(prev => prev.map(b => b.id === id ? { ...b, status: newStatus, ...transportInfo } : b));
       if (newStatus === 'dispatched' && transportInfo) {
         setSuccessMessage('Transport details added successfully');
         setTimeout(() => setSuccessMessage(''), 3000);
       }
       setError('');
-    } catch {
-      setError('Failed to update status');
-    }
+    } catch { setError('Failed to update status'); }
   };
 
   const handleModalSubmit = async (e) => {
     e.preventDefault();
-    if (!transportDetails.transportName || !transportDetails.lrNumber) {
-      setError('Transport Name and LR Number are required');
-      return;
-    }
+    if (!transportDetails.transportName || !transportDetails.lrNumber) { setError('Transport Name and LR Number are required'); return; }
     await updateStatus(selectedBookingId, 'dispatched', transportDetails);
     setIsModalOpen(false);
     setTransportDetails({ transportName: '', lrNumber: '', transportContact: '' });
@@ -107,12 +86,8 @@ export default function Dispatch() {
 
   const generatePDF = async (booking) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/direct/invoice/${booking.order_id}`, {
-        responseType: 'blob'
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch PDF');
-      }
+      const response = await fetch(`${API_BASE_URL}/api/direct/invoice/${booking.order_id}`, { responseType: 'blob' });
+      if (!response.ok) throw new Error('Failed to fetch PDF');
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -123,197 +98,132 @@ export default function Dispatch() {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-
-      toast.success("Downloaded estimate bill, check downloads", {
-        position: "top-center",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
+      toast.success("Downloaded estimate bill, check downloads", { position: "top-center", autoClose: 5000 });
     } catch (err) {
-      console.error("PDF download error:", err);
-      toast.error("Failed to download PDF. Please try again.", {
-        position: "top-center",
-        autoClose: 5000,
-      });
+      toast.error("Failed to download PDF. Please try again.", { position: "top-center", autoClose: 5000 });
     }
   };
 
-  const filteredBookings = bookings.filter(booking =>
-    ['customer_name', 'order_id', 'total'].some(key =>
-      booking[key]?.toString().toLowerCase().includes(searchQuery.toLowerCase())
-    )
+  const filteredBookings = bookings.filter(b =>
+    ['customer_name', 'order_id', 'total'].some(key => b[key]?.toString().toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const indexOfLastOrder = currentPage * ordersPerPage;
-  const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
-  const currentOrders = filteredBookings.slice(indexOfFirstOrder, indexOfLastOrder);
   const totalPages = Math.ceil(filteredBookings.length / ordersPerPage);
-
-  const renderInput = (value, onChange, placeholder) => (
-    <input
-      type="text"
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className="w-full p-3 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-900 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:focus:ring-blue-500 mobile:p-2 mobile:text-sm"
-      style={{ background: styles.input.background, backgroundDark: styles.input.backgroundDark, border: styles.input.border, borderDark: styles.input.borderDark, backdropFilter: styles.input.backdropFilter }}
-    />
-  );
-
-  const renderSelect = (value, onChange, options, placeholder) => (
-    <select
-      value={value}
-      onChange={onChange}
-      className="w-48 p-3 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-900 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:focus:ring-blue-500 mobile:p-2 mobile:text-sm"
-      style={{ background: styles.input.background, backgroundDark: styles.input.backgroundDark, border: styles.input.border, borderDark: styles.input.borderDark, backdropFilter: styles.input.backdropFilter }}
-    >
-      <option value="">{placeholder}</option>
-      {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-    </select>
-  );
+  const currentOrders = filteredBookings.slice((currentPage - 1) * ordersPerPage, currentPage * ordersPerPage);
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <Logout />
-      <div className="flex-1 flex items-start justify-center p-6 mobile:overflow-hidden onefifty:ml-[0%] hundred:ml-[15%] mobile:ml-[0%]">
-        <div className="w-full max-w-5xl mobile:p-4">
-          <h1 className="text-4xl font-bold mb-8 text-center text-gray-800 dark:text-gray-100 mobile:text-2xl">Dispatch Customers</h1>
-          {error && (
-            <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
-              {error}
-            </div>
-          )}
-          {successMessage && (
-            <div className="bg-green-100 dark:bg-green-900 border border-green-400 dark:border-green-700 text-green-700 dark:text-green-200 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
-              {successMessage}
-            </div>
-          )}
-          <div className="mb-6 flex justify-center gap-4 flex-wrap mobile:gap-2">
-            {renderSelect(filterStatus, e => setFilterStatus(e.target.value), [
-              { value: 'paid', label: 'Paid' },
-              { value: 'packed', label: 'Packed' },
-              { value: 'dispatched', label: 'Dispatched' },
-              { value: 'delivered', label: 'Delivered' }
-            ], 'All Statuses')}
-            {renderInput(searchQuery, e => setSearchQuery(e.target.value), 'Search by Name, Order ID, or Total')}
+      <div className="hundred:ml-64 mobile:ml-0 mobile:px-3 w-auto">
+        <div className="mx-auto px-6 py-8 w-full">
+
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Dispatch Customers</h1>
+            <p className="text-slate-400 mt-1.5 text-sm">Manage and update order dispatch statuses</p>
           </div>
-          <div className="grid mobile:grid-cols-1 onefifty:grid-cols-2 hundred:grid-cols-3 gap-6 mobile:gap-4">
-            {currentOrders.length > 0 ? (
-              currentOrders.map((booking, index) => (
-                <div key={booking.id} className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 mobile:p-4">
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">#{indexOfFirstOrder + index + 1}</div>
-                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">{booking.customer_name || 'N/A'}</h3>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    <strong>Contact:</strong>{" "}
-                    <a href={`tel:${booking.mobile_number}`} className="text-blue-600 hover:underline">
-                      {booking.mobile_number}
-                    </a>
-                  </p>
-                  <p className="text-gray-700 dark:text-gray-300"><strong>Order ID:</strong> {booking.order_id || 'N/A'}</p>
-                  <p className="text-gray-700 dark:text-gray-300"><strong>District:</strong> {booking.district || 'N/A'}</p>
-                  <p className="text-gray-700 dark:text-gray-300"><strong>State:</strong> {booking.state || 'N/A'}</p>
-                  <p className="text-gray-700 dark:text-gray-300"><strong>Status:</strong> {booking.status}</p>
-                  <div className="mt-4 flex flex-col gap-2">
-                    {renderSelect(booking.status, e => handleStatusChange(booking.id, e.target.value), [
-                      { value: 'paid', label: 'Paid' },
-                      { value: 'packed', label: 'Packed' },
-                      { value: 'dispatched', label: 'Dispatched' },
-                      { value: 'delivered', label: 'Delivered' }
-                    ], 'Update Status')}
-                    <button
-                      onClick={() => generatePDF(booking)}
-                      className="flex items-center justify-center px-4 py-2 text-sm text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-blue-600 mobile:text-sm"
-                      style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
-                    >
-                      <FaDownload className="mr-2" /> Download
+
+          {error && <div className="bg-red-50 border border-red-200 border-l-4 border-l-red-500 text-red-700 px-4 py-3.5 rounded-xl mb-5 text-sm font-medium">⚠️ {error}</div>}
+          {successMessage && <div className="bg-emerald-50 border border-emerald-200 border-l-4 border-l-emerald-500 text-emerald-800 px-4 py-3.5 rounded-xl mb-5 text-sm font-medium">✓ {successMessage}</div>}
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-5 mb-6">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="min-w-44">
+                <label className="block text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-1.5">Status</label>
+                <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setCurrentPage(1); }} className={inputCls}>
+                  <option value="">All Statuses</option>
+                  {['paid', 'packed', 'dispatched', 'delivered'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                </select>
+              </div>
+              <div className="min-w-64 flex-1">
+                <label className="block text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-1.5">Search</label>
+                <div className="relative">
+                  <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
+                  <input type="text" placeholder="Name, Order ID or Total..." value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {currentOrders.length === 0 ? (
+            <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl mb-6">
+              <div className="text-4xl mb-3">📦</div>
+              <p className="text-slate-400 font-medium text-sm">No bookings found</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4 mb-6">
+              {currentOrders.map((booking) => (
+                <div key={booking.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div className="text-base font-bold text-slate-800">{booking.customer_name || 'N/A'}</div>
+                      {booking.mobile_number && (
+                        <a href={`tel:${booking.mobile_number}`} className="text-xs font-semibold text-indigo-500 hover:text-indigo-700">📞 {booking.mobile_number}</a>
+                      )}
+                    </div>
+                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusColors[booking.status] || "text-slate-400 bg-slate-50 border-slate-200"}`}>
+                      {booking.status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5 mb-4">
+                    {[["🆔 Order ID", booking.order_id || 'N/A'], ["📍 District", booking.district || 'N/A'], ["🏛️ State", booking.state || 'N/A'], ["💰 Total", booking.total ? `₹${booking.total}` : 'N/A']].map(([label, value]) => (
+                      <div key={label} className="bg-slate-50 rounded-lg px-2 py-1.5">
+                        <div className="text-xs font-bold text-slate-400">{label}</div>
+                        <div className="text-xs font-semibold text-slate-700">{value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <select value={booking.status} onChange={e => handleStatusChange(booking.id, e.target.value)} className={inputCls}>
+                      <option value="" disabled>Update Status</option>
+                      {['paid', 'packed', 'dispatched', 'delivered'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                    </select>
+                    <button onClick={() => generatePDF(booking)}
+                      className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-500 hover:text-white hover:border-indigo-500 transition-all duration-200">
+                      <FaDownload className="text-xs" /> Download Invoice
                     </button>
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="col-span-full text-center text-gray-600 dark:text-gray-400 p-4 mobile:text-sm">No bookings found</div>
-            )}
-          </div>
-          {totalPages > 1 && (
-            <div className="mt-6 flex justify-center space-x-2 mobile:space-x-1">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 rounded-lg text-white disabled:bg-gray-400 dark:disabled:bg-gray-700 hover:bg-indigo-700 dark:hover:bg-blue-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
-              >
-                Previous
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`px-4 py-2 rounded-lg ${currentPage === page ? 'bg-indigo-600 dark:bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-600'} mobile:px-2 mobile:py-1 mobile:text-sm`}
-                >
-                  {page}
-                </button>
               ))}
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 rounded-lg text-white disabled:bg-gray-400 dark:disabled:bg-gray-700 hover:bg-indigo-700 dark:hover:bg-blue-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
-              >
-                Next
-              </button>
             </div>
           )}
-          {isModalOpen && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 mobile:p-5">
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-2xl w-full max-w-md border border-gray-200 dark:border-gray-700">
-                <h2 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100">Transport Details</h2>
-                <form onSubmit={handleModalSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Transport Name *</label>
-                    {renderInput(transportDetails.transportName, e => setTransportDetails({ ...transportDetails, transportName: e.target.value }), 'Enter transport name')}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">LR Number *</label>
-                    {renderInput(transportDetails.lrNumber, e => setTransportDetails({ ...transportDetails, lrNumber: e.target.value }), 'Enter LR number')}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Transport Contact (Optional)</label>
-                    {renderInput(transportDetails.transportContact, e => setTransportDetails({ ...transportDetails, transportContact: e.target.value }), 'Enter contact number')}
-                  </div>
-                  <div className="flex justify-end space-x-3">
-                    <button
-                      type="button"
-                      onClick={handleModalClose}
-                      className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 rounded-lg text-white hover:bg-indigo-700 dark:hover:bg-blue-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                      style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
-                    >
-                      Submit
-                    </button>
-                  </div>
-                </form>
-              </div>
+
+          {totalPages > 1 && (
+            <div className="flex justify-center gap-1.5 flex-wrap">
+              <PaginBtn label="← Prev" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} />
+              {Array.from({ length: totalPages }, (_, i) => i + 1).slice(Math.max(0, currentPage - 3), Math.min(totalPages, currentPage + 2)).map(page => (
+                <PaginBtn key={page} label={page} onClick={() => setCurrentPage(page)} active={currentPage === page} />
+              ))}
+              <PaginBtn label="Next →" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} />
             </div>
           )}
         </div>
       </div>
-      <style>{`
-        [style*="backgroundDark"] { background: var(--bg, ${styles.input.background}); }
-        [style*="backgroundDark"][data-dark] { --bg: ${styles.input.backgroundDark}; }
-        [style*="borderDark"] { border: var(--border, ${styles.input.border}); }
-        [style*="borderDark"][data-dark] { --border: ${styles.input.borderDark}; }
-        [style*="boxShadowDark"] { box-shadow: var(--shadow, ${styles.button.boxShadow}); }
-        [style*="boxShadowDark"][data-dark] { --shadow: ${styles.button.boxShadowDark}; }
-      `}</style>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <h2 className="text-xl font-extrabold text-slate-800 mb-6 text-center">🚚 Transport Details</h2>
+            {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-xs">⚠️ {error}</div>}
+            <form onSubmit={handleModalSubmit} className="space-y-4">
+              {[["Transport Name", "transportName", "Enter transport name", true], ["LR Number", "lrNumber", "Enter LR number", true], ["Transport Contact", "transportContact", "Enter contact number (optional)", false]].map(([label, key, placeholder, required]) => (
+                <div key={key}>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
+                  <input type="text" value={transportDetails[key]} onChange={e => setTransportDetails({ ...transportDetails, [key]: e.target.value })}
+                    placeholder={placeholder} className={inputCls} required={required} />
+                </div>
+              ))}
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button type="button" onClick={handleModalClose} className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors">Cancel</button>
+                <button type="submit" className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500 transition-all duration-200">Confirm Dispatch</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

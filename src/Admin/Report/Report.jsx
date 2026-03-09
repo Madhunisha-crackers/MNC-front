@@ -8,35 +8,37 @@ import { API_BASE_URL } from '../../../Config';
 import Sidebar from '../Sidebar/Sidebar';
 import Logout from '../Logout';
 
+const PaginBtn = ({ label, onClick, disabled, active }) => (
+  <button onClick={onClick} disabled={disabled}
+    className={`px-4 py-2 rounded-lg border text-sm font-bold transition-all duration-150
+      ${active ? "bg-indigo-600 border-indigo-600 text-white"
+      : disabled ? "bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed"
+      : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:text-indigo-600"}`}>
+    {label}
+  </button>
+)
+
+const statusColors = {
+  booked: "text-sky-600 bg-sky-50 border-sky-200",
+  paid: "text-amber-600 bg-amber-50 border-amber-200",
+  packed: "text-violet-600 bg-violet-50 border-violet-200",
+  dispatched: "text-indigo-600 bg-indigo-50 border-indigo-200",
+  delivered: "text-emerald-600 bg-emerald-50 border-emerald-200",
+  canceled: "text-red-500 bg-red-50 border-red-200",
+}
+
 export default function Report() {
   const [bookings, setBookings] = useState([]);
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const ordersPerPage = 9;
 
-  const styles = {
-    button: { 
-      background: "linear-gradient(135deg, rgba(2,132,199,0.9), rgba(14,165,233,0.95))", 
-      backgroundDark: "linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.95))",
-      backdropFilter: "blur(15px)", 
-      border: "1px solid rgba(125,211,252,0.4)", 
-      borderDark: "1px solid rgba(147,197,253,0.4)",
-      boxShadow: "0 15px 35px rgba(2,132,199,0.3), inset 0 1px 0 rgba(255,255,255,0.2)",
-      boxShadowDark: "0 15px 35px rgba(59,130,246,0.4), inset 0 1px 0 rgba(255,255,255,0.1)"
-    }
-  };
-
   useEffect(() => {
     const fetchBookings = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/tracking/report-bookings`, {
-          params: { status: '' }
-        });
-        setBookings(response.data);
-        setError('');
-      } catch {
-        setError('Failed to fetch bookings');
-      }
+        const response = await axios.get(`${API_BASE_URL}/api/tracking/report-bookings`, { params: { status: '' } });
+        setBookings(response.data); setError('');
+      } catch { setError('Failed to fetch bookings'); }
     };
     fetchBookings();
     const interval = setInterval(fetchBookings, 10000);
@@ -64,203 +66,118 @@ export default function Report() {
       ['Promocode', booking.promocode || 'N/A', 'Discount', booking.discount ? `Rs.${booking.discount}` : 'N/A'],
       ['Subtotal', booking.subtotal ? `Rs.${booking.subtotal}` : 'N/A', 'Total', booking.total ? `Rs.${booking.total}` : 'N/A']
     ];
-    autoTable(doc, {
-      startY: 40,
-      body: orderDetails,
-      columnStyles: { 0: { cellWidth: 50 }, 1: { cellWidth: 50 }, 2: { cellWidth: 50 }, 3: { cellWidth: 50 } },
-      styles: { fontSize: 12 }
-    });
+    autoTable(doc, { startY: 40, body: orderDetails, columnStyles: { 0: { cellWidth: 50 }, 1: { cellWidth: 50 }, 2: { cellWidth: 50 }, 3: { cellWidth: 50 } }, styles: { fontSize: 12 } });
     const finalY = doc.lastAutoTable.finalY + 10;
     doc.text(`Total: Rs.${booking.total || '0.00'}`, 150, finalY, { align: 'right' });
-    const sanitizedCustomerName = (booking.customer_name || 'order').replace(/[^a-zA-Z0-9]/g, '_');
-    doc.save(`${sanitizedCustomerName}_crackers_order.pdf`);
+    doc.save(`${(booking.customer_name || 'order').replace(/[^a-zA-Z0-9]/g, '_')}_crackers_order.pdf`);
   };
 
   const exportToExcel = () => {
-    // Group bookings by status
     const groupedBookings = bookings.reduce((acc, booking) => {
       const status = booking.status || 'Unknown';
-      if (!acc[status]) {
-        acc[status] = [];
-      }
+      if (!acc[status]) acc[status] = [];
       acc[status].push(booking);
       return acc;
     }, {});
-
-    // Create a new workbook
     const workbook = XLSX.utils.book_new();
-
-    // Process each status group
     Object.keys(groupedBookings).forEach(status => {
-      // Sort bookings by month ascending within each status
-      const sortedBookings = [...groupedBookings[status]].sort((a, b) => {
-        const dateA = new Date(a.created_at);
-        const dateB = new Date(b.created_at);
-        const monthA = dateA.getMonth();
-        const monthB = dateB.getMonth();
-        return monthA - monthB;
-      });
-
-      // Map bookings to sheet data
+      const sortedBookings = [...groupedBookings[status]].sort((a, b) => new Date(a.created_at).getMonth() - new Date(b.created_at).getMonth());
       const data = sortedBookings.map((b, i) => {
-        // Calculate total if not provided: subtotal - discount
         const subtotal = b.subtotal || (b.total ? parseFloat(b.total) + (b.discount || 0) : 0);
         const discount = parseFloat(b.discount) || 0;
-        const calculatedTotal = subtotal - discount;
-        const totalAmount = b.total ? parseFloat(b.total).toFixed(2) : calculatedTotal.toFixed(2);
-
-        return {
-          'Sl. No': i + 1,
-          'Order ID': b.order_id || '',
-          'Customer Name': b.customer_name || '',
-          'Mobile Number': b.mobile_number || '',
-          'District': b.district || '',
-          'State': b.state || '',
-          'Status': b.status || '',
-          'Date': new Date(b.created_at).toLocaleDateString('en-GB'),
-          'Address': b.address || '',
-          'Subtotal': subtotal.toFixed(2),
-          'Discount': discount.toFixed(2),
-          'Promocode': b.promocode || '',
-          'Total Amount': `Rs.${totalAmount}`,
-          'Payment Method': b.payment_method || '',
-          'Amount Paid': b.amount_paid ? `Rs.${b.amount_paid}` : '',
-          'Transaction ID': b.transaction_id || ''
-        };
+        const totalAmount = b.total ? parseFloat(b.total).toFixed(2) : (subtotal - discount).toFixed(2);
+        return { 'Sl. No': i + 1, 'Order ID': b.order_id || '', 'Customer Name': b.customer_name || '', 'Mobile Number': b.mobile_number || '', 'District': b.district || '', 'State': b.state || '', 'Status': b.status || '', 'Date': new Date(b.created_at).toLocaleDateString('en-GB'), 'Address': b.address || '', 'Subtotal': subtotal.toFixed(2), 'Discount': discount.toFixed(2), 'Promocode': b.promocode || '', 'Total Amount': `Rs.${totalAmount}`, 'Payment Method': b.payment_method || '', 'Amount Paid': b.amount_paid ? `Rs.${b.amount_paid}` : '', 'Transaction ID': b.transaction_id || '' };
       });
-
-      // Create worksheet for this status
-      const worksheet = XLSX.utils.json_to_sheet(data);
-      // Sanitize sheet name (Excel sheet names can't exceed 31 chars and can't contain some special chars)
-      const safeStatus = status.replace(/[*?:/\\[\]]/g, '_').substring(0, 31);
-      XLSX.utils.book_append_sheet(workbook, worksheet, safeStatus || 'Unknown');
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data), status.replace(/[*?:/\\[\]]/g, '_').substring(0, 31) || 'Unknown');
     });
-
-    // Write the workbook to file
-    XLSX.writeFile(workbook, `Bookings_Report_By_Status.xlsx`);
+    XLSX.writeFile(workbook, 'Bookings_Report_By_Status.xlsx');
   };
 
-  const indexOfLastOrder = currentPage * ordersPerPage;
-  const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
-  const currentOrders = bookings.slice(indexOfFirstOrder, indexOfLastOrder);
   const totalPages = Math.ceil(bookings.length / ordersPerPage);
+  const currentOrders = bookings.slice((currentPage - 1) * ordersPerPage, currentPage * ordersPerPage);
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <Logout />
-      <div className="flex-1 flex items-start justify-center onefifty:ml-[0%] hundred:ml-[15%] mobile:ml-[0%]">
-        <div className="w-full max-w-5xl p-6 mobile:p-4">
-          <h1 className="text-4xl font-bold mb-8 text-center text-gray-800 dark:text-gray-100 mobile:text-2xl">Report</h1>
-          {error && (
-            <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
-              {error}
-            </div>
-          )}
-          <div className="flex justify-end mb-4">
-            <button
-              onClick={exportToExcel}
-              className="flex items-center px-4 py-2 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 mobile:text-sm mobile:px-3 mobile:py-1"
-              style={{
-                background: styles.button.background.replace('2,132,199', '22,163,74').replace('14,165,233', '34,197,94'),
-                backgroundDark: styles.button.backgroundDark.replace('59,130,246', '22,163,74').replace('37,99,235', '20,83,45'),
-                border: styles.button.border.replace('125,211,252', '134,239,172'),
-                borderDark: styles.button.borderDark.replace('147,197,253', '134,239,172'),
-                boxShadow: styles.button.boxShadow.replace('2,132,199', '22,163,74'),
-                boxShadowDark: styles.button.boxShadowDark.replace('59,130,246', '22,163,74')
-              }}
-            >
-              Export to Excel
+      <div className="hundred:ml-64 mobile:ml-0 mobile:px-3 w-auto">
+        <div className="mx-auto px-6 py-8 w-full">
+
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Report</h1>
+            <p className="text-slate-400 mt-1.5 text-sm">View and export all booking records</p>
+          </div>
+
+          {error && <div className="bg-red-50 border border-red-200 border-l-4 border-l-red-500 text-red-700 px-4 py-3.5 rounded-xl mb-5 text-sm font-medium">⚠️ {error}</div>}
+
+          <div className="flex justify-end mb-5">
+            <button onClick={exportToExcel} className="h-10 px-5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-emerald-500 to-emerald-400 shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-500 transition-all duration-200 flex items-center gap-2">
+              <FaDownload className="text-xs" /> Export to Excel
             </button>
           </div>
-          <div className="grid mobile:grid-cols-1 onefifty:grid-cols-2 hundred:grid-cols-3 gap-6 mobile:gap-4">
-            {currentOrders.length > 0 ? (
-              currentOrders.map((booking, index) => {
-                // Calculate total for display if needed
+
+          {currentOrders.length === 0 ? (
+            <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl mb-6">
+              <div className="text-4xl mb-3">📋</div>
+              <p className="text-slate-400 font-medium text-sm">No bookings found</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4 mb-6">
+              {currentOrders.map((booking, index) => {
                 const subtotal = booking.subtotal || (booking.total ? parseFloat(booking.total) + (booking.discount || 0) : 0);
                 const discount = parseFloat(booking.discount) || 0;
-                const calculatedTotal = subtotal - discount;
-                const totalAmount = booking.total ? parseFloat(booking.total).toFixed(2) : calculatedTotal.toFixed(2);
-
+                const totalAmount = booking.total ? parseFloat(booking.total).toFixed(2) : (subtotal - discount).toFixed(2);
                 return (
-                  <div
-                    key={booking.id}
-                    className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 mobile:p-4"
-                  >
-                    <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Booking #{indexOfFirstOrder + index + 1}</h2>
-                      <button
-                        onClick={() => generatePDF(booking)}
-                        className="flex items-center px-3 py-2 text-sm text-white rounded-md hover:bg-indigo-700 dark:hover:bg-blue-600 mobile:text-sm"
-                        style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
-                      >
-                        <FaDownload className="mr-2" />
-                        Download PDF
-                      </button>
+                  <div key={booking.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <div className="text-base font-bold text-slate-800">{booking.customer_name || 'N/A'}</div>
+                        {booking.mobile_number && (
+                          <a href={`tel:${booking.mobile_number}`} className="text-xs font-semibold text-indigo-500 hover:text-indigo-700">📞 {booking.mobile_number}</a>
+                        )}
+                      </div>
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusColors[booking.status] || "text-slate-400 bg-slate-50 border-slate-200"}`}>
+                        {booking.status || 'N/A'}
+                      </span>
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Order ID:</span> {booking.order_id || 'N/A'}</p>
-                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Customer Name:</span> {booking.customer_name || 'N/A'}</p>
-                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Phone:</span> {booking.mobile_number || 'N/A'}</p>
-                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">District:</span> {booking.district || 'N/A'}</p>
-                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">State:</span> {booking.state || 'N/A'}</p>
-                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Status:</span> {booking.status || 'N/A'}</p>
-                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Date:</span> {formatDate(booking.created_at)}</p>
-                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Total Amount:</span> Rs.{booking.total}</p>
-                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Payment Method:</span> {booking.payment_method || 'N/A'}</p>
-                      <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Amount Paid:</span> {booking.amount_paid ? `Rs.${booking.amount_paid}` : 'N/A'}</p>
-                      {booking.transaction_id && (
-                        <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Transaction ID:</span> {booking.transaction_id}</p>
-                      )}
+
+                    <div className="grid grid-cols-2 gap-1.5 mb-4">
+                      {[["🆔 Order ID", booking.order_id || 'N/A'], ["📅 Date", formatDate(booking.created_at)], ["📍 District", booking.district || 'N/A'], ["🏛️ State", booking.state || 'N/A'], ["💳 Payment", booking.payment_method || 'N/A'], ["💰 Total", `₹${totalAmount}`]].map(([label, value]) => (
+                        <div key={label} className="bg-slate-50 rounded-lg px-2 py-1.5">
+                          <div className="text-xs font-bold text-slate-400">{label}</div>
+                          <div className="text-xs font-semibold text-slate-700">{value}</div>
+                        </div>
+                      ))}
                     </div>
+
+                    {booking.amount_paid && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3">
+                        <div className="text-xs font-bold text-amber-600">Amount Paid: ₹{booking.amount_paid}</div>
+                        {booking.transaction_id && <div className="text-xs text-amber-500 mt-0.5">TXN: {booking.transaction_id}</div>}
+                      </div>
+                    )}
+
+                    <button onClick={() => generatePDF(booking)}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-500 hover:text-white hover:border-indigo-500 transition-all duration-200">
+                      <FaDownload className="text-xs" /> Download PDF
+                    </button>
                   </div>
                 );
-              })
-            ) : (
-              <div className="col-span-full text-center text-gray-600 dark:text-gray-400 p-4 bg-white dark:bg-gray-900 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 mobile:text-sm">
-                No bookings found
-              </div>
-            )}
-          </div>
+              })}
+            </div>
+          )}
+
           {totalPages > 1 && (
-            <div className="mt-6 flex justify-center space-x-2 mobile:space-x-1">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 rounded-lg text-white disabled:bg-gray-400 dark:disabled:bg-gray-700 hover:bg-indigo-700 dark:hover:bg-blue-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
-              >
-                Previous
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`px-4 py-2 rounded-lg ${currentPage === page ? 'bg-indigo-600 dark:bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-600'} mobile:px-2 mobile:py-1 mobile:text-sm`}
-                >
-                  {page}
-                </button>
+            <div className="flex justify-center gap-1.5 flex-wrap">
+              <PaginBtn label="← Prev" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} />
+              {Array.from({ length: totalPages }, (_, i) => i + 1).slice(Math.max(0, currentPage - 3), Math.min(totalPages, currentPage + 2)).map(page => (
+                <PaginBtn key={page} label={page} onClick={() => setCurrentPage(page)} active={currentPage === page} />
               ))}
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 rounded-lg text-white disabled:bg-gray-400 dark:disabled:bg-gray-700 hover:bg-indigo-700 dark:hover:bg-blue-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
-              >
-                Next
-              </button>
+              <PaginBtn label="Next →" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} />
             </div>
           )}
         </div>
       </div>
-      <style>{`
-        [style*="backgroundDark"] { background: var(--bg, ${styles.button.background}); }
-        [style*="backgroundDark"][data-dark] { --bg: ${styles.button.backgroundDark}; }
-        [style*="borderDark"] { border: var(--border, ${styles.button.border}); }
-        [style*="borderDark"][data-dark] { --border: ${styles.button.borderDark}; }
-        [style*="boxShadowDark"] { box-shadow: var(--shadow, ${styles.button.boxShadow}); }
-        [style*="boxShadowDark"][data-dark] { --shadow: ${styles.button.boxShadowDark}; }
-      `}</style>
     </div>
   );
 }

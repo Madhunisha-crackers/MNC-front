@@ -3,8 +3,44 @@ import axios from 'axios';
 import { API_BASE_URL } from '../../../Config';
 import Sidebar from '../Sidebar/Sidebar';
 import Logout from '../Logout';
-import { FaDownload, FaTrash } from 'react-icons/fa';
+import { FaDownload, FaTrash, FaSearch } from 'react-icons/fa';
 import { toast } from 'react-toastify';
+
+const StatusBadge = ({ status }) => {
+  const map = {
+    booked:     "text-sky-600 bg-sky-50 border-sky-200",
+    paid:       "text-amber-600 bg-amber-50 border-amber-200",
+    dispatched: "text-emerald-600 bg-emerald-50 border-emerald-200",
+    delivered:  "text-emerald-700 bg-emerald-100 border-emerald-300",
+  };
+  const icons = {
+    booked: "⏳ Booked",
+    paid: "💰 Paid",
+    dispatched: "🚚 Dispatched",
+    delivered: "✓ Delivered",
+  };
+  const cls = map[status?.toLowerCase()] || "text-slate-400 bg-slate-50 border-slate-200";
+  return (
+    <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${cls}`}>
+      {icons[status?.toLowerCase()] || status}
+    </span>
+  );
+};
+
+const PaginBtn = ({ label, onClick, disabled, active }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={`px-4 py-2 rounded-lg border text-sm font-bold transition-all duration-150
+      ${active    ? "bg-indigo-600 border-indigo-600 text-white"
+      : disabled  ? "bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed"
+                  : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:text-indigo-600"}`}
+  >
+    {label}
+  </button>
+);
+
+const selectStyles = "w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border";
 
 export default function Tracking() {
   const [bookings, setBookings] = useState([]);
@@ -23,25 +59,6 @@ export default function Tracking() {
   const [amountPaid, setAmountPaid] = useState('');
   const ordersPerPage = 9;
 
-  const styles = {
-    input: { 
-      background: "linear-gradient(135deg, rgba(255,255,255,0.8), rgba(240,249,255,0.6))", 
-      backgroundDark: "linear-gradient(135deg, rgba(55,65,81,0.8), rgba(75,85,99,0.6))",
-      backdropFilter: "blur(10px)", 
-      border: "1px solid rgba(2,132,199,0.3)", 
-      borderDark: "1px solid rgba(59,130,246,0.4)"
-    },
-    button: { 
-      background: "linear-gradient(135deg, rgba(2,132,199,0.9), rgba(14,165,233,0.95))", 
-      backgroundDark: "linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.95))",
-      backdropFilter: "blur(15px)", 
-      border: "1px solid rgba(125,211,252,0.4)", 
-      borderDark: "1px solid rgba(147,197,253,0.4)",
-      boxShadow: "0 15px 35px rgba(2,132,199,0.3), inset 0 1px 0 rgba(255,255,255,0.2)",
-      boxShadowDark: "0 15px 35px rgba(59,130,246,0.4), inset 0 1px 0 rgba(255,255,255,0.1)"
-    }
-  };
-
   const fetchBookings = async (resetPage = false) => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/tracking/bookings`, {
@@ -50,9 +67,7 @@ export default function Tracking() {
       const sortedBookings = response.data.sort((a, b) => b.id - a.id);
       setBookings(sortedBookings);
       setError('');
-      if (resetPage) {
-        setCurrentPage(1);
-      }
+      if (resetPage) setCurrentPage(1);
     } catch {
       setError('Failed to fetch bookings');
     }
@@ -75,55 +90,28 @@ export default function Tracking() {
 
   const updateStatus = async (id, newStatus, paymentDetails = null) => {
     try {
-      // Prepare the payload for the API request
       const payload = { status: newStatus };
-
-      // Only include payment details when explicitly provided (e.g., when setting status to 'paid')
       if (paymentDetails) {
         payload.payment_method = paymentDetails.paymentMethod;
         payload.transaction_id = paymentDetails.transactionId || null;
         payload.amount_paid = paymentDetails.amountPaid;
       }
-
-      console.log('Sending Payload to Backend:', payload);
       await axios.put(`${API_BASE_URL}/api/tracking/bookings/${id}/status`, payload);
-
-      // Update the local state without clearing payment details unless explicitly set
       setBookings((prev) =>
-        prev
-          .map((booking) =>
-            booking.id === id
-              ? {
-                  ...booking,
-                  status: newStatus,
-                  // Only update payment details if provided
-                  ...(paymentDetails && {
-                    payment_method: paymentDetails.paymentMethod || booking.payment_method,
-                    transaction_id: paymentDetails.transactionId || booking.transaction_id,
-                    amount_paid: paymentDetails.amountPaid || booking.amount_paid,
-                  }),
-                }
-              : booking
-          )
-          .sort((a, b) => b.id - a.id)
+        prev.map((booking) =>
+          booking.id === id
+            ? { ...booking, status: newStatus, ...(paymentDetails && { payment_method: paymentDetails.paymentMethod || booking.payment_method, transaction_id: paymentDetails.transactionId || booking.transaction_id, amount_paid: paymentDetails.amountPaid || booking.amount_paid }) }
+            : booking
+        ).sort((a, b) => b.id - a.id)
       );
-
       setError('');
       setShowPaidModal(false);
       setShowDetailsModal(false);
       setPaymentMethod('cash');
       setTransactionId('');
       setAmountPaid('');
-      toast.success("Status updated successfully", {
-        position: "top-center",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
+      toast.success("Status updated successfully", { position: "top-center", autoClose: 5000, hideProgressBar: false, closeOnClick: true, pauseOnHover: true, draggable: true });
     } catch (err) {
-      console.error('Error Response:', err.response?.data);
       setError(err.response?.data?.message || 'Failed to update status');
     }
   };
@@ -134,83 +122,44 @@ export default function Tracking() {
       setBookings((prev) => prev.filter((booking) => booking.order_id !== selectedOrderId));
       setShowDeleteModal(false);
       setError('');
-      toast.success("Booking deleted successfully", {
-        position: "top-center",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
+      toast.success("Booking deleted successfully", { position: "top-center", autoClose: 5000, hideProgressBar: false, closeOnClick: true, pauseOnHover: true, draggable: true });
     } catch (err) {
-      console.error('Error Response:', err.response?.data);
       setError(err.response?.data?.message || 'Failed to delete booking');
       setShowDeleteModal(false);
     }
   };
 
-  const handleFillDetails = () => {
-    setShowPaidModal(false);
-    setShowDetailsModal(true);
-  };
+  const handleFillDetails = () => { setShowPaidModal(false); setShowDetailsModal(true); };
 
   const handleDetailsSubmit = () => {
-    if (!amountPaid.trim() || isNaN(amountPaid) || Number(amountPaid) <= 0) {
-      setError('Please enter a valid amount paid');
-      return;
-    }
-    if (paymentMethod === 'bank' && !transactionId.trim()) {
-      setError('Transaction ID is required for bank transactions');
-      return;
-    }
-    updateStatus(selectedBookingId, 'paid', { 
-      paymentMethod, 
-      transactionId: paymentMethod === 'bank' ? transactionId : null, 
-      amountPaid: Number(amountPaid)
-    });
+    if (!amountPaid.trim() || isNaN(amountPaid) || Number(amountPaid) <= 0) { setError('Please enter a valid amount paid'); return; }
+    if (paymentMethod === 'bank' && !transactionId.trim()) { setError('Transaction ID is required for bank transactions'); return; }
+    updateStatus(selectedBookingId, 'paid', { paymentMethod, transactionId: paymentMethod === 'bank' ? transactionId : null, amountPaid: Number(amountPaid) });
   };
 
   const generatePDF = async (booking) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/direct/invoice/${booking.order_id}`, {
-        responseType: 'blob'
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch PDF');
-      }
+      const response = await fetch(`${API_BASE_URL}/api/direct/invoice/${booking.order_id}`, { responseType: 'blob' });
+      if (!response.ok) throw new Error('Failed to fetch PDF');
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       const safeCustomerName = (booking.customer_name || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
       link.setAttribute('download', `${safeCustomerName}-${booking.order_id}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      toast.success("Downloaded estimate bill, check downloads", {
-        position: "top-center",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
+      document.body.appendChild(link); link.click(); document.body.removeChild(link); window.URL.revokeObjectURL(url);
+      toast.success("Downloaded estimate bill, check downloads", { position: "top-center", autoClose: 5000 });
     } catch (err) {
-      console.error("PDF download error:", err);
-      toast.error("Failed to download PDF. Please try again.", {
-        position: "top-center",
-        autoClose: 5000,
-      });
+      toast.error("Failed to download PDF. Please try again.", { position: "top-center", autoClose: 5000 });
     }
   };
 
   const filteredBookings = bookings.filter((booking) =>
     ['customer_name', 'order_id', 'total', 'customer_type'].some((key) =>
-      booking[key].toString().toLowerCase().includes(searchTerm.toLowerCase())
+      booking[key]?.toString().toLowerCase().includes(searchTerm.toLowerCase())
     )
   );
+
   const formatDate = (dateStr) => {
     if (!dateStr) return 'N/A';
     const date = new Date(dateStr);
@@ -223,343 +172,271 @@ export default function Tracking() {
   const currentOrders = filteredBookings.slice(indexOfFirstOrder, indexOfLastOrder);
   const totalPages = Math.ceil(filteredBookings.length / ordersPerPage);
 
-  const renderSelect = (value, onChange, options, placeholder) => (
-    <select
-      value={value}
-      onChange={onChange}
-      className="w-64 p-3 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-900 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:focus:ring-blue-500"
-      style={{ background: styles.input.background, backgroundDark: styles.input.backgroundDark, border: styles.input.border, borderDark: styles.input.borderDark, backdropFilter: styles.input.backdropFilter }}
-    >
-      <option value="">{placeholder}</option>
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
+  const ModalWrapper = ({ children }) => (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl">
+        {children}
+      </div>
+    </div>
   );
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <Logout />
-      <div className="flex-1 flex items-start justify-center p-6 mobile:overflow-hidden onefifty:ml-[0%] hundred:ml-[15%] mobile:ml-[0%]">
-        <div className="w-full max-w-5xl mobile:p-4">
-          <h1 className="text-4xl font-bold mb-8 text-center text-gray-800 dark:text-gray-100 mobile:text-2xl">Tracking</h1>
+      <div className="hundred:ml-64 mobile:ml-0 mobile:px-3 w-auto">
+        <div className="mx-auto px-6 py-8 w-full">
+
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Tracking</h1>
+            <p className="text-slate-400 mt-1.5 text-sm">Monitor and manage all bookings</p>
+          </div>
+
           {error && (
-            <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-6 py-3 rounded-lg mb-6 text-center shadow-md mobile:text-sm mobile:px-3 mobile:py-2">
-              {error}
+            <div className="bg-red-50 border border-red-200 border-l-4 border-l-red-500 text-red-700 px-4 py-3.5 rounded-xl mb-5 text-sm font-medium">
+              ⚠️ {error}
             </div>
           )}
-          <div className="mb-6 flex justify-center flex-wrap gap-4 mobile:gap-2">
-            {renderSelect(filterStatus, (e) => setFilterStatus(e.target.value), [
-              { value: 'booked', label: 'Booked' },
-              { value: 'paid', label: 'Paid' },
-            ], 'All Statuses')}
-            {renderSelect(filterCustomerType, (e) => setFilterCustomerType(e.target.value), [
-              { value: 'Customer', label: 'Customer' },
-              { value: 'Agent', label: 'Agent' },
-              { value: 'Customer of Selected Agent', label: 'Customer of Selected Agent' },
-              { value: 'User', label: 'User' }
-            ], 'All Customer Types')}
-            <input
-              type="text"
-              placeholder="Search name, order ID, total, type..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-96 p-3 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-900 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:focus:ring-blue-500 mobile:w-full mobile:p-2 mobile:text-sm"
-              style={{ background: styles.input.background, backgroundDark: styles.input.backgroundDark, border: styles.input.border, borderDark: styles.input.borderDark, backdropFilter: styles.input.backdropFilter }}
-            />
-          </div>
-          <div className="grid mobile:grid-cols-1 onefifty:grid-cols-2 hundred:grid-cols-3 gap-6 mobile:gap-4">
-            {currentOrders.length > 0 ? (
-              currentOrders.map((booking, index) => (
-                <div
-                  key={booking.id}
-                  className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 mobile:p-4 relative overflow-hidden"
-                >
-                  {['dispatched', 'delivered'].includes(booking.status.toLowerCase()) && (
-                    <div className="absolute top-2 right-2 w-8 h-8 bg-green-500 text-black text-md font-bold flex items-center justify-center rounded-full transform opacity-80 pointer-events-none z-10 shadow-md">
-                      D
-                    </div>
-                  )}
-                  {['paid'].includes(booking.status.toLowerCase()) && (
-                    <div className="absolute top-2 right-2 w-8 h-8 bg-orange-500 text-black text-md font-bold flex items-center justify-center rounded-full transform opacity-80 pointer-events-none z-10 shadow-md">
-                      P
-                    </div>
-                  )}
-                  {['booked'].includes(booking.status.toLowerCase()) && (
-                    <div className="absolute top-2 right-2 w-8 h-8 bg-sky-500 text-black text-md font-bold flex items-center justify-center rounded-full transform opacity-80 pointer-events-none z-10 shadow-md">
-                      B
-                    </div>
-                  )}
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">#{indexOfFirstOrder + index + 1}</div>
-                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">{booking.customer_name}</h3>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    <strong>Contact:</strong>{" "}
-                    <a href={`tel:${booking.mobile_number}`} className="text-blue-600 hover:underline">
-                      {booking.mobile_number}
-                    </a>
-                  </p>
-                  <p className="text-gray-700 dark:text-gray-300"><strong>Order ID:</strong> {booking.order_id}</p>
-                  <p className="text-gray-700 dark:text-gray-300"><span className="font-medium">Date:</span> {formatDate(booking.created_at)}</p>
-                  <p className="text-gray-700 dark:text-gray-300"><strong>Type:</strong> {booking.customer_type}</p>
-                  <p className="text-gray-700 dark:text-gray-300"><strong>District:</strong> {booking.district}</p>
-                  <p className="text-gray-700 dark:text-gray-300"><strong>State:</strong> {booking.state}</p>
-                  <p className="text-gray-700 dark:text-gray-300"><strong>Status:</strong> {booking.status}</p>
-                  {booking.amount_paid && (
-                    <p className="text-gray-700 dark:text-gray-300">
-                      <strong>Amount Paid:</strong> Rs.{booking.amount_paid}
-                    </p>
-                  )}
-                  {booking.payment_method && (
-                    <p className="text-gray-700 dark:text-gray-300">
-                      <strong>Payment Method:</strong> {booking.payment_method}
-                    </p>
-                  )}
-                  {booking.transaction_id && (
-                    <p className="text-gray-700 dark:text-gray-300">
-                      <strong>Transaction ID:</strong> {booking.transaction_id}
-                    </p>
-                  )}
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={() => generatePDF(booking)}
-                      className="flex items-center justify-center px-4 py-2 text-sm text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-blue-600 mobile:text-sm"
-                      style={{
-                        background: styles.button.background,
-                        backgroundDark: styles.button.backgroundDark,
-                        border: styles.button.border,
-                        borderDark: styles.button.borderDark,
-                        boxShadow: styles.button.boxShadow,
-                        boxShadowDark: styles.button.boxShadowDark,
-                      }}
-                    >
-                      <FaDownload className="mr-2" /> Download
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedOrderId(booking.order_id);
-                        setShowDeleteModal(true);
-                      }}
-                      className="flex items-center justify-center px-4 py-2 text-sm text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 mobile:text-sm"
-                      style={{
-                        background: "linear-gradient(135deg, rgba(220,38,38,0.9), rgba(239,68,68,0.95))",
-                        backgroundDark: "linear-gradient(135deg, rgba(185,28,28,0.9), rgba(220,38,38,0.95))",
-                        border: "1px solid rgba(252,165,165,0.4)",
-                        borderDark: "1px solid rgba(252,165,165,0.4)",
-                        boxShadow: "0 15px 35px rgba(220,38,38,0.3), inset 0 1px 0 rgba(255,255,255,0.2)",
-                        boxShadowDark: "0 15px 35px rgba(185,28,28,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
-                      }}
-                    >
-                      <FaTrash className="mr-2" /> Delete Booking
-                    </button>
-                  </div>
-                  <div className="mt-4">
-                    {renderSelect(booking.status, (e) => handleStatusChange(booking.id, e.target.value), [
-                      { value: 'booked', label: 'Booked' },
-                      { value: 'paid', label: 'Paid' },
-                    ], 'Update Status')}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-full text-center text-gray-600 dark:text-gray-400 p-4 mobile:text-sm">
-                No bookings found
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-5 mb-6">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex-1 min-w-48">
+                <label className="block text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-1.5">Status</label>
+                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={selectStyles}>
+                  <option value="">All Statuses</option>
+                  <option value="booked">Booked</option>
+                  <option value="paid">Paid</option>
+                </select>
               </div>
-            )}
-          </div>
-          {totalPages > 1 && (
-            <div className="mt-6 flex justify-center space-x-2 mobile:space-x-1">
-              <button
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 rounded-lg text-white disabled:bg-gray-400 dark:disabled:bg-gray-700 hover:bg-indigo-700 dark:hover:bg-blue-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                style={{
-                  background: styles.button.background,
-                  backgroundDark: styles.button.backgroundDark,
-                  border: styles.button.border,
-                  borderDark: styles.button.borderDark,
-                  boxShadow: styles.button.boxShadow,
-                  boxShadowDark: styles.button.boxShadowDark,
-                }}
-              >
-                Previous
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`px-4 py-2 rounded-lg ${
-                    currentPage === page
-                      ? 'bg-indigo-600 dark:bg-blue-600 text-white'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-600'
-                  } mobile:px-2 mobile:py-1 mobile:text-sm`}
-                >
-                  {page}
-                </button>
-              ))}
-              <button
-                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 rounded-lg text-white disabled:bg-gray-400 dark:disabled:bg-gray-700 hover:bg-indigo-700 dark:hover:bg-blue-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                style={{
-                  background: styles.button.background,
-                  backgroundDark: styles.button.backgroundDark,
-                  border: styles.button.border,
-                  borderDark: styles.button.borderDark,
-                  boxShadow: styles.button.boxShadow,
-                  boxShadowDark: styles.button.boxShadowDark,
-                }}
-              >
-                Next
-              </button>
-            </div>
-          )}
-          {showPaidModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-lg w-96 border border-gray-200 dark:border-gray-700">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Update Status to Paid</h2>
-                <p className="text-gray-700 dark:text-gray-300 mb-4">Please fill in the payment details.</p>
-                <div className="flex justify-end space-x-4">
-                  <button
-                    onClick={handleFillDetails}
-                    className="px-4 py-2 rounded-lg text-white hover:bg-green-700 dark:hover:bg-green-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                    style={{
-                      background: styles.button.background.replace('2,132,199', '22,163,74').replace('14,165,233', '34,197,94'),
-                      backgroundDark: styles.button.backgroundDark.replace('59,130,246', '22,163,74').replace('37,99,235', '20,83,45'),
-                      border: styles.button.border.replace('125,211,252', '134,239,172'),
-                      borderDark: styles.button.borderDark.replace('147,197,253', '134,239,172'),
-                      boxShadow: styles.button.boxShadow.replace('2,132,199', '22,163,74'),
-                      boxShadowDark: styles.button.boxShadowDark.replace('59,130,246', '22,163,74'),
-                    }}
-                  >
-                    Fill Details
-                  </button>
-                  <button
-                    onClick={() => setShowPaidModal(false)}
-                    className="px-4 py-2 rounded-lg bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-100 hover:bg-gray-400 dark:hover:bg-gray-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
+              <div className="flex-1 min-w-48">
+                <label className="block text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-1.5">Customer Type</label>
+                <select value={filterCustomerType} onChange={(e) => setFilterCustomerType(e.target.value)} className={selectStyles}>
+                  <option value="">All Customer Types</option>
+                  <option value="Customer">Customer</option>
+                  <option value="Agent">Agent</option>
+                  <option value="Customer of Selected Agent">Customer of Selected Agent</option>
+                  <option value="User">User</option>
+                </select>
               </div>
-            </div>
-          )}
-          {showDetailsModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-lg w-96 border border-gray-200 dark:border-gray-700">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Payment Details</h2>
-                <div className="mb-4">
-                  <label className="block text-gray-700 dark:text-gray-300 mb-2">Payment Method</label>
-                  {renderSelect(paymentMethod, (e) => setPaymentMethod(e.target.value), [
-                    { value: 'cash', label: 'Cash' },
-                    { value: 'bank', label: 'Bank Transaction' }
-                  ], 'Select Payment Method')}
-                </div>
-                <div className="mb-4">
-                  <label className="block text-gray-700 dark:text-gray-300 mb-2">Amount Paid</label>
+              <div className="flex-1 min-w-64">
+                <label className="block text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-1.5">Search</label>
+                <div className="relative">
+                  <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
                   <input
-                    type="number"
-                    value={amountPaid}
-                    onChange={(e) => setAmountPaid(e.target.value)}
-                    placeholder="Enter amount paid"
-                    className="w-full p-2 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-900 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:focus:ring-blue-500 mobile:text-xl"
-                    style={{
-                      background: styles.input.background,
-                      backgroundDark: styles.input.backgroundDark,
-                      border: styles.input.border,
-                      borderDark: styles.input.borderDark,
-                      backdropFilter: styles.input.backdropFilter,
-                    }}
+                    type="text"
+                    placeholder="Name, order ID, total, type..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
                   />
                 </div>
-                {paymentMethod === 'bank' && (
-                  <div className="mb-4">
-                    <label className="block text-gray-700 dark:text-gray-300 mb-2">Transaction ID</label>
-                    <input
-                      type="text"
-                      value={transactionId}
-                      onChange={(e) => setTransactionId(e.target.value)}
-                      placeholder="Enter transaction ID"
-                      className="w-full p-2 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-900 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:focus:ring-blue-500 mobile:text-xl"
-                      style={{
-                        background: styles.input.background,
-                        backgroundDark: styles.input.backgroundDark,
-                        border: styles.input.border,
-                        borderDark: styles.input.borderDark,
-                        backdropFilter: styles.input.backdropFilter,
-                      }}
-                    />
-                  </div>
-                )}
-                <div className="flex justify-end space-x-4">
-                  <button
-                    onClick={handleDetailsSubmit}
-                    className="px-4 py-2 rounded-lg text-white hover:bg-indigo-700 dark:hover:bg-blue-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                    style={{
-                      background: styles.button.background,
-                      backgroundDark: styles.button.backgroundDark,
-                      border: styles.button.border,
-                      borderDark: styles.button.borderDark,
-                      boxShadow: styles.button.boxShadow,
-                      boxShadowDark: styles.button.boxShadowDark,
-                    }}
-                  >
-                    Submit
-                  </button>
-                  <button
-                    onClick={() => setShowDetailsModal(false)}
-                    className="px-4 py-2 rounded-lg bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-100 hover:bg-gray-400 dark:hover:bg-gray-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
               </div>
             </div>
-          )}
-          {showDeleteModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-lg w-96 border border-gray-200 dark:border-gray-700">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4">Confirm Delete</h2>
-                <p className="text-gray-700 dark:text-gray-300 mb-4">
-                  Are you sure you want to delete this booking and its associated quotation (if any)?
-                </p>
-                <div className="flex justify-end space-x-4">
-                  <button
-                    onClick={handleDeleteBooking}
-                    className="px-4 py-2 rounded-lg text-white hover:bg-red-700 dark:hover:bg-red-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                    style={{
-                      background: "linear-gradient(135deg, rgba(220,38,38,0.9), rgba(239,68,68,0.95))",
-                      backgroundDark: "linear-gradient(135deg, rgba(185,28,28,0.9), rgba(220,38,38,0.95))",
-                      border: "1px solid rgba(252,165,165,0.4)",
-                      borderDark: "1px solid rgba(252,165,165,0.4)",
-                      boxShadow: "0 15px 35px rgba(220,38,38,0.3), inset 0 1px 0 rgba(255,255,255,0.2)",
-                      boxShadowDark: "0 15px 35px rgba(185,28,28,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
-                    }}
-                  >
-                    Delete
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteModal(false)}
-                    className="px-4 py-2 rounded-lg bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-100 hover:bg-gray-400 dark:hover:bg-gray-600 mobile:px-2 mobile:py-1 mobile:text-sm"
-                  >
-                    Cancel
-                  </button>
+          </div>
+
+          {currentOrders.length > 0 ? (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 mb-6">
+              {currentOrders.map((booking, index) => (
+                <div
+                  key={booking.id}
+                  className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div className="text-xs font-extrabold text-indigo-500 tracking-wide">{booking.order_id}</div>
+                      <div className="text-base font-bold text-slate-800 mt-0.5">{booking.customer_name}</div>
+                    </div>
+                    <StatusBadge status={booking.status} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    {[
+                      ["📍 District", booking.district || "N/A"],
+                      ["🏛️ State", booking.state || "N/A"],
+                      ["👤 Type", booking.customer_type],
+                      ["📅 Date", formatDate(booking.created_at)],
+                    ].map(([label, value]) => (
+                      <div key={label} className="bg-slate-50 rounded-lg px-2.5 py-2">
+                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">{label}</div>
+                        <div className="text-xs font-semibold text-slate-700 mt-0.5">{value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {(booking.amount_paid || booking.payment_method || booking.transaction_id) && (
+                    <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 mb-4 space-y-1">
+                      {booking.amount_paid && (
+                        <p className="text-xs text-slate-700"><span className="font-bold text-amber-600">Amount Paid:</span> ₹{booking.amount_paid}</p>
+                      )}
+                      {booking.payment_method && (
+                        <p className="text-xs text-slate-700"><span className="font-bold text-amber-600">Method:</span> {booking.payment_method}</p>
+                      )}
+                      {booking.transaction_id && (
+                        <p className="text-xs text-slate-700"><span className="font-bold text-amber-600">Txn ID:</span> {booking.transaction_id}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {booking.mobile_number && (
+                    <a href={`tel:${booking.mobile_number}`} className="block text-xs font-semibold text-indigo-500 hover:text-indigo-700 mb-4 transition-colors">
+                      📞 {booking.mobile_number}
+                    </a>
+                  )}
+
+                  <div className="mb-3">
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Update Status</label>
+                    <select
+                      value={booking.status}
+                      onChange={(e) => handleStatusChange(booking.id, e.target.value)}
+                      className={selectStyles}
+                    >
+                      <option value="">— Change Status —</option>
+                      <option value="booked">Booked</option>
+                      <option value="paid">Paid</option>
+                    </select>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => generatePDF(booking)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-500 hover:text-white hover:border-indigo-500 transition-all duration-200"
+                    >
+                      <FaDownload className="text-xs" /> Download
+                    </button>
+                    <button
+                      onClick={() => { setSelectedOrderId(booking.order_id); setShowDeleteModal(true); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-red-50 text-red-500 border border-red-200 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200"
+                    >
+                      <FaTrash className="text-xs" /> Delete
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-slate-400 font-medium bg-white border border-slate-200 rounded-2xl mb-6">
+              No bookings found
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="flex justify-center gap-1.5 flex-wrap">
+              <PaginBtn label="← Prev" onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1} />
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <PaginBtn key={page} label={page} onClick={() => setCurrentPage(page)} active={currentPage === page} />
+              ))}
+              <PaginBtn label="Next →" onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} />
             </div>
           )}
         </div>
       </div>
-      <style>{`
-        [style*="backgroundDark"] { background: var(--bg, ${styles.input.background}); }
-        [style*="backgroundDark"][data-dark] { --bg: ${styles.input.backgroundDark}; }
-        [style*="borderDark"] { border: var(--border, ${styles.input.border}); }
-        [style*="borderDark"][data-dark] { --border: ${styles.input.borderDark}; }
-        [style*="boxShadowDark"] { box-shadow: var(--shadow, ${styles.button.boxShadow}); }
-        [style*="boxShadowDark"][data-dark] { --shadow: ${styles.button.boxShadowDark}; }
-      `}</style>
+
+      {showPaidModal && (
+        <ModalWrapper>
+          <div className="text-5xl mb-4 text-center">💰</div>
+          <h2 className="text-xl font-extrabold text-slate-800 mb-2 text-center">Update to Paid?</h2>
+          <p className="text-slate-500 text-sm mb-6 text-center">Please fill in the payment details to proceed.</p>
+          <div className="flex gap-2.5 justify-center">
+            <button onClick={() => setShowPaidModal(false)} className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors">
+              Cancel
+            </button>
+            <button onClick={handleFillDetails} className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-emerald-500 to-emerald-400 shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-500 transition-all duration-200">
+              Fill Details
+            </button>
+          </div>
+        </ModalWrapper>
+      )}
+
+{showDetailsModal && (
+  <ModalWrapper key="payment-details-modal">   {/* ← this is the most important fix */}
+    <h2 className="text-xl font-extrabold text-slate-800 mb-6 text-center">💳 Payment Details</h2>
+    <div className="space-y-4">
+      <div>
+        <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+          Payment Method
+        </label>
+        <select
+          value={paymentMethod}
+          onChange={(e) => setPaymentMethod(e.target.value)}
+          className={selectStyles}
+        >
+          <option value="cash">Cash</option>
+          <option value="bank">Bank Transaction</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+          Amount Paid <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={amountPaid ?? ""}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (/^\d*\.?\d{0,2}$/.test(val)) {
+              setAmountPaid(val);
+            }
+          }}
+          placeholder="Enter amount paid"
+          className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+          autoFocus
+        />
+      </div>
+
+      {paymentMethod === 'bank' && (
+        <div key="bank-transaction-id-field">
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+            Transaction ID <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={transactionId ?? ""}
+            onChange={(e) => setTransactionId(e.target.value)}
+            placeholder="Enter transaction ID"
+            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+            autoFocus
+          />
+        </div>
+      )}
+    </div>
+
+    <div className="flex gap-2.5 justify-end mt-6">
+      <button
+        onClick={() => setShowDetailsModal(false)}
+        className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors"
+      >
+        Cancel
+      </button>
+      <button
+        onClick={handleDetailsSubmit}
+        className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500 transition-all duration-200"
+      >
+        Submit
+      </button>
+    </div>
+  </ModalWrapper>
+)}
+
+      {showDeleteModal && (
+        <ModalWrapper>
+          <div className="text-5xl mb-4 text-center">⚠️</div>
+          <h2 className="text-lg font-extrabold text-slate-800 mb-2.5 text-center">Delete Booking?</h2>
+          <p className="text-slate-500 text-sm mb-6 text-center">
+            Are you sure you want to delete this booking and its associated quotation (if any)? This cannot be undone.
+          </p>
+          <div className="flex gap-2.5 justify-center">
+            <button onClick={() => setShowDeleteModal(false)} className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors">
+              Keep It
+            </button>
+            <button onClick={handleDeleteBooking} className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-red-500 to-red-400 shadow-lg shadow-red-200 hover:from-red-600 hover:to-red-500 transition-all duration-200">
+              Yes, Delete
+            </button>
+          </div>
+        </ModalWrapper>
+      )}
     </div>
   );
 }

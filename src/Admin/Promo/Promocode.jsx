@@ -3,6 +3,18 @@ import Sidebar from '../Sidebar/Sidebar';
 import { API_BASE_URL } from '../../../Config';
 import Logout from '../Logout';
 
+const inputCls = "w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+const Field = ({ label, required, children }) => (
+  <div>
+    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+      {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+    </label>
+    {children}
+  </div>
+)
+
+const capitalize = (str) => str ? str.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : str
+
 const Promocode = () => {
   const [promocodes, setPromocodes] = useState([]);
   const [productTypes, setProductTypes] = useState([]);
@@ -10,41 +22,16 @@ const Promocode = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
-  const styles = {
-    input: { 
-      background: "linear-gradient(135deg, rgba(255,255,255,0.8), rgba(240,249,255,0.6))", 
-      backgroundDark: "linear-gradient(135deg, rgba(55,65,81,0.8), rgba(75,85,99,0.6))",
-      backdropFilter: "blur(10px)", 
-      border: "1px solid rgba(2,132,199,0.3)", 
-      borderDark: "1px solid rgba(59,130,246,0.4)"
-    },
-    button: { 
-      background: "linear-gradient(135deg, rgba(2,132,199,0.9), rgba(14,165,233,0.95))", 
-      backgroundDark: "linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.95))",
-      backdropFilter: "blur(15px)", 
-      border: "1px solid rgba(125,211,252,0.4)", 
-      borderDark: "1px solid rgba(147,197,253,0.4)",
-      boxShadow: "0 15px 35px rgba(2,132,199,0.3), inset 0 1px 0 rgba(255,255,255,0.2)",
-      boxShadowDark: "0 15px 35px rgba(59,130,246,0.4), inset 0 1px 0 rgba(255,255,255,0.1)"
-    }
-  };
-
-  useEffect(() => {
-    fetchPromocodes();
-    fetchProductTypes();
-  }, []);
+  useEffect(() => { fetchPromocodes(); fetchProductTypes(); }, []);
 
   const fetchPromocodes = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/promocodes`);
       if (!res.ok) throw new Error('Failed to fetch promocodes');
-      const data = await res.json();
-      setPromocodes(data);
-    } catch (err) {
-      console.error('Error fetching promocodes:', err);
-      setError('Failed to load promocodes. Please try again.');
-    }
+      setPromocodes(await res.json());
+    } catch (err) { setError('Failed to load promocodes.'); }
   };
 
   const fetchProductTypes = async () => {
@@ -52,273 +39,157 @@ const Promocode = () => {
       const res = await fetch(`${API_BASE_URL}/api/product-types`);
       if (!res.ok) throw new Error('Failed to fetch product types');
       const data = await res.json();
-      // Expect array of objects with product_type property, map to strings and filter out 'gift_box_dealers'
-      const types = Array.isArray(data)
-        ? data
-            .map(item => item.product_type)
-            .filter(type => type && type !== 'gift_box_dealers')
-        : [];
-      console.log('Fetched Product Types:', types); // Debugging
-      setProductTypes(types);
-    } catch (err) {
-      console.error('Error fetching product types:', err);
-      setError('Failed to load product types. Please try again.');
-    }
+      setProductTypes(Array.isArray(data) ? data.map(item => item.product_type).filter(type => type && type !== 'gift_box_dealers') : []);
+    } catch (err) { setError('Failed to load product types.'); }
   };
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.code || !form.discount) {
-      setError('Code and discount are required.');
-      return;
-    }
-
+    if (!form.code || !form.discount) { setError('Code and discount are required.'); return; }
     try {
-      const payload = {
-        code: form.code,
-        discount: parseInt(form.discount, 10),
-        min_amount: form.min_amount ? parseFloat(form.min_amount) : null,
-        end_date: form.end_date || null,
-        product_type: form.product_type || null,
-      };
-
+      const payload = { code: form.code, discount: parseInt(form.discount, 10), min_amount: form.min_amount ? parseFloat(form.min_amount) : null, end_date: form.end_date || null, product_type: form.product_type || null };
       if (isEditing) {
-        const res = await fetch(`${API_BASE_URL}/api/promocodes/${editingId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) throw new Error('Failed to update promocode');
+        const res = await fetch(`${API_BASE_URL}/api/promocodes/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (!res.ok) throw new Error('Failed to update');
         const updated = await res.json();
-        setPromocodes((prev) =>
-          prev.map((promo) => (promo.id === editingId ? updated : promo))
-        );
+        setPromocodes(prev => prev.map(p => p.id === editingId ? updated : p));
       } else {
-        const res = await fetch(`${API_BASE_URL}/api/promocodes`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) throw new Error('Failed to create promocode');
-        const newPromo = await res.json();
-        setPromocodes([...promocodes, newPromo]);
+        const res = await fetch(`${API_BASE_URL}/api/promocodes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (!res.ok) throw new Error('Failed to create');
+        setPromocodes([...promocodes, await res.json()]);
       }
-
       setForm({ code: '', discount: '', min_amount: '', end_date: '', product_type: '' });
-      setIsEditing(false);
-      setEditingId(null);
-      setError('');
-    } catch (err) {
-      console.error('Error submitting promocode:', err);
-      setError('Failed to save promocode. Please try again.');
-    }
+      setIsEditing(false); setEditingId(null); setError('');
+    } catch (err) { setError('Failed to save promocode.'); }
   };
 
   const handleDelete = async (id) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/promocodes/${id}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) throw new Error('Failed to delete promocode');
-      setPromocodes(promocodes.filter((promo) => promo.id !== id));
-      if (editingId === id) {
-        setIsEditing(false);
-        setEditingId(null);
-        setForm({ code: '', discount: '', min_amount: '', end_date: '', product_type: '' });
-      }
-      setError('');
-    } catch (err) {
-      console.error('Error deleting promocode:', err);
-      setError('Failed to delete promocode. Please try again.');
-    }
+      const res = await fetch(`${API_BASE_URL}/api/promocodes/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+      setPromocodes(promocodes.filter(p => p.id !== id));
+      if (editingId === id) { setIsEditing(false); setEditingId(null); setForm({ code: '', discount: '', min_amount: '', end_date: '', product_type: '' }); }
+      setDeleteConfirmId(null); setError('');
+    } catch (err) { setError('Failed to delete promocode.'); setDeleteConfirmId(null); }
   };
 
   const handleEdit = (promo) => {
-    setForm({
-      code: promo.code,
-      discount: promo.discount.toString(),
-      min_amount: promo.min_amount ? promo.min_amount.toString() : '',
-      end_date: promo.end_date ? promo.end_date.split('T')[0] : '',
-      product_type: promo.product_type || '',
-    });
-    setIsEditing(true);
-    setEditingId(promo.id);
+    setForm({ code: promo.code, discount: promo.discount.toString(), min_amount: promo.min_amount ? promo.min_amount.toString() : '', end_date: promo.end_date ? promo.end_date.split('T')[0] : '', product_type: promo.product_type || '' });
+    setIsEditing(true); setEditingId(promo.id); setError('');
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false); setEditingId(null);
+    setForm({ code: '', discount: '', min_amount: '', end_date: '', product_type: '' });
     setError('');
   };
 
   return (
-    <div className="flex flex-col md:flex-row bg-gray-50 dark:bg-gray-900 min-h-screen">
+    <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <Logout />
-      <div className="flex-1 p-4 mobile:p-6 hundred:ml-64">
-        <h1 className="text-xl sm:text-2xl font-bold mb-6 text-center text-gray-900 dark:text-gray-100">Promocode Management</h1>
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg mb-4 text-center">
-            {error}
-          </div>
-        )}
-        <div className="bg-white dark:bg-gray-900 shadow-md rounded p-4 mobile:p-6 max-w-full mobile:max-w-md mx-auto mb-8">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">{isEditing ? 'Edit Promocode' : 'Add New Promocode'}</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block mb-1 font-medium text-gray-700 dark:text-gray-300">Code</label>
-              <input
-                type="text"
-                name="code"
-                value={form.code}
-                onChange={handleChange}
-                className="w-full rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 px-3 py-2 focus:border-indigo-600 dark:focus:border-blue-500 focus:ring-indigo-600 dark:focus:ring-blue-500"
-                style={{ background: styles.input.background, backgroundDark: styles.input.backgroundDark, border: styles.input.border, borderDark: styles.input.borderDark, backdropFilter: styles.input.backdropFilter }}
-                required
-              />
-            </div>
-            <div>
-              <label className="block mb-1 font-medium text-gray-700 dark:text-gray-300">Discount (%)</label>
-              <input
-                type="number"
-                name="discount"
-                value={form.discount}
-                onChange={handleChange}
-                className="w-full rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 px-3 py-2 focus:border-indigo-600 dark:focus:border-blue-500 focus:ring-indigo-600 dark:focus:ring-blue-500"
-                style={{ background: styles.input.background, backgroundDark: styles.input.backgroundDark, border: styles.input.border, borderDark: styles.input.borderDark, backdropFilter: styles.input.backdropFilter }}
-                required
-                min="1"
-                max="100"
-              />
-            </div>
-            <div>
-              <label className="block mb-1 font-medium text-gray-700 dark:text-gray-300">Minimum Amount (Optional)</label>
-              <input
-                type="number"
-                name="min_amount"
-                value={form.min_amount}
-                onChange={handleChange}
-                className="w-full rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-800 border border-gray-300 dark:border-gray-600 px-3 py-2 focus:border-indigo-600 dark:focus:border-blue-500 focus:ring-indigo-600 dark:focus:ring-blue-500"
-                style={{ background: styles.input.background, backgroundDark: styles.input.backgroundDark, border: styles.input.border, borderDark: styles.input.borderDark, backdropFilter: styles.input.backdropFilter }}
-                min="0"
-                placeholder="Enter minimum amount"
-              />
-            </div>
-            <div>
-              <label className="block mb-1 font-medium text-gray-700 dark:text-gray-300">End Date (Optional)</label>
-              <input
-                type="date"
-                name="end_date"
-                value={form.end_date}
-                onChange={handleChange}
-                className="w-full rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-800 border border-gray-300 dark:border-gray-600 px-3 py-2 focus:border-indigo-600 dark:focus:border-blue-500 focus:ring-indigo-600 dark:focus:ring-blue-500"
-                style={{ background: styles.input.background, backgroundDark: styles.input.backgroundDark, border: styles.input.border, borderDark: styles.input.borderDark, backdropFilter: styles.input.backdropFilter }}
-              />
-            </div>
-            <div>
-              <label className="block mb-1 font-medium text-gray-700 dark:text-gray-300">Product Type (Optional)</label>
-              <select
-                name="product_type"
-                value={form.product_type}
-                onChange={handleChange}
-                className="w-full rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-800 border border-gray-300 dark:border-gray-600 px-3 py-2 focus:border-indigo-600 dark:focus:border-blue-500 focus:ring-indigo-600 dark:focus:ring-blue-500"
-                style={{ background: styles.input.background, backgroundDark: styles.input.backgroundDark, border: styles.input.border, borderDark: styles.input.borderDark, backdropFilter: styles.input.backdropFilter }}
-              >
-                <option value="">Select a product type (or none for all products)</option>
-                {productTypes.length === 0 ? (
-                  <option disabled>No product types available</option>
-                ) : (
-                  productTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-md text-white dark:text-gray-100 font-semibold hover:bg-blue-700 dark:hover:bg-blue-600"
-                style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
-              >
-                {isEditing ? 'Update' : 'Add'}
-              </button>
-              {isEditing && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditing(false);
-                    setEditingId(null);
-                    setForm({ code: '', discount: '', min_amount: '', end_date: '', product_type: '' });
-                    setError('');
-                  }}
-                  className="px-4 py-2 rounded-md text-white dark:text-gray-100 font-semibold hover:bg-gray-700 dark:hover:bg-gray-600"
-                  style={{ background: styles.button.background, backgroundDark: styles.button.backgroundDark, border: styles.button.border, borderDark: styles.button.borderDark, boxShadow: styles.button.boxShadow, boxShadowDark: styles.button.boxShadowDark }}
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
+      <div className="hundred:ml-64 mobile:ml-0 mobile:px-3 w-auto">
+        <div className="mx-auto px-6 py-8 w-full">
 
-        {/* Table */}
-        <div className="overflow-x-auto bg-white dark:bg-gray-900 shadow-md rounded">
-          <table className="min-w-full text-sm text-center">
-            <thead className="bg-gray-200 dark:bg-gray-800 text-black dark:text-gray-200 uppercase">
-              <tr>
-                <th className="px-4 py-2">Code</th>
-                <th className="px-4 py-2">Discount (%)</th>
-                <th className="px-4 py-2">Min Amount</th>
-                <th className="px-4 py-2">End Date</th>
-                <th className="px-4 py-2">Product Type</th>
-                <th className="px-4 py-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {promocodes.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="text-center p-4 text-gray-500 dark:text-gray-400">
-                    No promocodes added yet.
-                  </td>
-                </tr>
-              ) : (
-                promocodes.map((promo) => (
-                  <tr key={promo.id} className="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                    <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{promo.code}</td>
-                    <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{promo.discount}%</td>
-                    <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{promo.min_amount ? `₹${promo.min_amount}` : '-'}</td>
-                    <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{promo.end_date ? new Date(promo.end_date).toLocaleDateString() : '-'}</td>
-                    <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{promo.product_type || 'All Products'}</td>
-                    <td className="px-4 py-2 space-x-5">
-                      <button
-                        onClick={() => handleEdit(promo)}
-                        className="text-blue-600 dark:text-blue-400 bg-gray-300 dark:bg-gray-700 h-10 w-15 font-semibold rounded-lg cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-600"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(promo.id)}
-                        className="text-red-600 dark:text-red-400 bg-gray-300 dark:bg-gray-700 h-10 w-15 font-semibold rounded-lg cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-600"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Promocode Management</h1>
+            <p className="text-slate-400 mt-1.5 text-sm">Create and manage discount codes</p>
+          </div>
+
+          {error && <div className="bg-red-50 border border-red-200 border-l-4 border-l-red-500 text-red-700 px-4 py-3.5 rounded-xl mb-5 text-sm font-medium">⚠️ {error}</div>}
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-8 py-7 mb-8 max-w-lg mobile:p-4">
+            <h3 className="text-base font-extrabold text-slate-800 mb-5 flex items-center gap-2">
+              <span className="w-1 h-5 bg-indigo-500 rounded-full inline-block" />
+              {isEditing ? 'Edit Promocode' : 'Add New Promocode'}
+            </h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <Field label="Code" required>
+                <input type="text" name="code" value={form.code} onChange={handleChange} placeholder="e.g. SAVE20" className={inputCls} required />
+              </Field>
+              <Field label="Discount (%)" required>
+                <input type="number" name="discount" value={form.discount} onChange={handleChange} placeholder="e.g. 20" className={inputCls} required min="1" max="100" />
+              </Field>
+              <Field label="Minimum Amount">
+                <input type="number" name="min_amount" value={form.min_amount} onChange={handleChange} placeholder="e.g. 500" className={inputCls} min="0" />
+              </Field>
+              <Field label="End Date">
+                <input type="date" name="end_date" value={form.end_date} onChange={handleChange} className={inputCls} />
+              </Field>
+              <Field label="Product Type">
+                <select name="product_type" value={form.product_type} onChange={handleChange} className={inputCls}>
+                  <option value="">All Products</option>
+                  {productTypes.length === 0 ? <option disabled>No types available</option> : productTypes.map(type => <option key={type} value={type}>{capitalize(type)}</option>)}
+                </select>
+              </Field>
+              <div className="flex gap-2.5 pt-1">
+                <button type="submit" className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500 transition-all duration-200">
+                  {isEditing ? 'Update' : 'Add Promocode'}
+                </button>
+                {isEditing && (
+                  <button type="button" onClick={handleCancelEdit} className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors">Cancel</button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {promocodes.length === 0 ? (
+            <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl">
+              <div className="text-4xl mb-3">🎟️</div>
+              <p className="text-slate-400 font-medium text-sm">No promocodes added yet</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      {['Code', 'Discount', 'Min Amount', 'End Date', 'Product Type', 'Actions'].map(h => (
+                        <th key={h} className="px-4 py-3 text-left text-xs font-extrabold text-slate-500 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {promocodes.map((promo) => (
+                      <tr key={promo.id} className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${editingId === promo.id ? 'bg-indigo-50' : ''}`}>
+                        <td className="px-4 py-3">
+                          <span className="inline-block px-2.5 py-1 rounded-full text-xs font-extrabold bg-indigo-50 border border-indigo-200 text-indigo-700 tracking-wide">{promo.code}</span>
+                        </td>
+                        <td className="px-4 py-3 font-bold text-emerald-600">{promo.discount}%</td>
+                        <td className="px-4 py-3 text-slate-600">{promo.min_amount ? `₹${promo.min_amount}` : <span className="text-slate-300">—</span>}</td>
+                        <td className="px-4 py-3 text-slate-600">{promo.end_date ? new Date(promo.end_date).toLocaleDateString() : <span className="text-slate-300">—</span>}</td>
+                        <td className="px-4 py-3 text-slate-600">{promo.product_type ? capitalize(promo.product_type) : <span className="text-slate-400 text-xs">All Products</span>}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1.5">
+                            <button onClick={() => handleEdit(promo)} className="py-1.5 px-3 rounded-lg text-xs font-bold bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all duration-200">Edit</button>
+                            <button onClick={() => setDeleteConfirmId(promo.id)} className="py-1.5 px-3 rounded-lg text-xs font-bold bg-red-50 text-red-500 border border-red-200 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200">Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-      <style>{`
-        [style*="backgroundDark"] { background: var(--bg, ${styles.input.background}); }
-        [style*="backgroundDark"][data-dark] { --bg: ${styles.input.backgroundDark}; }
-        [style*="borderDark"] { border: var(--border, ${styles.input.border}); }
-        [style*="borderDark"][data-dark] { --border: ${styles.input.borderDark}; }
-        [style*="boxShadowDark"] { box-shadow: var(--shadow, ${styles.button.boxShadow}); }
-        [style*="boxShadowDark"][data-dark] { --shadow: ${styles.button.boxShadowDark}; }
-      `}</style>
+
+      {deleteConfirmId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl text-center">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h2 className="text-lg font-extrabold text-slate-800 mb-2.5">Delete Promocode?</h2>
+            <p className="text-slate-500 text-sm mb-6">This code will be permanently removed.</p>
+            <div className="flex gap-2.5 justify-center">
+              <button onClick={() => setDeleteConfirmId(null)} className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors">Keep It</button>
+              <button onClick={() => handleDelete(deleteConfirmId)} className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-red-500 to-red-400 shadow-lg shadow-red-200 hover:from-red-600 hover:to-red-500 transition-all duration-200">Yes, Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
