@@ -8,7 +8,7 @@ import { API_BASE_URL } from '../../../Config';
 import Sidebar from '../Sidebar/Sidebar';
 import Logout from '../Logout';
 import { FaEdit, FaArrowRight, FaTrash, FaDownload, FaSearch, FaCamera } from 'react-icons/fa';
-import Select from 'react-select';
+import Select, { components } from 'react-select';
 import Tesseract from 'tesseract.js';
 import Webcam from 'react-webcam';
 
@@ -34,6 +34,7 @@ const selectStyles = {
     color: isSelected ? "#fff" : "#1e293b",
     fontWeight: isFocused || isSelected ? 500 : 400,
     cursor: "pointer",
+    padding: "0",
   }),
   placeholder: (base) => ({ ...base, color: "#94a3b8" }),
   clearIndicator: (base) => ({ ...base, color: "#94a3b8", "&:hover": { color: "#ef4444" } }),
@@ -143,6 +144,103 @@ const PaginBtn = ({ label, onClick, disabled, active }) => (
   </button>
 );
 
+const CustomOption = (props) => {
+  const { data, innerRef, innerProps, isFocused, isSelected, selectProps } = props;
+  const { onAddToCart, cart } = selectProps;
+  const cartItem = cart && cart.find(item => `${item.id}-${item.product_type}` === data.value);
+  const qty = cartItem ? cartItem.quantity : 0;
+
+  return (
+    <div
+      ref={innerRef}
+      {...innerProps}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "8px 12px",
+        background: isSelected ? "#6366f1" : isFocused ? "#f0f0ff" : "#fff",
+        color: isSelected ? "#fff" : "#1e293b",
+        cursor: "pointer",
+        gap: "8px",
+      }}
+    >
+      <span style={{ flex: 1, fontSize: "0.9rem", fontWeight: isFocused || isSelected ? 500 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {data.label}
+      </span>
+      <div
+        style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {qty > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <button
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddToCart && onAddToCart(data.value, "minus"); }}
+              style={{
+                width: "22px", height: "22px", borderRadius: "50%", border: "1.5px solid",
+                borderColor: isSelected ? "rgba(255,255,255,0.6)" : "#e2e8f0",
+                background: isSelected ? "rgba(255,255,255,0.15)" : "#fff",
+                color: isSelected ? "#fff" : "#64748b",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "14px", fontWeight: "bold", cursor: "pointer", lineHeight: 1,
+                flexShrink: 0,
+              }}
+            >
+              −
+            </button>
+            <input
+              type="number"
+              value={qty}
+              min="0"
+              onMouseDown={(e) => e.stopPropagation()}
+              onChange={(e) => { e.stopPropagation(); onAddToCart && onAddToCart(data.value, "set", parseInt(e.target.value) || 0); }}
+              style={{
+                width: "38px", height: "24px", borderRadius: "6px", border: "1.5px solid",
+                borderColor: isSelected ? "rgba(255,255,255,0.5)" : "#c7d2fe",
+                background: isSelected ? "rgba(255,255,255,0.2)" : "#eef2ff",
+                color: isSelected ? "#fff" : "#4338ca",
+                textAlign: "center", fontSize: "0.78rem", fontWeight: "700",
+                outline: "none", padding: "0 2px",
+              }}
+            />
+            <button
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddToCart && onAddToCart(data.value, "plus"); }}
+              style={{
+                width: "22px", height: "22px", borderRadius: "50%", border: "1.5px solid",
+                borderColor: isSelected ? "rgba(255,255,255,0.6)" : "#6366f1",
+                background: isSelected ? "rgba(255,255,255,0.2)" : "#6366f1",
+                color: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "14px", fontWeight: "bold", cursor: "pointer", lineHeight: 1,
+                flexShrink: 0,
+              }}
+            >
+              +
+            </button>
+          </div>
+        )}
+        {qty === 0 && (
+          <button
+            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddToCart && onAddToCart(data.value, "plus"); }}
+            style={{
+              width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid",
+              borderColor: isSelected ? "rgba(255,255,255,0.7)" : "#6366f1",
+              background: isSelected ? "rgba(255,255,255,0.2)" : "#6366f1",
+              color: "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "16px", fontWeight: "bold", cursor: "pointer", lineHeight: 1,
+              flexShrink: 0,
+            }}
+          >
+            +
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const QuotationTable = ({
   cart = [], products = [], selectedProduct, setSelectedProduct,
   addToCart, updateQuantity, updateDiscount, updatePrice, removeFromCart,
@@ -173,8 +271,44 @@ const QuotationTable = ({
     if (isModal) setModalCart(updatedCart); else setCart(updatedCart);
   };
 
+  const handleOptionCartAction = useCallback((productValue, action, setValue) => {
+    const [id, type] = productValue.split("-");
+    const product = products.find(p => p.id.toString() === id && p.product_type === type);
+    if (!product) return;
+    const targetCart = isModal ? null : cart;
+    const setTargetCart = isModal ? setModalCart : setCart;
+    const currentDiscount = isModal ? changeDiscount : changeDiscount;
+
+    setTargetCart(prev => {
+      const exists = prev.find(item => item.id.toString() === id && item.product_type === type);
+      if (action === "plus") {
+        if (exists) {
+          return prev.map(item => item.id.toString() === id && item.product_type === type ? { ...item, quantity: item.quantity + 1 } : item);
+        } else {
+          const newItem = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: 1, discount: parseFloat(product.discount) || currentDiscount, initialDiscount: parseFloat(product.discount) || 0, per: product.per || 'Unit' };
+          return [newItem, ...prev];
+        }
+      } else if (action === "minus") {
+        if (!exists) return prev;
+        if (exists.quantity <= 1) return prev.filter(item => !(item.id.toString() === id && item.product_type === type));
+        return prev.map(item => item.id.toString() === id && item.product_type === type ? { ...item, quantity: item.quantity - 1 } : item);
+      } else if (action === "set") {
+        const qty = parseInt(setValue) || 0;
+        if (!exists && qty > 0) {
+          const newItem = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: qty, discount: parseFloat(product.discount) || currentDiscount, initialDiscount: parseFloat(product.discount) || 0, per: product.per || 'Unit' };
+          return [newItem, ...prev];
+        }
+        if (qty <= 0) return prev.filter(item => !(item.id.toString() === id && item.product_type === type));
+        return prev.map(item => item.id.toString() === id && item.product_type === type ? { ...item, quantity: qty } : item);
+      }
+      return prev;
+    });
+  }, [cart, products, isModal, setCart, setModalCart, changeDiscount]);
+
   const total = parseFloat(calculateTotal(cart, additionalDiscount));
   const cartInputCls = "w-20 px-2 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 text-center bg-slate-50 outline-none focus:border-indigo-400 transition-colors";
+
+  const currentCart = isModal ? null : cart;
 
   return (
     <div className="space-y-5">
@@ -322,6 +456,9 @@ const QuotationTable = ({
               isClearable
               isSearchable
               styles={selectStyles}
+              components={{ Option: CustomOption }}
+              onAddToCart={handleOptionCartAction}
+              cart={cart}
             />
           </div>
           <button
@@ -732,7 +869,7 @@ export default function Direct() {
     try {
       const subtotal = parseFloat(calculateNetRate(cart)) - parseFloat(calculateYouSave(cart));
       const discountedSubtotal = subtotal * (1 - additionalDiscount / 100);
-      const processingFee = discountedSubtotal * 0.03;
+      const processingFee = discountedSubtotal * 0.01;
       const payload = { customer_id: Number(selectedCustomer.value), quotation_id, products: cart.map(item => ({ id: item.id, product_type: item.product_type, productname: item.productname, price: getEffectivePrice(item), discount: parseFloat(item.discount) || 0, quantity: parseInt(item.quantity) || 0, per: item.per || 'Unit', serial_number: item.serial_number || undefined })), net_rate: parseFloat(calculateNetRate(cart)), you_save: parseFloat(calculateYouSave(cart)), processing_fee: processingFee, total: parseFloat(calculateTotal(cart, additionalDiscount)), promo_discount: 0, additional_discount: parseFloat(additionalDiscount.toFixed(2)), customer_type: customer.customer_type || "User", customer_name: customer.name, address: customer.address, mobile_number: customer.mobile_number, email: customer.email, district: customer.district, state: customer.state, status: "pending" };
       const response = await axios.post(`${API_BASE_URL}/api/direct/quotations`, payload);
       const newQuotationId = response.data.quotation_id;
