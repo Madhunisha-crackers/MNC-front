@@ -57,6 +57,8 @@ export default function Tracking() {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [transactionId, setTransactionId] = useState('');
   const [amountPaid, setAmountPaid] = useState('');
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [downloadTarget, setDownloadTarget] = useState(null);
   const ordersPerPage = 9;
 
   const fetchBookings = async (resetPage = false) => {
@@ -137,7 +139,7 @@ export default function Tracking() {
     updateStatus(selectedBookingId, 'paid', { paymentMethod, transactionId: paymentMethod === 'bank' ? transactionId : null, amountPaid: Number(amountPaid) });
   };
 
-  const generatePDF = async (booking) => {
+  const generateBillPDF = async (booking) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/direct/invoice/${booking.order_id}`, { responseType: 'blob' });
       if (!response.ok) throw new Error('Failed to fetch PDF');
@@ -147,11 +149,175 @@ export default function Tracking() {
       link.href = url;
       const safeCustomerName = (booking.customer_name || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
       link.setAttribute('download', `${safeCustomerName}-${booking.order_id}.pdf`);
-      document.body.appendChild(link); link.click(); document.body.removeChild(link); window.URL.revokeObjectURL(url);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
       toast.success("Downloaded estimate bill, check downloads", { position: "top-center", autoClose: 5000 });
     } catch (err) {
       toast.error("Failed to download PDF. Please try again.", { position: "top-center", autoClose: 5000 });
     }
+  };
+
+  const generatePackingPDF = async (booking) => {
+    try {
+      const { jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+
+      const doc = new jsPDF();
+      const pageW = doc.internal.pageSize.getWidth();
+      const marginL = 14;
+      const contentW = pageW - marginL * 2;
+
+      // ── Header ──
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(234, 88, 12);
+      doc.text('MADHU NISHA CRACKERS', pageW / 2, 18, { align: 'center' });
+
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text('www.madhunishacrackers.com  |  +91 94875 24689', pageW / 2, 25, { align: 'center' });
+
+      doc.setDrawColor(234, 88, 12);
+      doc.setLineWidth(0.8);
+      doc.line(marginL, 29, marginL + contentW, 29);
+
+      // ── PACKING SLIP label ──
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text('PACKING SLIP', marginL, 38);
+
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.4);
+      doc.line(marginL, 41, marginL + contentW, 41);
+
+      // ── FROM / BILL TO boxes ──
+      const boxY = 46;
+      const boxH = 52;
+      const halfW = contentW / 2 - 4;
+
+      // FROM box
+      doc.setDrawColor(220, 220, 220);
+      doc.setLineWidth(0.5);
+      doc.rect(marginL, boxY, halfW, boxH);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(150, 150, 150);
+      doc.text('FROM', marginL + 4, boxY + 7);
+      doc.setFontSize(9);
+      doc.setTextColor(40, 40, 40);
+      doc.text('Madhu Nisha Crackers', marginL + 4, boxY + 16);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(80, 80, 80);
+      doc.text('Sivakasi, Tamil Nadu', marginL + 4, boxY + 24);
+      doc.text('+91 94875 24689', marginL + 4, boxY + 32);
+      doc.text('madhunishacrackers@gmail.com', marginL + 4, boxY + 40);
+
+      // SHIP TO box
+      const shipX = marginL + halfW + 8;
+      doc.rect(shipX, boxY, halfW, boxH);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(150, 150, 150);
+      doc.text('SHIP TO', shipX + 4, boxY + 7);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text(booking.customer_name || 'N/A', shipX + 4, boxY + 16, { width: halfW - 8 });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(80, 80, 80);
+      let addr = booking.address || '';
+      if (addr.length > 40) addr = addr.substring(0, 37) + '…';
+      doc.text(addr, shipX + 4, boxY + 24, { width: halfW - 8 });
+      const distState = [booking.district, booking.state].filter(Boolean).join(', ');
+      doc.text(distState, shipX + 4, boxY + 32);
+      doc.text(`Mobile: ${booking.mobile_number || 'N/A'}`, shipX + 4, boxY + 40);
+
+      // ── Order ID row ──
+      const metaY = boxY + boxH + 8;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Order ID:`, marginL, metaY);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text(booking.order_id || 'N/A', marginL + 20, metaY);
+
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.4);
+      doc.line(marginL, metaY + 4, marginL + contentW, metaY + 4);
+
+      // ── Products table — NO rate, NO total ──
+      let products = [];
+      try {
+        products = typeof booking.products === 'string'
+          ? JSON.parse(booking.products)
+          : (booking.products || []);
+      } catch { products = []; }
+
+      const tableRows = products.map((p, i) => [
+        i + 1,
+        p.productname || 'N/A',
+        p.quantity || 1,
+      ]);
+
+      autoTable(doc, {
+        startY: metaY + 10,
+        head: [['Sl.No', 'Product Name', 'Quantity']],
+        body: tableRows,
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 4 },
+        headStyles: {
+          fillColor: [255, 255, 255],
+          textColor: [40, 40, 40],
+          fontStyle: 'bold',
+          halign: 'center',
+          lineColor: [200, 200, 200],
+          lineWidth: 0.3,
+        },
+        columnStyles: {
+          0: { cellWidth: 18, halign: 'center' },
+          1: { cellWidth: 'auto', halign: 'left' },
+          2: { cellWidth: 28, halign: 'center' },
+        },
+        alternateRowStyles: { fillColor: [255, 247, 237] },
+      });
+
+      // ── Footer ──
+      const finalY = doc.lastAutoTable.finalY + 10;
+      doc.setDrawColor(234, 88, 12);
+      doc.setLineWidth(0.6);
+      doc.line(marginL, finalY, marginL + contentW, finalY);
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(120, 120, 120);
+      doc.text('Thank you for your business with Madhu Nisha Crackers, Sivakasi', pageW / 2, finalY + 7, { align: 'center' });
+
+      const safeCustomerName = (booking.customer_name || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      doc.save(`${safeCustomerName}-${booking.order_id}-packing.pdf`);
+      toast.success("Packing slip downloaded!", { position: "top-center", autoClose: 5000 });
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate packing slip.", { position: "top-center", autoClose: 5000 });
+    }
+  };
+
+  const handleDownloadClick = (booking) => {
+    setDownloadTarget(booking);
+    setShowDownloadModal(true);
+  };
+
+  const handleDownloadChoice = async (type) => {
+    setShowDownloadModal(false);
+    if (!downloadTarget) return;
+    if (type === 'bill') await generateBillPDF(downloadTarget);
+    else await generatePackingPDF(downloadTarget);
+    setDownloadTarget(null);
   };
 
   const filteredBookings = bookings.filter((booking) =>
@@ -298,7 +464,7 @@ export default function Tracking() {
 
                   <div className="flex gap-2">
                     <button
-                      onClick={() => generatePDF(booking)}
+                      onClick={() => handleDownloadClick(booking)}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-500 hover:text-white hover:border-indigo-500 transition-all duration-200"
                     >
                       <FaDownload className="text-xs" /> Download
@@ -347,78 +513,102 @@ export default function Tracking() {
         </ModalWrapper>
       )}
 
-{showDetailsModal && (
-  <ModalWrapper key="payment-details-modal">   {/* ← this is the most important fix */}
-    <h2 className="text-xl font-extrabold text-slate-800 mb-6 text-center">💳 Payment Details</h2>
-    <div className="space-y-4">
-      <div>
-        <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
-          Payment Method
-        </label>
-        <select
-          value={paymentMethod}
-          onChange={(e) => setPaymentMethod(e.target.value)}
-          className={selectStyles}
-        >
-          <option value="cash">Cash</option>
-          <option value="bank">Bank Transaction</option>
-        </select>
-      </div>
+      {showDetailsModal && (
+        <ModalWrapper key="payment-details-modal">   {/* ← this is the most important fix */}
+          <h2 className="text-xl font-extrabold text-slate-800 mb-6 text-center">💳 Payment Details</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                Payment Method
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className={selectStyles}
+              >
+                <option value="cash">Cash</option>
+                <option value="bank">Bank Transaction</option>
+              </select>
+            </div>
 
-      <div>
-        <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
-          Amount Paid <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          value={amountPaid ?? ""}
-          onChange={(e) => {
-            const val = e.target.value;
-            if (/^\d*\.?\d{0,2}$/.test(val)) {
-              setAmountPaid(val);
-            }
-          }}
-          placeholder="Enter amount paid"
-          className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
-          autoFocus
-        />
-      </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                Amount Paid <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={amountPaid ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (/^\d*\.?\d{0,2}$/.test(val)) {
+                    setAmountPaid(val);
+                  }
+                }}
+                placeholder="Enter amount paid"
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+                autoFocus
+              />
+            </div>
 
-      {paymentMethod === 'bank' && (
-        <div key="bank-transaction-id-field">
-          <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
-            Transaction ID <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={transactionId ?? ""}
-            onChange={(e) => setTransactionId(e.target.value)}
-            placeholder="Enter transaction ID"
-            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
-            autoFocus
-          />
+            {paymentMethod === 'bank' && (
+              <div key="bank-transaction-id-field">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                  Transaction ID <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={transactionId ?? ""}
+                  onChange={(e) => setTransactionId(e.target.value)}
+                  placeholder="Enter transaction ID"
+                  className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+                  autoFocus
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2.5 justify-end mt-6">
+            <button
+              onClick={() => setShowDetailsModal(false)}
+              className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDetailsSubmit}
+              className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500 transition-all duration-200"
+            >
+              Submit
+            </button>
+          </div>
+        </ModalWrapper>
+      )}
+
+      {showDownloadModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl text-center">
+            <div className="text-4xl mb-4">📄</div>
+            <h2 className="text-xl font-extrabold text-slate-800 mb-2">Download PDF</h2>
+            <p className="text-slate-400 text-sm mb-7">Choose the type of PDF to download</p>
+            <div className="flex gap-3">
+              <button onClick={() => handleDownloadChoice('bill')}
+                className="flex-1 py-3 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500 transition-all">
+                🧾 Bill
+              </button>
+              <button onClick={() => handleDownloadChoice('packing')}
+                className="flex-1 py-3 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-orange-500 to-orange-400 shadow-lg shadow-orange-200 hover:from-orange-600 hover:to-orange-500 transition-all">
+                📦 Packing
+              </button>
+            </div>
+            <button onClick={() => { setShowDownloadModal(false); setDownloadTarget(null); }}
+              className="mt-4 w-full py-2.5 rounded-xl border border-slate-200 text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors">
+              Cancel
+            </button>
+          </div>
         </div>
       )}
-    </div>
-
-    <div className="flex gap-2.5 justify-end mt-6">
-      <button
-        onClick={() => setShowDetailsModal(false)}
-        className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors"
-      >
-        Cancel
-      </button>
-      <button
-        onClick={handleDetailsSubmit}
-        className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500 transition-all duration-200"
-      >
-        Submit
-      </button>
-    </div>
-  </ModalWrapper>
-)}
 
       {showDeleteModal && (
         <ModalWrapper>

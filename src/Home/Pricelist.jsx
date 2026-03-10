@@ -58,6 +58,7 @@ const Pricelist = () => {
     kids: false,
     sound: false,
     night: false,
+    kidsnight: false,
   });
   const [suggestedCart, setSuggestedCart] = useState({});
 
@@ -79,11 +80,12 @@ const Pricelist = () => {
     setTimeout(() => setShowMinOrderModal(false), 5000);
   };
 
-  const downloadPDF = () => {
+  const downloadPDF = async () => {
     if (!products.length) return;
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     let yOffset = 20;
+
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text('MADHU NISHA CRACKERS', pageWidth / 2, yOffset, { align: 'center' });
@@ -95,10 +97,8 @@ const Pricelist = () => {
     doc.text('Retail Pricelist - 2025', pageWidth / 2, yOffset, { align: 'center' });
     yOffset += 10;
     doc.text('Contact Number - 9487524689', pageWidth / 2, yOffset, { align: 'center' });
-    yOffset += 30;
+    yOffset += 20;
 
-    const tableData = [];
-    let slNo = 1;
     const orderedTypes = [
       "One sound crackers", "Ground Chakkar", "Flower Pots", "Twinkling Star",
       "Rockets", "Bombs", "Repeating Shots", "Comets Sky Shots",
@@ -106,43 +106,157 @@ const Pricelist = () => {
       "Guns and Caps", "Sparklers", "Premium Sparklers", "Gift Boxes", "Kids Special "
     ];
 
-    orderedTypes.forEach(type => {
+    // Helper: fetch image as base64 data URL
+    const fetchImageAsBase64 = (url) => {
+      return new Promise((resolve) => {
+        if (!url) return resolve(null);
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const MAX = 80;
+            let w = img.naturalWidth, h = img.naturalHeight;
+            if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
+            else { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.75));
+          } catch { resolve(null); }
+        };
+        img.onerror = () => resolve(null);
+        // Use a CORS proxy if needed, or try direct
+        img.src = url;
+      });
+    };
+
+    // Pre-fetch all images
+    const imageCache = {};
+    const allProducts = orderedTypes.flatMap(type => {
       const typeKey = type.replace(/ /g, "_").toLowerCase();
-      const typeProducts = products.filter(p => p.product_type.toLowerCase() === typeKey).sort(serialSort);
-      if (typeProducts.length > 0) {
-        tableData.push([{ content: capitalize(type), colSpan: 6, styles: { fontStyle: 'bold', halign: 'left', fillColor: [200, 200, 200] } }]);
-        tableData.push(['Sl No.', 'Code', 'Product Name', 'Rate', 'Discounted Rate', 'Per']);
-        typeProducts.forEach(product => {
-          const discount = product.price * (product.discount / 100);
-          const discountedRate = product.price - discount;
-          tableData.push([
-            slNo++,
-            product.serial_number,
-            product.productname,
-            `Rs.${formatPrice(product.price)}`,
-            `Rs.${formatPrice(discountedRate)}`,
-            product.per
-          ]);
-        });
-        tableData.push([]);
-      }
+      return products.filter(p => p.product_type.toLowerCase() === typeKey);
     });
 
-    autoTable(doc, {
-      startY: yOffset,
-      head: [['Sl No.', 'Code', 'Product Name', 'Rate', 'Discounted Rate', 'Per']],
-      body: tableData,
-      theme: 'grid',
-      styles: { fontSize: 10, cellPadding: 3 },
-      headStyles: { fillColor: [2, 132, 199], textColor: [255, 255, 255] },
-      columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: 20 }, 2: { cellWidth: 70 }, 3: { cellWidth: 20 }, 4: { cellWidth: 30 }, 5: { cellWidth: 25 } },
-      didDrawCell: (data) => {
-        if (data.row.section === 'body' && data.cell.raw?.colSpan === 6) {
-          data.cell.styles.cellPadding = 5;
-          data.cell.styles.fontSize = 12;
+    await Promise.all(
+      allProducts.map(async (product) => {
+        const images = Array.isArray(product.images) ? product.images : [];
+        const imgUrl = images.find(img => img && !img.includes('/video/') && !img.toLowerCase().endsWith('.gif'));
+        if (imgUrl) {
+          imageCache[product.serial_number] = await fetchImageAsBase64(imgUrl);
         }
-      },
-    });
+      })
+    );
+
+    const ROW_HEIGHT = 18; // mm per row
+    const IMG_SIZE = 14;   // mm image box
+
+    for (const type of orderedTypes) {
+      const typeKey = type.replace(/ /g, "_").toLowerCase();
+      const typeProducts = products.filter(p => p.product_type.toLowerCase() === typeKey).sort(serialSort);
+      if (!typeProducts.length) continue;
+
+      // Section header row
+      const sectionHeaderHeight = 10;
+      if (yOffset + sectionHeaderHeight > doc.internal.pageSize.getHeight() - 20) {
+        doc.addPage();
+        yOffset = 20;
+      }
+
+      // Draw section header
+      doc.setFillColor(200, 200, 200);
+      doc.rect(10, yOffset, pageWidth - 20, sectionHeaderHeight, 'F');
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text(capitalize(type), 14, yOffset + 7);
+      yOffset += sectionHeaderHeight + 1;
+
+      // Column header row
+      const colHeaderHeight = 8;
+      doc.setFillColor(234, 88, 12);
+      doc.rect(10, yOffset, pageWidth - 20, colHeaderHeight, 'F');
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 255, 255);
+
+      // Col positions: Sl(10), Code(22), Image(38), Product Name(60), Rate(130), Disc Rate(150), Per(175)
+      const cols = { sl: 12, code: 23, img: 39, name: 61, rate: 131, disc: 152, per: 176 };
+      doc.text('Sl', cols.sl, yOffset + 5.5);
+      doc.text('Code', cols.code, yOffset + 5.5);
+      doc.text('Image', cols.img, yOffset + 5.5);
+      doc.text('Product Name', cols.name, yOffset + 5.5);
+      doc.text('Rate', cols.rate, yOffset + 5.5);
+      doc.text('Disc. Rate', cols.disc, yOffset + 5.5);
+      doc.text('Per', cols.per, yOffset + 5.5);
+      yOffset += colHeaderHeight + 1;
+
+      let slNo = 1;
+      for (const product of typeProducts) {
+        if (yOffset + ROW_HEIGHT > doc.internal.pageSize.getHeight() - 15) {
+          doc.addPage();
+          yOffset = 20;
+        }
+
+        const discount = product.price * (product.discount / 100);
+        const discountedRate = product.price - discount;
+
+        // Alternating row background
+        if (slNo % 2 === 0) {
+          doc.setFillColor(255, 247, 237); // light orange tint
+          doc.rect(10, yOffset, pageWidth - 20, ROW_HEIGHT, 'F');
+        }
+
+        // Draw grid borders
+        doc.setDrawColor(220, 220, 220);
+        doc.rect(10, yOffset, pageWidth - 20, ROW_HEIGHT);
+
+        // Cell dividers
+        [21, 37, 59, 129, 150, 173].forEach(x => {
+          doc.line(x, yOffset, x, yOffset + ROW_HEIGHT);
+        });
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(50, 50, 50);
+
+        const textY = yOffset + ROW_HEIGHT / 2 + 1.5;
+
+        doc.text(String(slNo++), cols.sl, textY);
+        doc.text(product.serial_number || '', cols.code, textY);
+
+        // Product name — wrap if needed
+        const nameLines = doc.splitTextToSize(product.productname, 66);
+        const nameY = nameLines.length > 1 ? yOffset + 5 : textY;
+        doc.text(nameLines.slice(0, 2), cols.name, nameY);
+
+        doc.text(`Rs.${formatPrice(product.price)}`, cols.rate, textY);
+        doc.text(`Rs.${formatPrice(discountedRate)}`, cols.disc, textY);
+        doc.text(product.per || '', cols.per, textY);
+
+        // Embed image if available
+        const imgData = imageCache[product.serial_number];
+        if (imgData) {
+          const imgX = cols.img - 1;
+          const imgY = yOffset + (ROW_HEIGHT - IMG_SIZE) / 2;
+          try {
+            doc.addImage(imgData, 'JPEG', imgX, imgY, IMG_SIZE, IMG_SIZE);
+          } catch { /* skip if image fails */ }
+        } else {
+          // Placeholder box
+          doc.setFillColor(245, 245, 245);
+          doc.rect(cols.img - 1, yOffset + (ROW_HEIGHT - IMG_SIZE) / 2, IMG_SIZE, IMG_SIZE, 'F');
+          doc.setFontSize(6);
+          doc.setTextColor(180, 180, 180);
+          doc.text('No img', cols.img + 2, yOffset + ROW_HEIGHT / 2 + 1);
+        }
+
+        yOffset += ROW_HEIGHT;
+      }
+
+      yOffset += 6; // gap between sections
+    }
+
     doc.save('MNC_Pricelist_2025.pdf');
   };
 
@@ -262,61 +376,191 @@ const Pricelist = () => {
     });
   }, []);
 
-  const generateSuggestions = useCallback(() => {
-    const budget = Number(aiBudget);
-    if (!budget || budget <= 0) { showError("Please enter a valid budget"); return; }
+const generateSuggestions = useCallback(() => {
+  const budget = Number(aiBudget);
+  if (!budget || budget <= 0) { showError("Please enter a valid budget"); return; }
 
-    const categories = {
-      kids: ["kids_special","fountain_and_fancy_novelties","flower_pots","ground_chakkar","sparklers","premium_sparklers","fancy_pencil_varieties","twinkling_star"],
-      sound: ["bombs", "one_sound_crackers"],
-      night: ["repeating_shots","comets_sky_shots","fountain_and_fancy_novelties","flower_pots","ground_chakkar","sparklers","premium_sparklers","rockets"]
-    };
+  const categories = {
+    kids: [
+      "new_arrivals",
+      "fancy_pencil_varieties",
+      "twinkling_star",
+      "guns_and_caps",
+      "matches"
+    ],
+    sound: [
+      "bombs",
+      "one_sound_crackers"
+    ],
+    night: [
+      "repeating_shots",
+      "comets_sky_shots",
+      "new_arrivals",
+      "rockets"
+    ],
+    kidsnight: [
+      "fountain_and_fancy_novelties",
+      "flower_pots",
+      "ground_chakkar",
+      "sparklers",
+      "premium_sparklers"
+    ]
+  };
 
-    const selectedPrefs = ["night", "kids", "sound"].filter(p => aiPreferences[p]);
-    if (!selectedPrefs.length) { showError("Select at least one preference"); return; }
+  const selectedPrefs = ["night", "kids", "sound", "kidsnight"].filter(p => aiPreferences[p]);
+  if (!selectedPrefs.length) { showError("Select at least one preference"); return; }
 
-    const TARGET = 50;
-    const pool = products
-      .filter(p => selectedPrefs.some(pref => categories[pref].includes(p.product_type)))
-      .map(p => ({ ...p, finalPrice: p.price * (1 - p.discount / 100), rand: Math.random() }))
-      .sort((a, b) => a.rand - b.rand);
+  const budgetPerPref = budget / selectedPrefs.length;
 
-    const cheap = pool.filter(p => p.finalPrice <= budget * 0.03);
-    const mid = pool.filter(p => p.finalPrice > budget * 0.03 && p.finalPrice <= budget * 0.08);
-    const costly = pool.filter(p => p.finalPrice > budget * 0.08);
+  const tempCart = {};
+  const sparklerSizeCount = {};
+  const categorySpentMap = {};
+  selectedPrefs.forEach(p => { categorySpentMap[p] = 0; });
 
-    const tempCart = {};
-    let remaining = budget;
-    let count = 0;
-    const usedTypes = new Set();
-    const sparklerSizeCount = {};
+  const getSparklerSize = name => {
+    const m = name?.match(/(\d+)\s*cm/i);
+    return m ? m[1] : null;
+  };
 
-    const getSparklerSize = name => { const m = name?.match(/(\d+)\s*cm/i); return m ? m[1] : null; };
+  // ── Phase 1: Add products per category in defined type order with randomness ──
+  for (const pref of selectedPrefs) {
+    const phase1Budget = budgetPerPref * 0.70;
+    const types = categories[pref];
 
-    const tryAdd = (p, allowSameType = false) => {
-      if (count >= TARGET) return;
-      if (p.finalPrice > remaining) return;
-      if (tempCart[p.serial_number]) return;
+    const byType = {};
+    for (const type of types) byType[type] = [];
+
+    products
+      .filter(p => types.includes(p.product_type?.toLowerCase()))
+      .forEach(p => {
+        const type = p.product_type?.toLowerCase();
+        if (byType[type]) {
+          byType[type].push({
+            ...p,
+            finalPrice: p.price * (1 - (p.discount || 0) / 100),
+          });
+        }
+      });
+
+    // Shuffle first, then sort by price tier with slight randomness
+    // so regenerate produces different selections each time
+    for (const type of types) {
+      byType[type]
+        .sort(() => Math.random() - 0.5) // initial shuffle
+        .sort((a, b) => {
+          const priceDiff = a.finalPrice - b.finalPrice;
+          // Within same price tier (±50), keep random order
+          if (Math.abs(priceDiff) < 50) return Math.random() - 0.5;
+          return priceDiff; // cheaper first across tiers
+        });
+    }
+
+    // Flatten in category-defined order
+    const sorted = types.flatMap(type => byType[type] || []).filter(p => p.finalPrice > 0);
+
+    let prefSpent = 0;
+
+    for (const p of sorted) {
+      if (prefSpent + p.finalPrice > phase1Budget) continue;
+      if (tempCart[p.serial_number]) continue;
+
       if (p.product_type === "sparklers" || p.product_type === "premium_sparklers") {
-        const size = getSparklerSize(p.product_name) || "unknown";
-        if (sparklerSizeCount[size] >= 2) return;
+        const size = getSparklerSize(p.productname) || "unknown";
+        if ((sparklerSizeCount[size] || 0) >= 3) continue;
         sparklerSizeCount[size] = (sparklerSizeCount[size] || 0) + 1;
-      } else {
-        if (!allowSameType && usedTypes.has(p.product_type)) return;
-        usedTypes.add(p.product_type);
       }
+
       tempCart[p.serial_number] = 1;
-      remaining -= p.finalPrice;
-      count++;
-    };
+      prefSpent += p.finalPrice;
+      categorySpentMap[pref] = (categorySpentMap[pref] || 0) + p.finalPrice;
+    }
+  }
 
-    cheap.forEach(p => tryAdd(p, false));
-    mid.forEach(p => tryAdd(p, true));
-    costly.forEach(p => tryAdd(p, true));
-    pool.forEach(p => { if (count < TARGET) tryAdd(p, true); });
+  // ── Phase 2: Quantity boost per category using remaining 30% ──
+  for (const pref of selectedPrefs) {
+    const phase2Budget = budgetPerPref * 0.30;
+    const types = categories[pref];
 
-    setSuggestedCart(tempCart);
-  }, [aiBudget, aiPreferences, products, showError]);
+    const boostCandidates = types
+      .flatMap(type =>
+        Object.keys(tempCart)
+          .map(serial => {
+            const p = products.find(x => x.serial_number === serial);
+            if (!p) return null;
+            if (p.product_type?.toLowerCase() !== type) return null;
+            return { ...p, finalPrice: p.price * (1 - (p.discount || 0) / 100) };
+          })
+          .filter(Boolean)
+          .sort(() => Math.random() - 0.5) // shuffle so different products get boosted on regenerate
+      );
+
+    if (!boostCandidates.length) continue;
+
+    let boostRemaining = phase2Budget;
+    const boostThreshold = budgetPerPref * 0.02;
+    let safetyLimit = 500;
+
+    while (boostRemaining > boostThreshold && safetyLimit-- > 0) {
+      let addedAny = false;
+      for (const p of boostCandidates) {
+        if (boostRemaining < p.finalPrice) continue;
+        const maxQty = Math.max(1, Math.floor((budgetPerPref * 0.25) / p.finalPrice));
+        const currentQty = tempCart[p.serial_number] || 0;
+        if (currentQty >= maxQty) continue;
+        tempCart[p.serial_number] = currentQty + 1;
+        boostRemaining -= p.finalPrice;
+        addedAny = true;
+        if (boostRemaining <= boostThreshold) break;
+      }
+      if (!addedAny) break;
+    }
+  }
+
+  // ── Phase 3: Global mop-up of leftover budget ──
+  const totalSpent = Object.entries(tempCart).reduce((sum, [serial, qty]) => {
+    const p = products.find(x => x.serial_number === serial);
+    if (!p) return sum;
+    return sum + (p.price * (1 - (p.discount || 0) / 100)) * qty;
+  }, 0);
+
+  let globalRemaining = budget - totalSpent;
+  const globalThreshold = budget * 0.03;
+
+  if (globalRemaining > globalThreshold && Object.keys(tempCart).length > 0) {
+    const globalCandidates = selectedPrefs
+      .flatMap(pref =>
+        categories[pref].flatMap(type =>
+          Object.keys(tempCart)
+            .map(serial => {
+              const p = products.find(x => x.serial_number === serial);
+              if (!p) return null;
+              if (p.product_type?.toLowerCase() !== type) return null;
+              return { ...p, finalPrice: p.price * (1 - (p.discount || 0) / 100) };
+            })
+            .filter(Boolean)
+            .sort(() => Math.random() - 0.5) // shuffle for variety on regenerate
+        )
+      );
+
+    let safetyLimit = 500;
+    while (globalRemaining > globalThreshold && safetyLimit-- > 0) {
+      let addedAny = false;
+      for (const p of globalCandidates) {
+        if (globalRemaining < p.finalPrice) continue;
+        const maxQty = Math.max(1, Math.floor((budget * 0.20) / p.finalPrice));
+        const currentQty = tempCart[p.serial_number] || 0;
+        if (currentQty >= maxQty) continue;
+        tempCart[p.serial_number] = currentQty + 1;
+        globalRemaining -= p.finalPrice;
+        addedAny = true;
+        if (globalRemaining <= globalThreshold) break;
+      }
+      if (!addedAny) break;
+    }
+  }
+
+  setSuggestedCart(tempCart);
+}, [aiBudget, aiPreferences, products]);
 
   const handleAiNext = () => {
     if (aiStep === 0 && !aiBudget) return showError("Please enter a budget.");
@@ -342,7 +586,7 @@ const Pricelist = () => {
     setShowAiModal(false);
     setAiStep(0);
     setAiBudget("");
-    setAiPreferences({ kids: false, sound: false, night: false });
+    setAiPreferences({ kids: false, sound: false, night: false, kidsnight: false });
     setSuggestedCart({});
   };
 
@@ -894,7 +1138,7 @@ const Pricelist = () => {
         {showAiModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-md px-4"
-            onClick={() => { setShowAiModal(false); setAiStep(0); setAiBudget(""); setAiPreferences({ kids: false, sound: false, night: false }); setSuggestedCart({}); }}>
+            onClick={() => { setShowAiModal(false); setAiStep(0); setAiBudget(""); setAiPreferences({ kids: false, sound: false, night: false, kidsnight: false }); setSuggestedCart({}); }}>
             <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={e => e.stopPropagation()}
@@ -945,11 +1189,12 @@ const Pricelist = () => {
                     <motion.div key="step1" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-4">
                       <p className="text-gray-600 text-sm">What kind of fireworks do you prefer?</p>
                       <div className="space-y-3">
-                        {[
-                          { key: 'kids', emoji: '🧒', label: 'Kids Friendly', desc: 'Sparklers, Novelties, Flowers' },
-                          { key: 'sound', emoji: '💥', label: 'Sound Crackers', desc: 'Bombs, Atom Bombs, Shots' },
-                          { key: 'night', emoji: '🌙', label: 'Night Display', desc: 'Rockets, Sky Shots, Comets' },
-                        ].map(({ key, emoji, label, desc }) => (
+                        { [  
+                            { key: 'kids',      emoji: '🧒', label: 'Kids Friendly',       desc: 'Twinkling Star, Fancy Pencil, Novelties' },
+                            { key: 'sound',     emoji: '💥', label: 'Sound Crackers',       desc: 'Bombs, Atom Bombs, One Sound' },
+                            { key: 'night',     emoji: '🚀', label: 'Night Sky Display',    desc: 'Rockets, Repeating Shots, Sky Shots' },
+                            { key: 'kidsnight', emoji: '✨', label: 'Kids Night Crackers',  desc: 'Sparklers, Flower Pots, Fountains, Ground Chakkar' },
+                          ].map(({ key, emoji, label, desc }) => (
                           <label key={key}
                             className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all ${aiPreferences[key] ? 'border-orange-400 bg-orange-50' : 'border-gray-100 bg-gray-50 hover:border-orange-200'}`}>
                             <input type="checkbox" checked={aiPreferences[key]}

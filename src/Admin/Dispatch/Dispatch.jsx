@@ -35,6 +35,8 @@ export default function Dispatch() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [transportDetails, setTransportDetails] = useState({ transportName: '', lrNumber: '', transportContact: '' });
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [downloadTarget, setDownloadTarget] = useState(null);
   const ordersPerPage = 9;
 
   useEffect(() => {
@@ -84,7 +86,7 @@ export default function Dispatch() {
     setTransportDetails({ transportName: '', lrNumber: '', transportContact: '' });
   };
 
-  const generatePDF = async (booking) => {
+  const generateBillPDF = async (booking) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/direct/invoice/${booking.order_id}`, { responseType: 'blob' });
       if (!response.ok) throw new Error('Failed to fetch PDF');
@@ -102,6 +104,167 @@ export default function Dispatch() {
     } catch (err) {
       toast.error("Failed to download PDF. Please try again.", { position: "top-center", autoClose: 5000 });
     }
+  };
+
+  const generatePackingPDF = async (booking) => {
+    try {
+      const { jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+
+      const doc = new jsPDF();
+      const pageW = doc.internal.pageSize.getWidth();
+      const marginL = 14;
+      const contentW = pageW - marginL * 2;
+
+      // ── Header ──
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(234, 88, 12);
+      doc.text('MADHU NISHA CRACKERS', pageW / 2, 18, { align: 'center' });
+
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text('www.madhunishacrackers.com  |  +91 94875 24689', pageW / 2, 25, { align: 'center' });
+
+      doc.setDrawColor(234, 88, 12);
+      doc.setLineWidth(0.8);
+      doc.line(marginL, 29, marginL + contentW, 29);
+
+      // ── PACKING SLIP label ──
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text('PACKING SLIP', marginL, 38);
+
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.4);
+      doc.line(marginL, 41, marginL + contentW, 41);
+
+      // ── FROM / BILL TO boxes ──
+      const boxY = 46;
+      const boxH = 52;
+      const halfW = contentW / 2 - 4;
+
+      // FROM box
+      doc.setDrawColor(220, 220, 220);
+      doc.setLineWidth(0.5);
+      doc.rect(marginL, boxY, halfW, boxH);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(150, 150, 150);
+      doc.text('FROM', marginL + 4, boxY + 7);
+      doc.setFontSize(9);
+      doc.setTextColor(40, 40, 40);
+      doc.text('Madhu Nisha Crackers', marginL + 4, boxY + 16);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(80, 80, 80);
+      doc.text('Sivakasi, Tamil Nadu', marginL + 4, boxY + 24);
+      doc.text('+91 94875 24689', marginL + 4, boxY + 32);
+      doc.text('madhunishacrackers@gmail.com', marginL + 4, boxY + 40);
+
+      // SHIP TO box
+      const shipX = marginL + halfW + 8;
+      doc.rect(shipX, boxY, halfW, boxH);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(150, 150, 150);
+      doc.text('SHIP TO', shipX + 4, boxY + 7);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text(booking.customer_name || 'N/A', shipX + 4, boxY + 16, { width: halfW - 8 });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(80, 80, 80);
+      let addr = booking.address || '';
+      if (addr.length > 40) addr = addr.substring(0, 37) + '…';
+      doc.text(addr, shipX + 4, boxY + 24, { width: halfW - 8 });
+      const distState = [booking.district, booking.state].filter(Boolean).join(', ');
+      doc.text(distState, shipX + 4, boxY + 32);
+      doc.text(`Mobile: ${booking.mobile_number || 'N/A'}`, shipX + 4, boxY + 40);
+
+      // ── Order ID row ──
+      const metaY = boxY + boxH + 8;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Order ID:`, marginL, metaY);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text(booking.order_id || 'N/A', marginL + 20, metaY);
+
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.4);
+      doc.line(marginL, metaY + 4, marginL + contentW, metaY + 4);
+
+      // ── Products table — NO rate, NO total ──
+      let products = [];
+      try {
+        products = typeof booking.products === 'string'
+          ? JSON.parse(booking.products)
+          : (booking.products || []);
+      } catch { products = []; }
+
+      const tableRows = products.map((p, i) => [
+        i + 1,
+        p.productname || 'N/A',
+        p.quantity || 1,
+      ]);
+
+      autoTable(doc, {
+        startY: metaY + 10,
+        head: [['Sl.No', 'Product Name', 'Quantity']],
+        body: tableRows,
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 4 },
+        headStyles: {
+          fillColor: [255, 255, 255],
+          textColor: [40, 40, 40],
+          fontStyle: 'bold',
+          halign: 'center',
+          lineColor: [200, 200, 200],
+          lineWidth: 0.3,
+        },
+        columnStyles: {
+          0: { cellWidth: 18, halign: 'center' },
+          1: { cellWidth: 'auto', halign: 'left' },
+          2: { cellWidth: 28, halign: 'center' },
+        },
+        alternateRowStyles: { fillColor: [255, 247, 237] },
+      });
+
+      // ── Footer ──
+      const finalY = doc.lastAutoTable.finalY + 10;
+      doc.setDrawColor(234, 88, 12);
+      doc.setLineWidth(0.6);
+      doc.line(marginL, finalY, marginL + contentW, finalY);
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(120, 120, 120);
+      doc.text('Thank you for your business with Madhu Nisha Crackers, Sivakasi', pageW / 2, finalY + 7, { align: 'center' });
+
+      const safeCustomerName = (booking.customer_name || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      doc.save(`${safeCustomerName}-${booking.order_id}-packing.pdf`);
+      toast.success("Packing slip downloaded!", { position: "top-center", autoClose: 5000 });
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate packing slip.", { position: "top-center", autoClose: 5000 });
+    }
+  };
+
+  const handleDownloadClick = (booking) => {
+    setDownloadTarget(booking);
+    setShowDownloadModal(true);
+  };
+
+  const handleDownloadChoice = async (type) => {
+    setShowDownloadModal(false);
+    if (!downloadTarget) return;
+    if (type === 'bill') await generateBillPDF(downloadTarget);
+    else await generatePackingPDF(downloadTarget);
+    setDownloadTarget(null);
   };
 
   const filteredBookings = bookings.filter(b =>
@@ -181,7 +344,7 @@ export default function Dispatch() {
                       <option value="" disabled>Update Status</option>
                       {['paid', 'packed', 'dispatched', 'delivered'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                     </select>
-                    <button onClick={() => generatePDF(booking)}
+                    <button onClick={() => handleDownloadClick(booking)}
                       className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-500 hover:text-white hover:border-indigo-500 transition-all duration-200">
                       <FaDownload className="text-xs" /> Download Invoice
                     </button>
@@ -202,6 +365,30 @@ export default function Dispatch() {
           )}
         </div>
       </div>
+
+      {showDownloadModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl text-center">
+            <div className="text-4xl mb-4">📄</div>
+            <h2 className="text-xl font-extrabold text-slate-800 mb-2">Download PDF</h2>
+            <p className="text-slate-400 text-sm mb-7">Choose the type of PDF to download</p>
+            <div className="flex gap-3">
+              <button onClick={() => handleDownloadChoice('bill')}
+                className="flex-1 py-3 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500 transition-all">
+                🧾 Bill
+              </button>
+              <button onClick={() => handleDownloadChoice('packing')}
+                className="flex-1 py-3 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-orange-500 to-orange-400 shadow-lg shadow-orange-200 hover:from-orange-600 hover:to-orange-500 transition-all">
+                📦 Packing
+              </button>
+            </div>
+            <button onClick={() => { setShowDownloadModal(false); setDownloadTarget(null); }}
+              className="mt-4 w-full py-2.5 rounded-xl border border-slate-200 text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

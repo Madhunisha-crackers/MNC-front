@@ -233,33 +233,185 @@ export default function List() {
 
   const capitalize = (str) => str ? str.split("_").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ") : ""
 
-  const downloadPDF = () => {
-    try {
-      if (!products.length || !productTypes.length) { setError("No products or product types available to export"); return }
-      const doc = new jsPDF()
-      const pageWidth = doc.internal.pageSize.getWidth()
-      let yOffset = 20
-      doc.setFontSize(16); doc.setFont("helvetica", "bold")
-      doc.text("MADHU NISHA CRACKERS", pageWidth / 2, yOffset, { align: "center" }); yOffset += 10
-      doc.setFontSize(12); doc.setFont("helvetica", "normal")
-      doc.text("Website - www.madhunishacrackers.com", pageWidth / 2, yOffset, { align: "center" }); yOffset += 10
-      doc.text("Retail Pricelist - 2025", pageWidth / 2, yOffset, { align: "center" }); yOffset += 20
-      const tableData = []; let hasActiveProducts = false
-      productTypes.forEach((type) => {
-        const typeProducts = products.filter((product) => product.product_type === type)
-        if (typeProducts.length > 0) {
-          hasActiveProducts = true
-          tableData.push([{ content: capitalize(type), colSpan: 4, styles: { fontStyle: "bold", halign: "left", fillColor: [200, 200, 200] } }])
-          tableData.push(["Serial No.", "Product Name", "Rate", "Per"])
-          typeProducts.forEach((product) => { tableData.push([product.serial_number, product.productname, `Rs.${parseFloat(product.price).toFixed(2)}`, product.per]) })
-          tableData.push([])
+  const downloadPDF = async () => {
+    if (!products.length) return;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let yOffset = 20;
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('MADHU NISHA CRACKERS', pageWidth / 2, yOffset, { align: 'center' });
+    yOffset += 10;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Website - www.madhunishacrackers.com', pageWidth / 2, yOffset, { align: 'center' });
+    yOffset += 10;
+    doc.text('Retail Pricelist - 2025', pageWidth / 2, yOffset, { align: 'center' });
+    yOffset += 10;
+    doc.text('Contact Number - 9487524689', pageWidth / 2, yOffset, { align: 'center' });
+    yOffset += 20;
+
+    const orderedTypes = [
+      "One sound crackers", "Ground Chakkar", "Flower Pots", "Twinkling Star",
+      "Rockets", "Bombs", "Repeating Shots", "Comets Sky Shots",
+      "Fancy pencil varieties", "Fountain and Fancy Novelties", "Matches",
+      "Guns and Caps", "Sparklers", "Premium Sparklers", "Gift Boxes", "Kids Special "
+    ];
+
+    // Helper: fetch image as base64 data URL
+    const fetchImageAsBase64 = (url) => {
+      return new Promise((resolve) => {
+        if (!url) return resolve(null);
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const MAX = 80;
+            let w = img.naturalWidth, h = img.naturalHeight;
+            if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
+            else { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.75));
+          } catch { resolve(null); }
+        };
+        img.onerror = () => resolve(null);
+        // Use a CORS proxy if needed, or try direct
+        img.src = url;
+      });
+    };
+
+    // Pre-fetch all images
+    const imageCache = {};
+    const allProducts = orderedTypes.flatMap(type => {
+      const typeKey = type.replace(/ /g, "_").toLowerCase();
+      return products.filter(p => p.product_type.toLowerCase() === typeKey);
+    });
+
+    await Promise.all(
+      allProducts.map(async (product) => {
+        const images = Array.isArray(product.images) ? product.images : [];
+        const imgUrl = images.find(img => img && !img.includes('/video/') && !img.toLowerCase().endsWith('.gif'));
+        if (imgUrl) {
+          imageCache[product.serial_number] = await fetchImageAsBase64(imgUrl);
         }
       })
-      if (!hasActiveProducts) { setError("No active products available to export"); return }
-      autoTable(doc, { startY: yOffset, head: [["Serial No.", "Product Name", "Rate", "Per"]], body: tableData, theme: "grid", styles: { fontSize: 10, cellPadding: 3 }, headStyles: { fillColor: [100, 100, 100], textColor: [255, 255, 255] }, columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 70 }, 2: { cellWidth: 40 }, 3: { cellWidth: 30 } } })
-      doc.save("Retail_Pricelist_2025.pdf")
-    } catch (err) { setError("Failed to generate PDF: " + err.message) }
-  }
+    );
+
+    const ROW_HEIGHT = 18; // mm per row
+    const IMG_SIZE = 14;   // mm image box
+
+    for (const type of orderedTypes) {
+      const typeKey = type.replace(/ /g, "_").toLowerCase();
+      const typeProducts = products.filter(p => p.product_type.toLowerCase() === typeKey).sort(serialSort);
+      if (!typeProducts.length) continue;
+
+      // Section header row
+      const sectionHeaderHeight = 10;
+      if (yOffset + sectionHeaderHeight > doc.internal.pageSize.getHeight() - 20) {
+        doc.addPage();
+        yOffset = 20;
+      }
+
+      // Draw section header
+      doc.setFillColor(255, 247, 237)
+      doc.rect(10, yOffset, pageWidth - 20, sectionHeaderHeight, 'F');
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text(capitalize(type), 14, yOffset + 7);
+      yOffset += sectionHeaderHeight + 1;
+
+      // Column header row
+      const colHeaderHeight = 8;
+      doc.setFillColor(234, 88, 12);
+      doc.rect(10, yOffset, pageWidth - 20, colHeaderHeight, 'F');
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 255, 255);
+
+      // Col positions: Sl(10), Code(22), Image(38), Product Name(60), Rate(130), Disc Rate(150), Per(175)
+      const cols = { sl: 12, code: 23, img: 39, name: 61, rate: 131, disc: 152, per: 176 };
+      doc.text('Sl', cols.sl, yOffset + 5.5);
+      doc.text('Code', cols.code, yOffset + 5.5);
+      doc.text('Image', cols.img, yOffset + 5.5);
+      doc.text('Product Name', cols.name, yOffset + 5.5);
+      doc.text('Rate', cols.rate, yOffset + 5.5);
+      doc.text('Disc. Rate', cols.disc, yOffset + 5.5);
+      doc.text('Per', cols.per, yOffset + 5.5);
+      yOffset += colHeaderHeight + 1;
+
+      let slNo = 1;
+      for (const product of typeProducts) {
+        if (yOffset + ROW_HEIGHT > doc.internal.pageSize.getHeight() - 15) {
+          doc.addPage();
+          yOffset = 20;
+        }
+
+        const discount = product.price * (product.discount / 100);
+        const discountedRate = product.price - discount;
+
+        // Alternating row background
+        if (slNo % 2 === 0) {
+          doc.setFillColor(255, 247, 237); // light orange tint
+          doc.rect(10, yOffset, pageWidth - 20, ROW_HEIGHT, 'F');
+        }
+
+        // Draw grid borders
+        doc.setDrawColor(220, 220, 220);
+        doc.rect(10, yOffset, pageWidth - 20, ROW_HEIGHT);
+
+        // Cell dividers
+        [21, 37, 59, 129, 150, 173].forEach(x => {
+          doc.line(x, yOffset, x, yOffset + ROW_HEIGHT);
+        });
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(50, 50, 50);
+
+        const textY = yOffset + ROW_HEIGHT / 2 + 1.5;
+
+        doc.text(String(slNo++), cols.sl, textY);
+        doc.text(product.serial_number || '', cols.code, textY);
+
+        // Product name — wrap if needed
+        const nameLines = doc.splitTextToSize(product.productname, 66);
+        const nameY = nameLines.length > 1 ? yOffset + 5 : textY;
+        doc.text(nameLines.slice(0, 2), cols.name, nameY);
+
+        doc.text(`Rs.${formatPrice(product.price)}`, cols.rate, textY);
+        doc.text(`Rs.${formatPrice(discountedRate)}`, cols.disc, textY);
+        doc.text(product.per || '', cols.per, textY);
+
+        // Embed image if available
+        const imgData = imageCache[product.serial_number];
+        if (imgData) {
+          const imgX = cols.img - 1;
+          const imgY = yOffset + (ROW_HEIGHT - IMG_SIZE) / 2;
+          try {
+            doc.addImage(imgData, 'JPEG', imgX, imgY, IMG_SIZE, IMG_SIZE);
+          } catch { /* skip if image fails */ }
+        } else {
+          // Placeholder box
+          doc.setFillColor(245, 245, 245);
+          doc.rect(cols.img - 1, yOffset + (ROW_HEIGHT - IMG_SIZE) / 2, IMG_SIZE, IMG_SIZE, 'F');
+          doc.setFontSize(6);
+          doc.setTextColor(180, 180, 180);
+          doc.text('No img', cols.img + 2, yOffset + ROW_HEIGHT / 2 + 1);
+        }
+
+        yOffset += ROW_HEIGHT;
+      }
+
+      yOffset += 6; // gap between sections
+    }
+
+    doc.save('MNC_Pricelist_2025.pdf');
+  };
 
   const renderMedia = (media, idx, sizeClass) => {
     let src, isVideo = false
