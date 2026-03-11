@@ -34,11 +34,15 @@ const selectStyles = {
     color: isSelected ? "#fff" : "#1e293b",
     fontWeight: isFocused || isSelected ? 500 : 400,
     cursor: "pointer",
-    padding: "0",
+    padding: "0.8rem",
   }),
   placeholder: (base) => ({ ...base, color: "#94a3b8" }),
   clearIndicator: (base) => ({ ...base, color: "#94a3b8", "&:hover": { color: "#ef4444" } }),
 };
+
+const Spinner = ({ white = false }) => (
+  <span className={`inline-block w-4 h-4 border-[3px] rounded-full animate-spin ${white ? "border-white/30 border-t-white" : "border-indigo-200 border-t-indigo-500"}`} />
+);
 
 class DirectErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
@@ -92,7 +96,7 @@ const SummaryChip = ({ label, value, color, large }) => {
 const StatusBadge = ({ status }) => {
   const map = {
     pending: "text-amber-500 bg-amber-50 border-amber-200",
-    booked:  "text-emerald-600 bg-emerald-50 border-emerald-200",
+    booked: "text-emerald-600 bg-emerald-50 border-emerald-200",
     cancelled: "text-red-500 bg-red-50 border-red-200",
   };
   const icons = { pending: "⏳ Pending", booked: "✓ Booked", cancelled: "✕ Cancelled" };
@@ -104,29 +108,29 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-const QuotActionBtn = ({ label, onClick, disabled, color }) => {
+const QuotActionBtn = ({ label, onClick, disabled, color, loading = false }) => {
   const colorMap = {
     "#f59e0b": {
       idle: "bg-amber-50 text-amber-500 border border-amber-200 hover:bg-amber-500 hover:text-white hover:border-amber-500",
-      off:  "bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed",
+      off: "bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed",
     },
     "#10b981": {
       idle: "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500",
-      off:  "bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed",
+      off: "bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed",
     },
     "#ef4444": {
       idle: "bg-red-50 text-red-500 border border-red-200 hover:bg-red-500 hover:text-white hover:border-red-500",
-      off:  "bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed",
+      off: "bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed",
     },
   };
   const variant = colorMap[color] || colorMap["#6366f1"];
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
-      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all duration-150 ${disabled ? variant.off : variant.idle}`}
+      disabled={disabled || loading}
+      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all duration-150 flex items-center justify-center gap-1.5 ${disabled || loading ? variant.off : variant.idle}`}
     >
-      {label}
+      {loading ? <Spinner /> : label}
     </button>
   );
 };
@@ -136,9 +140,9 @@ const PaginBtn = ({ label, onClick, disabled, active }) => (
     onClick={onClick}
     disabled={disabled}
     className={`px-4 py-2 rounded-lg border text-sm font-bold transition-all duration-150
-      ${active    ? "bg-indigo-600 border-indigo-600 text-white"
-      : disabled  ? "bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed"
-                  : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:text-indigo-600"}`}
+      ${active ? "bg-indigo-600 border-indigo-600 text-white"
+      : disabled ? "bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed"
+        : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:text-indigo-600"}`}
   >
     {label}
   </button>
@@ -183,12 +187,9 @@ const CustomOption = (props) => {
                 background: isSelected ? "rgba(255,255,255,0.15)" : "#fff",
                 color: isSelected ? "#fff" : "#64748b",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "14px", fontWeight: "bold", cursor: "pointer", lineHeight: 1,
-                flexShrink: 0,
+                fontSize: "14px", fontWeight: "bold", cursor: "pointer", lineHeight: 1, flexShrink: 0,
               }}
-            >
-              −
-            </button>
+            >−</button>
             <input
               type="number"
               value={qty}
@@ -212,12 +213,9 @@ const CustomOption = (props) => {
                 background: isSelected ? "rgba(255,255,255,0.2)" : "#6366f1",
                 color: "#fff",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "14px", fontWeight: "bold", cursor: "pointer", lineHeight: 1,
-                flexShrink: 0,
+                fontSize: "14px", fontWeight: "bold", cursor: "pointer", lineHeight: 1, flexShrink: 0,
               }}
-            >
-              +
-            </button>
+            >+</button>
           </div>
         )}
         {qty === 0 && (
@@ -229,12 +227,9 @@ const CustomOption = (props) => {
               background: isSelected ? "rgba(255,255,255,0.2)" : "#6366f1",
               color: "#fff",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "16px", fontWeight: "bold", cursor: "pointer", lineHeight: 1,
-              flexShrink: 0,
+              fontSize: "16px", fontWeight: "bold", cursor: "pointer", lineHeight: 1, flexShrink: 0,
             }}
-          >
-            +
-          </button>
+          >+</button>
         )}
       </div>
     </div>
@@ -275,9 +270,8 @@ const QuotationTable = ({
     const [id, type] = productValue.split("-");
     const product = products.find(p => p.id.toString() === id && p.product_type === type);
     if (!product) return;
-    const targetCart = isModal ? null : cart;
     const setTargetCart = isModal ? setModalCart : setCart;
-    const currentDiscount = isModal ? changeDiscount : changeDiscount;
+    const currentDiscount = changeDiscount;
 
     setTargetCart(prev => {
       const exists = prev.find(item => item.id.toString() === id && item.product_type === type);
@@ -286,7 +280,7 @@ const QuotationTable = ({
           return prev.map(item => item.id.toString() === id && item.product_type === type ? { ...item, quantity: item.quantity + 1 } : item);
         } else {
           const newItem = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: 1, discount: parseFloat(product.discount) || currentDiscount, initialDiscount: parseFloat(product.discount) || 0, per: product.per || 'Unit' };
-          return [newItem, ...prev];
+          return [...prev, newItem];
         }
       } else if (action === "minus") {
         if (!exists) return prev;
@@ -296,7 +290,7 @@ const QuotationTable = ({
         const qty = parseInt(setValue) || 0;
         if (!exists && qty > 0) {
           const newItem = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: qty, discount: parseFloat(product.discount) || currentDiscount, initialDiscount: parseFloat(product.discount) || 0, per: product.per || 'Unit' };
-          return [newItem, ...prev];
+          return [...prev, newItem];
         }
         if (qty <= 0) return prev.filter(item => !(item.id.toString() === id && item.product_type === type));
         return prev.map(item => item.id.toString() === id && item.product_type === type ? { ...item, quantity: qty } : item);
@@ -307,8 +301,6 @@ const QuotationTable = ({
 
   const total = parseFloat(calculateTotal(cart, additionalDiscount));
   const cartInputCls = "w-20 px-2 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 text-center bg-slate-50 outline-none focus:border-indigo-400 transition-colors";
-
-  const currentCart = isModal ? null : cart;
 
   return (
     <div className="space-y-5">
@@ -414,7 +406,7 @@ const QuotationTable = ({
                       <td className="px-3.5 py-2.5 text-center">
                         <button
                           onClick={() => removeFromCart(item.id, item.product_type, isModal)}
-                          className="bg-red-50 border border-red-200 text-red-500 rounded-lg px-2.5 py-1.5 text-xs font-bold hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200"
+                          className="bg-red-50 border border-red-200 text-red-500 rounded-lg px-2.5 py-1.5 hundred:text-md hundred:w-20 mobile:w-8 mobile:text-xs font-bold hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200"
                         >
                           ✕
                         </button>
@@ -447,7 +439,38 @@ const QuotationTable = ({
             <Select
               ref={productSelectRef}
               value={selectedProduct}
-              onChange={setSelectedProduct}
+              onChange={(option) => {
+                if (!option) return setSelectedProduct(null);
+                setSelectedProduct(option);
+                const [id, type] = option.value.split("-");
+                const product = products.find(p => p.id.toString() === id && p.product_type === type);
+                if (!product) return;
+                const setTargetCart = isModal ? setModalCart : setCart;
+                const setTargetLastAddedProduct = isModal ? null : setLastAddedProduct;
+                const currentDiscount = changeDiscount;
+                const newItem = {
+                  ...product,
+                  id: product.id,
+                  price: Math.round(Number(product.price) || 0),
+                  quantity: 1,
+                  discount: parseFloat(product.discount) || currentDiscount,
+                  initialDiscount: parseFloat(product.discount) || 0,
+                  per: product.per || 'Unit',
+                };
+                setTargetCart(prev => {
+                  const exists = prev.find(item => item.id === product.id && item.product_type === product.product_type);
+                  return exists
+                    ? prev.map(item => item.id === product.id && item.product_type === product.product_type
+                      ? { ...item, quantity: item.quantity + 1 } : item)
+                    : [...prev, newItem];
+                });
+                if (setTargetLastAddedProduct) {
+                  setTargetLastAddedProduct({ id: product.id, product_type: product.product_type });
+                } else {
+                  setLastAddedProduct({ id: product.id, product_type: product.product_type });
+                }
+                setSelectedProduct(null);
+              }}
               options={products.map((p) => ({
                 value: `${p.id}-${p.product_type}`,
                 label: `${p.serial_number ? `[${p.serial_number}] ` : ''}${p.productname} · ${p.product_type} · ₹${getEffectivePrice(p)}`,
@@ -462,21 +485,10 @@ const QuotationTable = ({
             />
           </div>
           <button
-            onClick={() => addToCart(isModal)}
-            disabled={!selectedProduct}
-            className={`h-11 px-6 rounded-xl font-bold text-sm flex items-center gap-2 whitespace-nowrap transition-all duration-200
-              ${selectedProduct
-                ? "bg-gradient-to-br from-indigo-500 to-indigo-400 text-white shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500"
-                : "bg-slate-200 text-slate-400 cursor-not-allowed"}`}
-          >
-            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-            Add to Cart
-          </button>
-          <button
             onClick={() => openNewProductModal(isModal)}
             className="h-11 px-5 rounded-xl font-bold text-sm flex items-center gap-2 whitespace-nowrap bg-gradient-to-br from-emerald-500 to-emerald-400 text-white shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-500 transition-all duration-200"
           >
-            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
             Custom Product
           </button>
         </div>
@@ -492,7 +504,7 @@ const FormFields = ({
   calculateNetRate, calculateYouSave, calculateProcessingFee, calculateTotal,
   handleSubmit, closeModal, modalAdditionalDiscount, setModalAdditionalDiscount,
   modalChangeDiscount, setModalChangeDiscount, openNewProductModal,
-  modalLastAddedProduct, setModalLastAddedProduct,
+  modalLastAddedProduct, setModalLastAddedProduct, submitLoading,
 }) => (
   <div className="space-y-5">
     <div>
@@ -530,22 +542,23 @@ const FormFields = ({
     <div className="flex justify-end gap-2.5 pt-2">
       <button
         onClick={closeModal}
-        className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors"
+        disabled={submitLoading}
+        className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors disabled:opacity-50"
       >
         Cancel
       </button>
       <button
         onClick={handleSubmit}
-        disabled={!modalSelectedCustomer || !modalCart.length}
-        className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all duration-200
-          ${!modalSelectedCustomer || !modalCart.length
+        disabled={!modalSelectedCustomer || !modalCart.length || submitLoading}
+        className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all duration-200 flex items-center gap-2
+          ${!modalSelectedCustomer || !modalCart.length || submitLoading
             ? "bg-slate-200 text-slate-400 cursor-not-allowed"
             : isEdit
               ? "bg-gradient-to-br from-amber-500 to-amber-400 shadow-lg shadow-amber-200 hover:from-amber-600 hover:to-amber-500"
               : "bg-gradient-to-br from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500"
           }`}
       >
-        {isEdit ? "Update Quotation" : "Confirm Booking"}
+        {submitLoading ? <><Spinner white />{isEdit ? "Updating..." : "Confirming..."}</> : (isEdit ? "Update Quotation" : "Confirm Booking")}
       </button>
     </div>
   </div>
@@ -613,13 +626,13 @@ const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProd
           </button>
           <button
             onClick={handleSubmit} disabled={isSubmitting || !isValid}
-            className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all duration-200
+            className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all duration-200 flex items-center gap-2
               ${isSubmitting || !isValid
                 ? "bg-slate-200 text-slate-400 cursor-not-allowed"
                 : "bg-gradient-to-br from-emerald-500 to-emerald-400 shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-500"
               }`}
           >
-            Add to Cart
+            {isSubmitting ? <><Spinner white />Adding...</> : "Add to Cart"}
           </button>
         </div>
       </div>
@@ -627,7 +640,7 @@ const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProd
   );
 };
 
-const CancelConfirmModal = ({ isOpen, onClose, onConfirm, quotationId }) => (
+const CancelConfirmModal = ({ isOpen, onClose, onConfirm, quotationId, loading = false }) => (
   <Modal isOpen={isOpen} onRequestClose={onClose} className="fixed inset-0 flex items-center justify-center p-4" overlayClassName="fixed inset-0 bg-black/50">
     <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl text-center">
       <div className="text-5xl mb-4">⚠️</div>
@@ -637,16 +650,16 @@ const CancelConfirmModal = ({ isOpen, onClose, onConfirm, quotationId }) => (
       </p>
       <div className="flex gap-2.5 justify-center">
         <button
-          onClick={onClose}
-          className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors"
+          onClick={onClose} disabled={loading}
+          className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors disabled:opacity-50"
         >
           Keep It
         </button>
         <button
-          onClick={onConfirm}
-          className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-red-500 to-red-400 shadow-lg shadow-red-200 hover:from-red-600 hover:to-red-500 transition-all duration-200"
+          onClick={onConfirm} disabled={loading}
+          className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-red-500 to-red-400 shadow-lg shadow-red-200 hover:from-red-600 hover:to-red-500 transition-all duration-200 flex items-center gap-2 disabled:opacity-50"
         >
-          Yes, Cancel
+          {loading ? <><Spinner white />Cancelling...</> : "Yes, Cancel"}
         </button>
       </div>
     </div>
@@ -712,10 +725,12 @@ export default function Direct() {
   const [createLoading, setCreateLoading] = useState(false);
   const [modalSubmitLoading, setModalSubmitLoading] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
   const [quotationToCancel, setQuotationToCancel] = useState(null);
   const [pdfConfirmOpen, setPdfConfirmOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState(null);
   const [pdfFileName, setPdfFileName] = useState("");
+  const [exportLoading, setExportLoading] = useState(false);
 
   const triggerPdfDownload = (url, fileName) => {
     const link = document.createElement('a');
@@ -798,7 +813,7 @@ export default function Direct() {
   };
 
   const exportQuotationsToExcel = async () => {
-    setError(""); setSuccessMessage("");
+    setError(""); setSuccessMessage(""); setExportLoading(true);
     try {
       const response = await axios.get(`${API_BASE_URL}/api/direct/export-quotations-excel`, { responseType: "blob", timeout: 300000 });
       const contentDisposition = response.headers["content-disposition"];
@@ -812,7 +827,7 @@ export default function Direct() {
       if (err.code === "ECONNABORTED") message = "Export timed out. The file may be very large.";
       else if (err.response?.status === 500) message = "Server error during export.";
       setError(message);
-    }
+    } finally { setExportLoading(false); }
   };
 
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -822,7 +837,6 @@ export default function Direct() {
   const paginate = (pageNumber) => { if (pageNumber >= 1 && pageNumber <= totalPages) setCurrentPage(pageNumber); };
 
   const addToCart = (isModal = false, customProduct = null, directProduct = null) => {
-    const targetCart = isModal ? modalCart : cart;
     const setTargetCart = isModal ? setModalCart : setCart;
     const targetSelectedProduct = isModal ? modalSelectedProduct : selectedProduct;
     const setTargetSelectedProduct = isModal ? setModalSelectedProduct : setSelectedProduct;
@@ -842,7 +856,7 @@ export default function Direct() {
     }
     setTargetCart(prev => {
       const exists = prev.find(item => item.id === product.id && item.product_type === product.product_type);
-      return exists ? prev.map(item => item.id === product.id && item.product_type === product.product_type ? { ...item, quantity: item.quantity + 1 } : item) : [product, ...prev];
+      return exists ? prev.map(item => item.id === product.id && item.product_type === product.product_type ? { ...item, quantity: item.quantity + 1 } : item) : [...prev, product];
     });
     setTargetSelectedProduct(null);
     setTargetLastAddedProduct({ id: product.id, product_type: product.product_type });
@@ -856,7 +870,7 @@ export default function Direct() {
 
   const calculateNetRate = (targetCart = []) => targetCart.reduce((total, item) => total + getEffectivePrice(item) * item.quantity, 0).toFixed(2);
   const calculateYouSave = (targetCart = []) => targetCart.reduce((total, item) => total + getEffectivePrice(item) * (item.discount / 100) * item.quantity, 0).toFixed(2);
-  const calculateProcessingFee = (targetCart = [], additionalDiscount = 0) => { const subtotal = targetCart.reduce((total, item) => total + getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity, 0); return (subtotal * (1 - additionalDiscount / 100) * 0.03).toFixed(2); };
+  const calculateProcessingFee = (targetCart = [], additionalDiscount = 0) => { const subtotal = targetCart.reduce((total, item) => total + getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity, 0); return (subtotal * (1 - additionalDiscount / 100) * 0.01).toFixed(2); };
   const calculateTotal = (targetCart = [], additionalDiscount = 0) => { const subtotal = targetCart.reduce((total, item) => total + getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity, 0); const discountedSubtotal = subtotal * (1 - additionalDiscount / 100); return (discountedSubtotal + discountedSubtotal * 0.01).toFixed(2); };
 
   const createQuotation = async () => {
@@ -894,8 +908,8 @@ export default function Direct() {
       setModalSelectedCustomer({ value: quotation.customer_id?.toString(), label: `${quotation.customer_name} (${quotation.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : quotation.customer_type || "User"} - ${quotation.district || "N/A"})` });
       setQuotationId(quotation.quotation_id); setModalAdditionalDiscount(parseFloat(quotation.additional_discount) || 0); setModalChangeDiscount(0);
       try {
-        const products = typeof quotation.products === "string" ? JSON.parse(quotation.products) : quotation.products;
-        setModalCart(Array.isArray(products) ? products.map(p => ({ ...p, id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, price: parseFloat(p.price) || 0, discount: parseFloat(p.discount) || 0, initialDiscount: parseFloat(p.discount) || 0, quantity: parseInt(p.quantity) || 0, per: p.per || 'Unit', product_type: p.product_type || 'custom' })) : []);
+        const prods = typeof quotation.products === "string" ? JSON.parse(quotation.products) : quotation.products;
+        setModalCart(Array.isArray(prods) ? prods.map(p => ({ ...p, id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, price: parseFloat(p.price) || 0, discount: parseFloat(p.discount) || 0, initialDiscount: parseFloat(p.discount) || 0, quantity: parseInt(p.quantity) || 0, per: p.per || 'Unit', product_type: p.product_type || 'custom' })) : []);
       } catch (e) { setModalCart([]); setError("Failed to parse quotation products"); return; }
       setModalIsOpen(true); return;
     }
@@ -932,8 +946,8 @@ export default function Direct() {
       setModalSelectedCustomer({ value: quotation.customer_id?.toString(), label: `${quotation.customer_name} (${quotation.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : quotation.customer_type || "User"} - ${quotation.district || "N/A"})` });
       setQuotationId(quotation.quotation_id); setOrderId(`ORD-${Date.now()}`); setModalAdditionalDiscount(parseFloat(quotation.additional_discount) || 0); setModalChangeDiscount(0);
       try {
-        const products = typeof quotation.products === "string" ? JSON.parse(quotation.products) : quotation.products;
-        setModalCart(Array.isArray(products) ? products.map(p => ({ ...p, id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, price: parseFloat(p.price) || 0, discount: parseFloat(p.discount) || 0, initialDiscount: parseFloat(p.discount) || 0, quantity: parseInt(p.quantity) || 0, per: p.per || 'Unit', product_type: p.product_type || 'custom' })) : []);
+        const prods = typeof quotation.products === "string" ? JSON.parse(quotation.products) : quotation.products;
+        setModalCart(Array.isArray(prods) ? prods.map(p => ({ ...p, id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, price: parseFloat(p.price) || 0, discount: parseFloat(p.discount) || 0, initialDiscount: parseFloat(p.discount) || 0, quantity: parseInt(p.quantity) || 0, per: p.per || 'Unit', product_type: p.product_type || 'custom' })) : []);
       } catch (e) { setModalCart([]); setError("Failed to parse quotation products"); return; }
       setModalIsOpen(true); return;
     }
@@ -946,7 +960,7 @@ export default function Direct() {
       if (!customer) throw new Error("Invalid customer");
       const subtotal = parseFloat(calculateNetRate(modalCart)) - parseFloat(calculateYouSave(modalCart));
       const discountedSubtotal = subtotal * (1 - modalAdditionalDiscount / 100);
-      const processingFee = discountedSubtotal * 0.03;
+      const processingFee = discountedSubtotal * 0.01;
       const payload = { customer_id: Number(modalSelectedCustomer.value), order_id: orderId, quotation_id: quotationId, products: modalCart.map(item => ({ id: item.id, product_type: item.product_type, productname: item.productname, price: getEffectivePrice(item), discount: parseFloat(item.discount) || 0, quantity: parseInt(item.quantity) || 0, per: item.per || 'Unit', serial_number: item.serial_number || undefined })), net_rate: parseFloat(calculateNetRate(modalCart)), you_save: parseFloat(calculateYouSave(modalCart)), processing_fee: processingFee, total: parseFloat(calculateTotal(modalCart, modalAdditionalDiscount)), promo_discount: 0, additional_discount: parseFloat(modalAdditionalDiscount.toFixed(2)), customer_type: customer.customer_type || "User", customer_name: customer.name, address: customer.address, mobile_number: customer.mobile_number, email: customer.email, district: customer.district, state: customer.state };
       const response = await axios.post(`${API_BASE_URL}/api/direct/bookings`, payload);
       setSuccessMessage("Booking created successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000);
@@ -964,14 +978,14 @@ export default function Direct() {
   const cancelQuotation = async () => {
     const target = quotationToCancel;
     if (!target || target === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(target)) { setError("Invalid quotation ID"); setCancelConfirmOpen(false); return; }
+    setCancelLoading(true);
     try {
       await axios.put(`${API_BASE_URL}/api/direct/quotations/cancel/${target}`);
       setSuccessMessage("Quotation cancelled successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000);
       setQuotations(prev => prev.map(q => q.quotation_id === target ? { ...q, status: "cancelled" } : q));
       setFilteredQuotations(prev => prev.map(q => q.quotation_id === target ? { ...q, status: "cancelled" } : q));
-      if (!quotationToCancel) { setCart([]); setSelectedCustomer(null); setSelectedProduct(null); setQuotationId(null); setIsQuotationCreated(false); setAdditionalDiscount(0); setChangeDiscount(0); setLastAddedProduct(null); }
     } catch (err) { setError(`Failed to cancel: ${err.response?.data?.message || err.message}`); }
-    finally { setCancelConfirmOpen(false); setQuotationToCancel(null); }
+    finally { setCancelLoading(false); setCancelConfirmOpen(false); setQuotationToCancel(null); }
   };
 
   const openCancelConfirm = (id) => { setQuotationToCancel(id); setCancelConfirmOpen(true); };
@@ -1001,8 +1015,8 @@ export default function Direct() {
             </div>
 
             {loading && (
-              <div className="text-center py-5 text-indigo-500 font-semibold text-sm">
-                <span className="inline-block w-5 h-5 border-[3px] border-indigo-100 border-t-indigo-500 rounded-full animate-spin mr-2.5 align-middle" />
+              <div className="text-center py-5 text-indigo-500 font-semibold text-sm flex items-center justify-center gap-2">
+                <Spinner />
                 Loading...
               </div>
             )}
@@ -1026,7 +1040,7 @@ export default function Direct() {
                   value={selectedCustomer}
                   onChange={setSelectedCustomer}
                   options={customers.map(c => ({ value: c.id.toString(), label: `${c.name} (${c.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : c.customer_type || "User"} - ${c.district || "N/A"})` }))}
-                  placeholder="Search customer by name, type, or district..."
+                  placeholder="Search customer"
                   isClearable
                   styles={selectStyles}
                 />
@@ -1060,13 +1074,10 @@ export default function Direct() {
                     }`}
                 >
                   {createLoading ? (
-                    <>
-                      <span className="inline-block w-4 h-4 border-[3px] border-white/30 border-t-white rounded-full animate-spin" />
-                      Creating...
-                    </>
+                    <><Spinner white />Creating...</>
                   ) : (
                     <>
-                      <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><path d="M3 12a9 9 0 1018 0A9 9 0 003 12z"/></svg>
+                      <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4" /><path d="M3 12a9 9 0 1018 0A9 9 0 003 12z" /></svg>
                       Create Quotation
                     </>
                   )}
@@ -1146,15 +1157,15 @@ export default function Direct() {
 
             <div className="flex gap-3 justify-center flex-wrap mb-4">
               {[
-                { label: "Export Customers", onClick: exportToExcel, cls: "bg-emerald-500 shadow-emerald-200", icon: "📊" },
-                { label: "Export Quotations", onClick: exportQuotationsToExcel, cls: "bg-violet-500 shadow-violet-200", icon: "📋" },
-                { label: "Download Customers Excel", onClick: downloadCustomersExcel, cls: "bg-blue-500 shadow-blue-200", icon: "⬇️" },
-              ].map(({ label, onClick, cls, icon }) => (
+                { label: "Export Customers", onClick: exportToExcel, cls: "bg-emerald-500 shadow-emerald-200", icon: "📊", loadingState: false },
+                { label: "Export Quotations", onClick: exportQuotationsToExcel, cls: "bg-violet-500 shadow-violet-200", icon: "📋", loadingState: exportLoading },
+                { label: "Download Customers Excel", onClick: downloadCustomersExcel, cls: "bg-blue-500 shadow-blue-200", icon: "⬇️", loadingState: false },
+              ].map(({ label, onClick, cls, icon, loadingState }) => (
                 <button
-                  key={label} onClick={onClick}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border-none font-bold text-sm text-white cursor-pointer shadow-lg hover:opacity-85 transition-opacity ${cls}`}
+                  key={label} onClick={onClick} disabled={loadingState}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border-none font-bold text-sm text-white cursor-pointer shadow-lg hover:opacity-85 transition-opacity disabled:opacity-60 ${cls}`}
                 >
-                  {icon} {label}
+                  {loadingState ? <><Spinner white />{label}...</> : <>{icon} {label}</>}
                 </button>
               ))}
             </div>
@@ -1168,8 +1179,8 @@ export default function Direct() {
                 {modalMode === "edit" ? "✏️ Edit Quotation" : "🚀 Convert to Booking"}
               </h2>
               <button
-                onClick={closeModal}
-                className="bg-slate-100 border-none rounded-lg px-3 py-1.5 cursor-pointer font-bold text-slate-500 text-xs hover:bg-slate-200 transition-colors"
+                onClick={closeModal} disabled={modalSubmitLoading}
+                className="bg-slate-100 border-none rounded-lg px-3 py-1.5 cursor-pointer font-bold text-slate-500 text-xs hover:bg-slate-200 transition-colors disabled:opacity-50"
               >
                 ✕ Close
               </button>
@@ -1201,11 +1212,12 @@ export default function Direct() {
               modalChangeDiscount={modalChangeDiscount} setModalChangeDiscount={setModalChangeDiscount}
               openNewProductModal={openNewProductModal}
               modalLastAddedProduct={modalLastAddedProduct} setModalLastAddedProduct={setModalLastAddedProduct}
+              submitLoading={modalSubmitLoading}
             />
           </div>
         </Modal>
 
-        <CancelConfirmModal isOpen={cancelConfirmOpen} onClose={() => setCancelConfirmOpen(false)} onConfirm={cancelQuotation} quotationId={quotationToCancel} />
+        <CancelConfirmModal isOpen={cancelConfirmOpen} onClose={() => { if (!cancelLoading) setCancelConfirmOpen(false); }} onConfirm={cancelQuotation} quotationId={quotationToCancel} loading={cancelLoading} />
         <PDFDownloadConfirmModal isOpen={pdfConfirmOpen} onClose={handlePdfNo} onYes={handlePdfYes} fileName={pdfFileName} />
         <NewProductModal isOpen={newProductModalIsOpen} onClose={closeNewProductModal} onSubmit={handleAddNewProduct} newProductData={newProductData} setNewProductData={setNewProductData} />
 

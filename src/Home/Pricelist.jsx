@@ -92,12 +92,11 @@ const Pricelist = () => {
     yOffset += 10;
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    doc.text('Website - www.madhunishacrackers.com', pageWidth / 2, yOffset, { align: 'center' });
+    doc.text('www.madhunishacrackers.com   |   +91 94875 94689', pageWidth / 2, yOffset, { align: 'center' });
     yOffset += 10;
-    doc.text('Retail Pricelist - 2025', pageWidth / 2, yOffset, { align: 'center' });
+    const year = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric' });
+    doc.text(`PRICELIST - ${year}`, pageWidth / 2, yOffset, { align: 'center' });
     yOffset += 10;
-    doc.text('Contact Number - 9487524689', pageWidth / 2, yOffset, { align: 'center' });
-    yOffset += 20;
 
     const orderedTypes = [
       "One sound crackers", "Ground Chakkar", "Flower Pots", "Twinkling Star",
@@ -236,19 +235,16 @@ const Pricelist = () => {
 
         // Embed image if available
         const imgData = imageCache[product.serial_number];
+        const imgX = cols.img - 1;
+        const imgY = yOffset + (ROW_HEIGHT - IMG_SIZE) / 2;
         if (imgData) {
-          const imgX = cols.img - 1;
-          const imgY = yOffset + (ROW_HEIGHT - IMG_SIZE) / 2;
           try {
             doc.addImage(imgData, 'JPEG', imgX, imgY, IMG_SIZE, IMG_SIZE);
           } catch { /* skip if image fails */ }
         } else {
-          // Placeholder box
-          doc.setFillColor(245, 245, 245);
-          doc.rect(cols.img - 1, yOffset + (ROW_HEIGHT - IMG_SIZE) / 2, IMG_SIZE, IMG_SIZE, 'F');
-          doc.setFontSize(6);
-          doc.setTextColor(180, 180, 180);
-          doc.text('No img', cols.img + 2, yOffset + ROW_HEIGHT / 2 + 1);
+          try {
+            doc.addImage(need, 'JPEG', imgX, imgY, IMG_SIZE, IMG_SIZE);
+          } catch { /* skip if default image fails */ }
         }
 
         yOffset += ROW_HEIGHT;

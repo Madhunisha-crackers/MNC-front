@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import Modal from "react-modal"
 import Sidebar from "../Sidebar/Sidebar"
@@ -11,6 +9,7 @@ import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import JSZip from "jszip"
 import { saveAs } from "file-saver"
+import need from '../../default.jpg';
 
 Modal.setAppElement("#root")
 
@@ -233,6 +232,16 @@ export default function List() {
 
   const capitalize = (str) => str ? str.split("_").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ") : ""
 
+  const serialSort = (a, b) => {
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+    return collator.compare(a.serial_number, b.serial_number);
+  };
+
+  const formatPrice = (price) => {
+    const num = Number.parseFloat(price);
+    return Number.isInteger(num) ? num.toString() : num.toFixed(2);
+  };
+
   const downloadPDF = async () => {
     if (!products.length) return;
     const doc = new jsPDF();
@@ -245,12 +254,11 @@ export default function List() {
     yOffset += 10;
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    doc.text('Website - www.madhunishacrackers.com', pageWidth / 2, yOffset, { align: 'center' });
+    doc.text('www.madhunishacrackers.com   |   +91 94875 94689', pageWidth / 2, yOffset, { align: 'center' });
     yOffset += 10;
-    doc.text('Retail Pricelist - 2025', pageWidth / 2, yOffset, { align: 'center' });
+    const year = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric' });
+    doc.text(`PRICELIST - ${year}`, pageWidth / 2, yOffset, { align: 'center' });
     yOffset += 10;
-    doc.text('Contact Number - 9487524689', pageWidth / 2, yOffset, { align: 'center' });
-    yOffset += 20;
 
     const orderedTypes = [
       "One sound crackers", "Ground Chakkar", "Flower Pots", "Twinkling Star",
@@ -317,7 +325,7 @@ export default function List() {
       }
 
       // Draw section header
-      doc.setFillColor(255, 247, 237)
+      doc.setFillColor(200, 200, 200);
       doc.rect(10, yOffset, pageWidth - 20, sectionHeaderHeight, 'F');
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
@@ -389,19 +397,16 @@ export default function List() {
 
         // Embed image if available
         const imgData = imageCache[product.serial_number];
+        const imgX = cols.img - 1;
+        const imgY = yOffset + (ROW_HEIGHT - IMG_SIZE) / 2;
         if (imgData) {
-          const imgX = cols.img - 1;
-          const imgY = yOffset + (ROW_HEIGHT - IMG_SIZE) / 2;
           try {
             doc.addImage(imgData, 'JPEG', imgX, imgY, IMG_SIZE, IMG_SIZE);
           } catch { /* skip if image fails */ }
         } else {
-          // Placeholder box
-          doc.setFillColor(245, 245, 245);
-          doc.rect(cols.img - 1, yOffset + (ROW_HEIGHT - IMG_SIZE) / 2, IMG_SIZE, IMG_SIZE, 'F');
-          doc.setFontSize(6);
-          doc.setTextColor(180, 180, 180);
-          doc.text('No img', cols.img + 2, yOffset + ROW_HEIGHT / 2 + 1);
+          try {
+            doc.addImage(need, 'JPEG', imgX, imgY, IMG_SIZE, IMG_SIZE);
+          } catch { /* skip if default image fails */ }
         }
 
         yOffset += ROW_HEIGHT;
