@@ -1,12 +1,17 @@
 import { BrowserRouter } from 'react-router-dom';
-import AllRoutes from './Router'
+import { useState } from 'react';
+import AllRoutes from './Router';
+import Launch from './Home/Launch';
 
 function App() {
+  const [launched, setLaunched] = useState(false);
+
   return (
     <div className='md:w-auto md:h-auto'>
-        <BrowserRouter>
-          <AllRoutes/>
-        </BrowserRouter>
+      {!launched && <Launch onComplete={() => setLaunched(true)} />}
+      <BrowserRouter>
+        <AllRoutes />
+      </BrowserRouter>
     </div>
   );
 }
