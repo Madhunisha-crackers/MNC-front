@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "vite build",
     "lint": "eslint .",
     "start": "vite preview"
@@ -22,7 +22,7 @@
     "favicons": "^7.2.0",
     "file-saver": "^2.0.5",
     "framer-motion": "^12.19.1",
-    "gsap": "^3.13.0",
+    "gsap": "^3.14.2",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
     "jszip": "^3.10.1",
@@ -43,6 +43,7 @@
     "react-webcam": "^7.2.0",
     "styled-components": "^6.1.19",
     "tesseract.js": "^6.0.1",
+    "three": "^0.183.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

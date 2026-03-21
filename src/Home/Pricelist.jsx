@@ -1,1563 +1,792 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { FaPlus, FaMinus, FaArrowLeft, FaArrowRight, FaInfoCircle, FaExpand, FaCompress } from "react-icons/fa";
-import { ShoppingCart, Search, Filter, X, Download, Sparkles, ChevronRight } from "lucide-react";
-import Navbar from "../Component/Navbar";
-import { API_BASE_URL } from "../../Config";
-import RocketLoader from "../Component/RocketLoader";
-import ToasterNotification from "../Component/ToasterNotification";
-import SuccessAnimation from "../Component/SuccessAnimation";
-import ModernCarousel from "../Component/ModernCarousel";
-import LoadingSpinner from "../Component/LoadingSpinner";
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import "../App.css";
-import need from '../default.jpg'
+import {useEffect,useRef,useState,useCallback,useMemo} from 'react'
+import * as THREE from 'three'
+import {API_BASE_URL} from '../../Config'
 
-const Pricelist = () => {
-  const [products, setProducts] = useState([]);
-  const [cart, setCart] = useState({});
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isExpandedCart, setIsExpandedCart] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [showMinOrderModal, setShowMinOrderModal] = useState(false);
-  const [minOrderMessage, setMinOrderMessage] = useState("");
-  const [showToaster, setShowToaster] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isBookingLoading, setIsBookingLoading] = useState(false);
-  const [customerDetails, setCustomerDetails] = useState({
-    customer_name: "",
-    address: "",
-    district: "",
-    state: "",
-    mobile_number: "",
-    email: "",
-    customer_type: "User",
-  });
-  const [selectedType, setSelectedType] = useState("All");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [promocode, setPromocode] = useState("");
-  const [appliedPromo, setAppliedPromo] = useState(null);
-  const [states, setStates] = useState([]);
-  const [districts, setDistricts] = useState([]);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [promocodes, setPromocodes] = useState([]);
-  const [originalTotal, setOriginalTotal] = useState(0);
-  const [totalDiscount, setTotalDiscount] = useState(0);
-  const [showLoader, setShowLoader] = useState(false);
-  const debounceTimeout = useRef(null);
-  const [showImageModal, setShowImageModal] = useState(false);
-  const [selectedImages, setSelectedImages] = useState([]);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [aiStep, setAiStep] = useState(0);
-  const [aiBudget, setAiBudget] = useState("");
-  const [aiPreferences, setAiPreferences] = useState({
-    kids: false,
-    sound: false,
-    night: false,
-    kidsnight: false,
-  });
-  const [suggestedCart, setSuggestedCart] = useState({});
+const C={wall:0xfff8f0,shelf:0xd4a76a,shelfDark:0xa0784a,sign:0xcc2200,counter:0x2d5a2d,cartMetal:0x888888,black:0x111111}
 
-  const formatPercentage = (value) => Math.round(Number.parseFloat(value)).toString();
-  const formatPrice = (price) => {
-    const num = Number.parseFloat(price);
-    return Number.isInteger(num) ? num.toString() : num.toFixed(2);
-  };
-  const capitalize = str => str ? str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : '';
+const mat=(c,r=0.85,m=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m})
+const nMat=(c,i=2)=>new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:i,roughness:1})
 
-  const serialSort = (a, b) => {
-    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-    return collator.compare(a.serial_number, b.serial_number);
-  };
+function bx(w,h,d,m){const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.castShadow=true;o.receiveShadow=true;return o}
+function cy(r,h,m,s=16){const o=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,s),m);o.castShadow=true;return o}
 
-  const showError = (message) => {
-    setMinOrderMessage(message);
-    setShowMinOrderModal(true);
-    setTimeout(() => setShowMinOrderModal(false), 5000);
-  };
+function labelTex(lines,W=256,H=128,bg='#cc2200'){
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H
+  const ctx=cv.getContext('2d')
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H)
+  let y=18
+  for(const l of lines){
+    ctx.font=`${l.bold?'bold ':''}${l.size||22}px "Arial Black",Arial,sans-serif`
+    ctx.fillStyle=l.color||'#fff';ctx.textAlign='center'
+    ctx.fillText(l.text,W/2,y);y+=(l.size||22)*1.38+(l.gap||0)
+  }
+  return new THREE.CanvasTexture(cv)
+}
 
-  const downloadPDF = async () => {
-    if (!products.length) return;
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    let yOffset = 20;
+function planeMesh(tex,w,h){
+  return new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,side:THREE.DoubleSide}))
+}
 
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MADHU NISHA CRACKERS', pageWidth / 2, yOffset, { align: 'center' });
-    yOffset += 10;
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    doc.text('www.madhunishacrackers.com   |   +91 94875 94689', pageWidth / 2, yOffset, { align: 'center' });
-    yOffset += 10;
-    const year = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric' });
-    doc.text(`PRICELIST - ${year}`, pageWidth / 2, yOffset, { align: 'center' });
-    yOffset += 10;
+function buildFloor(scene,W,D){
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(W,D),mat(0xf0e0c8,0.85))
+  floor.rotation.x=-Math.PI/2;floor.position.set(0,0,-D/2);floor.receiveShadow=true;scene.add(floor)
+  for(let i=0;i<=Math.ceil(W);i+=2){const l=bx(0.03,0.01,D,mat(0xccbbaa,0.9));l.position.set(-W/2+i,-0.005,-D/2);scene.add(l)}
+  for(let j=0;j<=Math.ceil(D);j+=2){const l=bx(W,0.01,0.03,mat(0xccbbaa,0.9));l.position.set(0,-0.005,-j);scene.add(l)}
+}
 
-    const orderedTypes = [
-      "One sound crackers", "Ground Chakkar", "Flower Pots", "Twinkling Star",
-      "Rockets", "Bombs", "Repeating Shots", "Comets Sky Shots",
-      "Fancy pencil varieties", "Fountain and Fancy Novelties", "Matches",
-      "Guns and Caps", "Sparklers", "Premium Sparklers", "Gift Boxes", "Kids Special "
-    ];
+function buildWalls(scene,W,D){
+  [[W,6,0.2,0,3,-D],[0.2,6,D+1,-W/2,3,-D/2],[0.2,6,D+1,W/2,3,-D/2],[W,0.15,D+1,0,6,-D/2]]
+    .forEach(([w,h,d,x,y,z])=>{const m=bx(w,h,d,mat(C.wall,0.9));m.position.set(x,y,z);scene.add(m)})
+  const sb=bx(7,2.2,0.15,mat(C.sign));sb.position.set(0,5,-D+0.06);scene.add(sb)
+  const st=planeMesh(labelTex([{text:'MADHU NISHA CRACKERS',bold:true,size:32,color:'#ffff00'},{text:'Premium Firecrackers Store',size:18,color:'#ffddaa'}],640,160,'#cc2200'),6.6,1.9)
+  st.position.set(0,5,-D+0.18);scene.add(st)
+  ;[[-3.6,5,-D+0.22],[3.6,5,-D+0.22]].forEach(([x,y,z])=>{const p=bx(0.1,2.3,0.1,nMat(0xff6600));p.position.set(x,y,z);scene.add(p)})
+  for(let lx=-W/2+3;lx<W/2;lx+=5){
+    const s=bx(0.18,0.06,D*0.55,nMat(0xfffff0,1.6));s.position.set(lx,5.9,-D/2);scene.add(s)
+    const l=new THREE.PointLight(0xfffce8,1.2,14);l.position.set(lx,5.5,-D/2);scene.add(l)
+  }
+}
 
-    // Helper: fetch image as base64 data URL
-    const fetchImageAsBase64 = (url) => {
-      return new Promise((resolve) => {
-        if (!url) return resolve(null);
-        const img = new Image();
-        img.crossOrigin = 'Anonymous';
-        img.onload = () => {
-          try {
-            const canvas = document.createElement('canvas');
-            const MAX = 80;
-            let w = img.naturalWidth, h = img.naturalHeight;
-            if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
-            else { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
-            canvas.width = w;
-            canvas.height = h;
-            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-            resolve(canvas.toDataURL('image/jpeg', 0.75));
-          } catch { resolve(null); }
-        };
-        img.onerror = () => resolve(null);
-        // Use a CORS proxy if needed, or try direct
-        img.src = url;
-      });
-    };
+function buildEntrance(scene,W){
+  const am=mat(0xddbb88,0.8)
+  ;[[-W/2+0.15,2.25,0.1],[W/2-0.15,2.25,0.1]].forEach(([x,y,z])=>{const p=bx(0.3,4.5,0.3,am);p.position.set(x,y,z);scene.add(p)})
+  const beam=bx(W,0.35,0.35,am);beam.position.set(0,4.7,0.1);scene.add(beam)
+  const ws=planeMesh(labelTex([{text:'WELCOME',bold:true,size:32,color:'#ffff00'},{text:'Aim crosshair at product → tap ADD',size:13,color:'#88ffaa'},{text:'Walk to Billing Counter to checkout',size:12,color:'#ffddaa'}],400,128,'#1a3a1a'),3.8,1.2)
+  ws.position.set(0,5.1,0.22);scene.add(ws)
+}
 
-    // Pre-fetch all images
-    const imageCache = {};
-    const allProducts = orderedTypes.flatMap(type => {
-      const typeKey = type.replace(/ /g, "_").toLowerCase();
-      return products.filter(p => p.product_type.toLowerCase() === typeKey);
-    });
+function buildDecorations(scene,W){
+  const cols=[0xff0000,0xffaa00,0xffff00,0x00ff00,0x0044ff,0xff00ff]
+  for(let i=0;i<8;i++){const f=bx(0.22,0.16,0.02,mat(cols[i%6]));f.position.set(-W/2+1+i*2.2,5.5,-1.5);scene.add(f)}
+  const em=bx(W*0.4,0.02,1.4,mat(0x882200,0.95));em.position.set(0,-0.01,-0.7);scene.add(em)
+}
 
-    await Promise.all(
-      allProducts.map(async (product) => {
-        const images = Array.isArray(product.images) ? product.images : [];
-        const imgUrl = images.find(img => img && !img.includes('/video/') && !img.toLowerCase().endsWith('.gif'));
-        if (imgUrl) {
-          imageCache[product.serial_number] = await fetchImageAsBase64(imgUrl);
+// Returns array of product meshes built inside this shelf
+function buildShelf(scene,x,z,ry,label,products){
+  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=ry
+  const SW=3.2,SH=3.4,SD=0.52
+  const ROWS=3,COLS=4
+  const back=bx(SW,SH,0.06,mat(C.shelfDark));back.position.set(0,SH/2,-SD/2+0.03);g.add(back)
+  ;[-SW/2,SW/2].forEach(sx=>{const side=bx(0.06,SH,SD,mat(C.shelfDark));side.position.set(sx,SH/2,0);g.add(side)})
+  const topCap=bx(SW+0.12,0.08,SD+0.1,mat(C.shelf));topCap.position.set(0,SH+0.04,0);g.add(topCap)
+  const rowSpacing=SH/ROWS
+  for(let s=0;s<=ROWS;s++){const sh=bx(SW,0.06,SD,mat(C.shelf));sh.position.set(0,s*rowSpacing+0.06,0);g.add(sh)}
+  if(label){
+    const lb=bx(2.4,0.52,0.14,mat(C.sign));lb.position.set(0,SH+0.38,0);g.add(lb)
+    const lp=planeMesh(labelTex([{text:label,bold:true,size:22}],256,64,'#cc2200'),2.2,0.48)
+    lp.position.set(0,SH+0.38,0.08);g.add(lp)
+  }
+  const pz=SD/2-0.04
+  const boxColors=[0xff5544,0xff8800,0xffcc00,0x44cc44,0x4499ff,0xcc44ff,0xff44aa,0x44ffdd,0xff6633,0x66ff44]
+  const meshes=[]
+  products.slice(0,ROWS*COLS).forEach((prod,idx)=>{
+    if(!prod)return
+    const row=Math.floor(idx/COLS),col=idx%COLS
+    const px=-SW/2+col*(SW/COLS)+SW/(COLS*2)
+    const plankY=row*rowSpacing+0.06+0.03
+    const py=plankY+0.30
+    const pBox=bx(0.34,0.50,0.18,mat(boxColors[idx%boxColors.length],0.72))
+    pBox.position.set(px,py,pz);pBox.userData={isProduct:true,product:prod};g.add(pBox)
+    meshes.push(pBox)
+    if(prod._imgTex){
+      const ip=planeMesh(prod._imgTex,0.32,0.46)
+      ip.position.set(px,py,pz+0.10);ip.userData={isProduct:true,product:prod};g.add(ip)
+      meshes.push(ip)
+    }
+    const pt=planeMesh(labelTex([{text:(prod.productname||'').slice(0,14),size:12,color:'#fff',bold:true},{text:`₹${Math.round(prod.price*(1-(prod.discount||0)/100))}`,size:15,color:'#ffff44'}],128,52,'#111111'),0.34,0.14)
+    pt.position.set(px,plankY-0.03,pz+0.10);g.add(pt)
+  })
+  scene.add(g)
+  // update world matrices so raycasting works immediately
+  g.updateMatrixWorld(true)
+  return meshes
+}
+
+function buildBillingCounter(scene,x,z){
+  const g=new THREE.Group();g.position.set(x,0,z)
+  const body=bx(4,1.05,1.2,mat(C.counter,0.8));body.position.set(0,0.525,0);g.add(body)
+  const top=bx(4.1,0.08,1.3,new THREE.MeshStandardMaterial({color:0x1a5a1a,roughness:0.7,metalness:0.2}));top.position.set(0,1.09,0);g.add(top)
+  const glass=bx(3.8,0.6,0.06,new THREE.MeshStandardMaterial({color:0xaaddaa,roughness:0,metalness:0.1,transparent:true,opacity:0.35}));glass.position.set(0,1.42,0.62);g.add(glass)
+  const mon=bx(1,0.65,0.07,mat(0x111111));mon.position.set(-0.8,1.68,-0.3);g.add(mon)
+  const torso=bx(0.36,0.52,0.22,mat(0x2244aa));torso.position.set(0.8,1.56,0);g.add(torso)
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.17,12,12),mat(0xf5c5a0));head.position.set(0.8,2.0,0);g.add(head)
+  const ns=bx(2.5,0.45,0.1,nMat(0x00cc44,1.5));ns.position.set(0,2.9,0);g.add(ns)
+  const nl=planeMesh(labelTex([{text:'💳 BILLING',bold:true,size:26,color:'#00ff88'}],256,64,'#00aa33'),2.2,0.4)
+  nl.position.set(0,2.9,0.06);g.add(nl)
+  const bp=planeMesh(labelTex([{text:'BILLING COUNTER',bold:true,size:22},{text:'Walk here to checkout',size:14,color:'#aaffaa'}],320,96,'#1a3a1a'),3,0.9)
+  bp.position.set(0,2.2,-0.62);g.add(bp)
+  scene.add(g)
+}
+
+function buildCartMesh(){
+  const g=new THREE.Group(),wm=mat(C.cartMetal,0.3,0.8)
+  for(let i=0;i<4;i++){const b=bx(i%2===0?0.7:0.5,0.04,0.04,wm);b.position.set(i%2===0?0:(i<2?-0.32:0.32),0.35+(i>1?0.28:0),i%2===0?(i<2?-0.22:0.22):0);g.add(b)}
+  const bot=bx(0.66,0.03,0.46,mat(0xaaaaaa,0.5,0.3));bot.position.y=0.22;g.add(bot)
+  ;[-0.32,0.32].forEach(x=>[-0.22,0.22].forEach(z=>{const p=bx(0.03,0.3,0.03,wm);p.position.set(x,0.37,z);g.add(p)}))
+  ;[-0.28,0.28].forEach(x=>[-0.18,0.18].forEach(z=>{const w=cy(0.05,0.04,mat(C.black,0.5),8);w.rotation.x=Math.PI/2;w.position.set(x,0.05,z);g.add(w)}))
+  const h=bx(0.66,0.04,0.04,wm);h.position.set(0,0.68,0.22);g.add(h)
+  g.scale.set(0.6,0.6,0.6);return g
+}
+
+const isMob=()=>typeof window!=='undefined'&&('ontouchstart'in window||navigator.maxTouchPoints>0||window.innerWidth<=900)
+
+export default function Pricelist({onClose}){
+  const canvasRef=useRef()
+  const st=useRef({keys:{},euler:new THREE.Euler(0,0,0,'YXZ'),camera:null,productMeshes:[],cartMesh:null,nearBilling:false,aimedProduct:null,moveJoy:{active:false,x:0,y:0},moveTouchId:null,moveTouchStart:{x:0,y:0},lookTouches:{}})
+  const [products,setProducts]=useState([])
+  const [loading,setLoading]=useState(true)
+  const [loadMsg,setLoadMsg]=useState('Connecting…')
+  const [cart,setCart]=useState({})
+  const [nearBilling,setNearBilling]=useState(false)
+  const [aimedProduct,setAimedProduct]=useState(null)
+  const [viewProduct,setViewProduct]=useState(null)
+  const [viewImgIdx,setViewImgIdx]=useState(0)
+  const [hint,setHint]=useState('')
+  const [crosshairHit,setCrosshairHit]=useState(false)
+  const [joyVis,setJoyVis]=useState({active:false,baseX:0,baseY:0,dx:0,dy:0})
+  const [showAi,setShowAi]=useState(false)
+  const [aiStep,setAiStep]=useState(0)
+  const [aiBudget,setAiBudget]=useState('')
+  const [aiPrefs,setAiPrefs]=useState({kids:false,sound:false,night:false,kidsnight:false})
+  const [suggestedCart,setSuggestedCart]=useState({})
+  const [showCheckout,setShowCheckout]=useState(false)
+  const [bookingLoading,setBookingLoading]=useState(false)
+  const [cartDropOpen,setCartDropOpen]=useState(false)
+  const [cartSideOpen,setCartSideOpen]=useState(false)
+  const [states,setStates]=useState([])
+  const [districts,setDistricts]=useState([])
+  const [promocodes,setPromocodes]=useState([])
+  const [promoSel,setPromoSel]=useState('')
+  const [promoCustom,setPromoCustom]=useState('')
+  const [appliedPromo,setAppliedPromo]=useState(null)
+  const [promoErr,setPromoErr]=useState('')
+  const [errMsg,setErrMsg]=useState('')
+  const [isMobile,setIsMobile]=useState(false)
+  const [customerDetails,setCustomerDetails]=useState({customer_name:'',address:'',district:'',state:'',mobile_number:'',email:'',customer_type:'User'})
+
+  useEffect(()=>{setIsMobile(isMob())},[])
+
+  const fmt=n=>Number.isInteger(+n)?(+n).toString():(+n).toFixed(2)
+  const fmtPct=v=>Math.round(parseFloat(v)).toString()
+
+  const totals=useMemo(()=>{
+    let net=0,pd=0,ad=0,prd=0
+    Object.values(cart).forEach(({product:p,qty})=>{
+      const orig=+p.price,disc=orig*(p.discount||0)/100,after=orig-disc
+      net+=orig*qty;pd+=disc*qty;ad+=after*qty
+      if(appliedPromo&&(!appliedPromo.product_type||p.product_type===appliedPromo.product_type))
+        prd+=(after*qty*appliedPromo.discount)/100
+    })
+    const total=ad-prd,fee=total*0.01
+    return{net:fmt(net),save:fmt(pd+prd),product_discount:fmt(pd),promo_discount:fmt(prd),processing_fee:fmt(fee),total:fmt(total+fee),rawAfterDiscount:ad}
+  },[cart,appliedPromo])
+
+  const cartCount=Object.values(cart).reduce((s,{qty})=>s+qty,0)
+  const cartRaw=Object.values(cart).reduce((s,{product:p,qty})=>s+p.price*(1-(p.discount||0)/100)*qty,0)
+
+  const suggestedTotal=useMemo(()=>{
+    let t=0;Object.entries(suggestedCart).forEach(([serial,qty])=>{const p=products.find(x=>x.serial_number===serial);if(p)t+=p.price*(1-(p.discount||0)/100)*qty});return fmt(t)
+  },[suggestedCart,products])
+
+  const showHintMsg=useCallback(msg=>{setHint(msg);setTimeout(()=>setHint(''),2200)},[])
+
+  const addToCartDirect=useCallback(prod=>{
+    if(!prod)return
+    setCart(prev=>{const ex=prev[prod.serial_number];return{...prev,[prod.serial_number]:ex?{...ex,qty:ex.qty+1}:{product:prod,qty:1}}})
+    showHintMsg('Added to cart!')
+  },[showHintMsg])
+
+  const removeFromCart=useCallback(serial=>{
+    setCart(prev=>{const u={...prev};if(u[serial]?.qty>1)u[serial]={...u[serial],qty:u[serial].qty-1};else delete u[serial];return u})
+  },[])
+
+  useEffect(()=>{
+    const load=async()=>{
+      try{
+        setLoadMsg('Fetching products…')
+        const[pRes,sRes,prRes]=await Promise.all([fetch(`${API_BASE_URL}/api/products`),fetch(`${API_BASE_URL}/api/locations/states`),fetch(`${API_BASE_URL}/api/promocodes`)])
+        const[pData,sData,prData]=await Promise.all([pRes.json(),sRes.json(),prRes.json()])
+        setStates(Array.isArray(sData)?sData:[]);setPromocodes(Array.isArray(prData)?prData:[])
+        const seen=new Set()
+        const raw=(pData.data||pData||[]).filter(p=>p.status==='on'&&!seen.has(p.serial_number)&&seen.add(p.serial_number)).map(p=>({...p,images:p.image?(typeof p.image==='string'?JSON.parse(p.image):p.image):[]}))
+        setLoadMsg(`Loading images for ${raw.length} products…`)
+        for(let b=0;b<raw.length;b+=20){
+          await Promise.all(raw.slice(b,b+20).map(p=>new Promise(res=>{
+            const url=(p.images||[]).find(i=>i&&!i.includes('/video/')&&!i.toLowerCase().endsWith('.gif'))
+            if(!url){res();return}
+            const img=new Image();img.crossOrigin='Anonymous'
+            img.onload=()=>{try{const cv=document.createElement('canvas');cv.width=128;cv.height=128;const ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,128,128);const sc=Math.min(128/img.naturalWidth,128/img.naturalHeight),dw=img.naturalWidth*sc,dh=img.naturalHeight*sc;ctx.drawImage(img,(128-dw)/2,(128-dh)/2,dw,dh);p._imgTex=new THREE.CanvasTexture(cv)}catch{};res()}
+            img.onerror=res;img.src=url
+          })))
+          setLoadMsg(`Loaded ${Math.min(b+20,raw.length)} / ${raw.length}…`)
         }
+        setProducts(raw)
+      }catch(e){console.error(e);setLoadMsg('Error loading products')}
+      finally{setLoading(false)}
+    };load()
+  },[])
+
+  useEffect(()=>{
+    if(!customerDetails.state)return
+    fetch(`${API_BASE_URL}/api/locations/states/${customerDetails.state}/districts`).then(r=>r.json()).then(d=>setDistricts(Array.isArray(d)?d:[])).catch(()=>{})
+  },[customerDetails.state])
+
+  useEffect(()=>{
+    if(loading||!canvasRef.current)return
+    const s=st.current
+    const canvas=canvasRef.current
+    const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'})
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5))
+    renderer.setSize(window.innerWidth,window.innerHeight)
+    renderer.setClearColor(0x87ceeb)
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap
+    const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x87ceeb,22,55)
+    const camera=new THREE.PerspectiveCamera(68,window.innerWidth/window.innerHeight,0.1,80)
+    camera.position.set(0,1.75,2);s.camera=camera;s.euler.y=Math.PI
+    scene.add(new THREE.AmbientLight(0xfff8ee,2.5))
+    scene.add(new THREE.HemisphereLight(0xfff0e0,0xddccaa,0.6))
+    const sun=new THREE.DirectionalLight(0xffeedd,0.7);sun.position.set(5,10,5);scene.add(sun)
+    const W=20,D=26
+    buildFloor(scene,W,D);buildWalls(scene,W,D);buildEntrance(scene,W);buildDecorations(scene,W)
+
+    const TYPES=['one_sound_crackers','ground_chakkar','flower_pots','twinkling_star','rockets','bombs','repeating_shots','comets_sky_shots','fancy_pencil_varieties','fountain_and_fancy_novelties','sparklers','premium_sparklers','gift_boxes','kids_special','matches','guns_and_caps']
+    const LABELS=['Sound Crackers','Ground Chakkar','Flower Pots','Twinkling Stars','Rockets','Bombs','Repeating Shots','Sky Shots','Fancy Pencils','Fountains','Sparklers','Premium Sparklers','Gift Boxes','Kids Special','Matches','Guns & Caps']
+    const SHELF_COLS=[{x:-8.5,ry:0},{x:-3.5,ry:0},{x:3.5,ry:Math.PI},{x:8.5,ry:Math.PI}]
+    const SHELF_ROWS=[-3,-7.5,-12,-16.5,-21]
+    const slots=[];SHELF_ROWS.forEach(z=>SHELF_COLS.forEach(col=>slots.push({...col,z})))
+    let slotIdx=0
+
+    // ── FIX: collect all product meshes so crosshair raycast can hit them ──
+    const allMeshes=[]
+    TYPES.forEach((typeKey,ti)=>{
+      const typeProds=products.filter(p=>p.product_type===typeKey||p.product_type===typeKey.replace(/_/g,' '))
+      if(!typeProds.length)return
+      const shelves=[]
+      for(let i=0;i<typeProds.length;i+=12)shelves.push(typeProds.slice(i,i+12))
+      shelves.forEach((shelfProds,shelfIdx)=>{
+        const slot=slots[slotIdx%slots.length];slotIdx++
+        const meshes=buildShelf(scene,slot.x,slot.z,slot.ry,(shelfIdx===0?LABELS[ti]||typeKey:''),shelfProds)
+        allMeshes.push(...meshes)
       })
-    );
+    })
+    s.productMeshes=allMeshes  // store for raycaster
 
-    const ROW_HEIGHT = 18; // mm per row
-    const IMG_SIZE = 14;   // mm image box
+    buildBillingCounter(scene,W/2-3.5,-D+2)
+    const cartMesh=buildCartMesh();cartMesh.position.set(0.9,0,1.5);scene.add(cartMesh);s.cartMesh=cartMesh
 
-    for (const type of orderedTypes) {
-      const typeKey = type.replace(/ /g, "_").toLowerCase();
-      const typeProducts = products.filter(p => p.product_type.toLowerCase() === typeKey).sort(serialSort);
-      if (!typeProducts.length) continue;
+    const crosshairRay=new THREE.Raycaster()
+    const CENTER=new THREE.Vector2(0,0)
 
-      // Section header row
-      const sectionHeaderHeight = 10;
-      if (yOffset + sectionHeaderHeight > doc.internal.pageSize.getHeight() - 20) {
-        doc.addPage();
-        yOffset = 20;
-      }
+    const fwd=new THREE.Vector3(),rgt=new THREE.Vector3(),dir=new THREE.Vector3(),UP=new THREE.Vector3(0,1,0)
 
-      // Draw section header
-      doc.setFillColor(200, 200, 200);
-      doc.rect(10, yOffset, pageWidth - 20, sectionHeaderHeight, 'F');
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(40, 40, 40);
-      doc.text(capitalize(type), 14, yOffset + 7);
-      yOffset += sectionHeaderHeight + 1;
-
-      // Column header row
-      const colHeaderHeight = 8;
-      doc.setFillColor(234, 88, 12);
-      doc.rect(10, yOffset, pageWidth - 20, colHeaderHeight, 'F');
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-
-      // Col positions: Sl(10), Code(22), Image(38), Product Name(60), Rate(130), Disc Rate(150), Per(175)
-      const cols = { sl: 12, code: 23, img: 39, name: 61, rate: 131, disc: 152, per: 176 };
-      doc.text('Sl', cols.sl, yOffset + 5.5);
-      doc.text('Code', cols.code, yOffset + 5.5);
-      doc.text('Image', cols.img, yOffset + 5.5);
-      doc.text('Product Name', cols.name, yOffset + 5.5);
-      doc.text('Rate', cols.rate, yOffset + 5.5);
-      doc.text('Disc. Rate', cols.disc, yOffset + 5.5);
-      doc.text('Per', cols.per, yOffset + 5.5);
-      yOffset += colHeaderHeight + 1;
-
-      let slNo = 1;
-      for (const product of typeProducts) {
-        if (yOffset + ROW_HEIGHT > doc.internal.pageSize.getHeight() - 15) {
-          doc.addPage();
-          yOffset = 20;
+    let raf
+    const tick=()=>{
+      raf=requestAnimationFrame(tick)
+      const joy=s.moveJoy
+      const mF=(s.keys['KeyW']||s.keys['ArrowUp']||(joy.active&&joy.y<-0.08))?1:0
+      const mB=(s.keys['KeyS']||s.keys['ArrowDown']||(joy.active&&joy.y>0.08))?1:0
+      const mL=(s.keys['KeyA']||s.keys['ArrowLeft']||(joy.active&&joy.x<-0.08))?1:0
+      const mR=(s.keys['KeyD']||s.keys['ArrowRight']||(joy.active&&joy.x>0.08))?1:0
+      if(mF||mB||mL||mR){
+        camera.getWorldDirection(fwd);fwd.y=0;fwd.normalize()
+        rgt.crossVectors(fwd,UP).normalize();dir.set(0,0,0)
+        if(mF)dir.add(fwd);if(mB)dir.sub(fwd);if(mR)dir.add(rgt);if(mL)dir.sub(rgt)
+        if(dir.lengthSq()>0){
+          dir.normalize()
+          camera.position.x=THREE.MathUtils.clamp(camera.position.x+dir.x*0.22,-W/2+0.8,W/2-0.8)
+          camera.position.z=THREE.MathUtils.clamp(camera.position.z+dir.z*0.22,-D+1.2,2.5)
+          camera.position.y=1.75
         }
-
-        const discount = product.price * (product.discount / 100);
-        const discountedRate = product.price - discount;
-
-        // Alternating row background
-        if (slNo % 2 === 0) {
-          doc.setFillColor(255, 247, 237); // light orange tint
-          doc.rect(10, yOffset, pageWidth - 20, ROW_HEIGHT, 'F');
-        }
-
-        // Draw grid borders
-        doc.setDrawColor(220, 220, 220);
-        doc.rect(10, yOffset, pageWidth - 20, ROW_HEIGHT);
-
-        // Cell dividers
-        [21, 37, 59, 129, 150, 173].forEach(x => {
-          doc.line(x, yOffset, x, yOffset + ROW_HEIGHT);
-        });
-
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8.5);
-        doc.setTextColor(50, 50, 50);
-
-        const textY = yOffset + ROW_HEIGHT / 2 + 1.5;
-
-        doc.text(String(slNo++), cols.sl, textY);
-        doc.text(product.serial_number || '', cols.code, textY);
-
-        // Product name — wrap if needed
-        const nameLines = doc.splitTextToSize(product.productname, 66);
-        const nameY = nameLines.length > 1 ? yOffset + 5 : textY;
-        doc.text(nameLines.slice(0, 2), cols.name, nameY);
-
-        doc.text(`Rs.${formatPrice(product.price)}`, cols.rate, textY);
-        doc.text(`Rs.${formatPrice(discountedRate)}`, cols.disc, textY);
-        doc.text(product.per || '', cols.per, textY);
-
-        // Embed image if available
-        const imgData = imageCache[product.serial_number];
-        const imgX = cols.img - 1;
-        const imgY = yOffset + (ROW_HEIGHT - IMG_SIZE) / 2;
-        if (imgData) {
-          try {
-            doc.addImage(imgData, 'JPEG', imgX, imgY, IMG_SIZE, IMG_SIZE);
-          } catch { /* skip if image fails */ }
-        } else {
-          try {
-            doc.addImage(need, 'JPEG', imgX, imgY, IMG_SIZE, IMG_SIZE);
-          } catch { /* skip if default image fails */ }
-        }
-
-        yOffset += ROW_HEIGHT;
       }
+      if(s.cartMesh){s.cartMesh.position.x+=(camera.position.x+0.9-s.cartMesh.position.x)*0.08;s.cartMesh.position.z+=(camera.position.z+0.05-s.cartMesh.position.z)*0.08}
 
-      yOffset += 6; // gap between sections
+      const bilPos=new THREE.Vector3(W/2-3.5,1.75,-D+2.5)
+      const nb=camera.position.distanceTo(bilPos)<3.5
+      if(nb!==s.nearBilling){s.nearBilling=nb;setNearBilling(nb)}
+
+      // crosshair raycast
+      crosshairRay.setFromCamera(CENTER,camera)
+      const hits=crosshairRay.intersectObjects(s.productMeshes,false)
+      const hit=hits.length>0&&hits[0].distance<20?hits[0].object:null
+      const aimed=hit?.userData?.isProduct?hit:null
+      s.aimedProduct=aimed
+      setAimedProduct(aimed?aimed.userData.product:null)
+      setCrosshairHit(!!aimed)
+
+      renderer.render(scene,camera)
     }
+    raf=requestAnimationFrame(tick)
 
-    doc.save('MNC_Pricelist_2025.pdf');
-  };
-
-  useEffect(() => {
-    const initializeData = async () => {
-      setIsLoading(true);
-      try {
-        const savedCart = localStorage.getItem("firecracker-cart");
-        if (savedCart) setCart(JSON.parse(savedCart));
-        const [statesRes, productsRes, promocodesRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/locations/states`),
-          fetch(`${API_BASE_URL}/api/products`),
-          fetch(`${API_BASE_URL}/api/promocodes`),
-        ]);
-        const [statesData, productsData, promocodesData] = await Promise.all([
-          statesRes.json(),
-          productsRes.json(),
-          promocodesRes.json(),
-        ]);
-        setStates(Array.isArray(statesData) ? statesData : []);
-        const naturalSort = (a, b) => new Intl.Collator(undefined, { numeric: true, sensitivity: "base" }).compare(a.productname, b.productname);
-        const seenSerials = new Set();
-        const normalizedProducts = productsData.data
-          .filter(p => p.status === "on" && !seenSerials.has(p.serial_number) && seenSerials.add(p.serial_number))
-          .map(product => ({
-            ...product,
-            images: product.image ? (typeof product.image === "string" ? JSON.parse(product.image) : product.image) : [],
-          }))
-          .sort(naturalSort);
-        setProducts(normalizedProducts);
-        setPromocodes(Array.isArray(promocodesData) ? promocodesData : []);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setTimeout(() => setIsLoading(false), 1500);
-      }
-    };
-    initializeData();
-  }, []);
-
-  useEffect(() => {
-    if (customerDetails.state) {
-      fetch(`${API_BASE_URL}/api/locations/states/${customerDetails.state}/districts`)
-        .then(res => res.json())
-        .then(data => setDistricts(Array.isArray(data) ? data : []))
-        .catch(err => console.error(err));
-    }
-  }, [customerDetails.state]);
-
-  useEffect(() => {
-    localStorage.setItem("firecracker-cart", JSON.stringify(cart));
-  }, [cart]);
-
-  useEffect(() => {
-    if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
-    debounceTimeout.current = setTimeout(() => {
-      if (promocode && promocode !== "custom") handleApplyPromo(promocode);
-      else {
-        setAppliedPromo(null);
-        setPromocode("");
-      }
-    }, 500);
-    return () => clearTimeout(debounceTimeout.current);
-  }, [promocode, cart]);
-
-  const addToCart = useCallback((product) => {
-    if (!product?.serial_number) return;
-    setCart(prev => ({ ...prev, [product.serial_number]: (prev[product.serial_number] || 0) + 1 }));
-  }, []);
-
-  const removeFromCart = useCallback((product) => {
-    if (!product?.serial_number) return;
-    setCart(prev => {
-      const count = (prev[product.serial_number] || 1) - 1;
-      const updated = { ...prev };
-      if (count <= 0) delete updated[product.serial_number];
-      else updated[product.serial_number] = count;
-      return updated;
-    });
-  }, []);
-
-  const updateCartQuantity = useCallback((product, quantity) => {
-    if (!product?.serial_number) return;
-    if (quantity < 0) quantity = 0;
-    setCart(prev => {
-      const updated = { ...prev };
-      if (quantity === 0) delete updated[product.serial_number];
-      else updated[product.serial_number] = quantity;
-      return updated;
-    });
-  }, []);
-
-  const addToSuggestedCart = useCallback((product) => {
-    if (!product?.serial_number) return;
-    setSuggestedCart(prev => ({ ...prev, [product.serial_number]: (prev[product.serial_number] || 0) + 1 }));
-  }, []);
-
-  const removeFromSuggestedCart = useCallback((product) => {
-    if (!product?.serial_number) return;
-    setSuggestedCart(prev => {
-      const count = (prev[product.serial_number] || 1) - 1;
-      const updated = { ...prev };
-      if (count <= 0) delete updated[product.serial_number];
-      else updated[product.serial_number] = count;
-      return updated;
-    });
-  }, []);
-
-  const updateSuggestedQuantity = useCallback((product, quantity) => {
-    if (!product?.serial_number) return;
-    if (quantity < 0) quantity = 0;
-    setSuggestedCart(prev => {
-      const updated = { ...prev };
-      if (quantity === 0) delete updated[product.serial_number];
-      else updated[product.serial_number] = quantity;
-      return updated;
-    });
-  }, []);
-
-const generateSuggestions = useCallback(() => {
-  const budget = Number(aiBudget);
-  if (!budget || budget <= 0) { showError("Please enter a valid budget"); return; }
-
-  const categories = {
-    kids: [
-      "new_arrivals",
-      "fancy_pencil_varieties",
-      "twinkling_star",
-      "guns_and_caps",
-      "matches"
-    ],
-    sound: [
-      "bombs",
-      "one_sound_crackers"
-    ],
-    night: [
-      "repeating_shots",
-      "comets_sky_shots",
-      "new_arrivals",
-      "rockets"
-    ],
-    kidsnight: [
-      "fountain_and_fancy_novelties",
-      "flower_pots",
-      "ground_chakkar",
-      "sparklers",
-      "premium_sparklers"
-    ]
-  };
-
-  const selectedPrefs = ["night", "kids", "sound", "kidsnight"].filter(p => aiPreferences[p]);
-  if (!selectedPrefs.length) { showError("Select at least one preference"); return; }
-
-  const budgetPerPref = budget / selectedPrefs.length;
-
-  const tempCart = {};
-  const sparklerSizeCount = {};
-  const categorySpentMap = {};
-  selectedPrefs.forEach(p => { categorySpentMap[p] = 0; });
-
-  const getSparklerSize = name => {
-    const m = name?.match(/(\d+)\s*cm/i);
-    return m ? m[1] : null;
-  };
-
-  // ── Phase 1: Add products per category in defined type order with randomness ──
-  for (const pref of selectedPrefs) {
-    const phase1Budget = budgetPerPref * 0.70;
-    const types = categories[pref];
-
-    const byType = {};
-    for (const type of types) byType[type] = [];
-
-    products
-      .filter(p => types.includes(p.product_type?.toLowerCase()))
-      .forEach(p => {
-        const type = p.product_type?.toLowerCase();
-        if (byType[type]) {
-          byType[type].push({
-            ...p,
-            finalPrice: p.price * (1 - (p.discount || 0) / 100),
-          });
-        }
-      });
-
-    // Shuffle first, then sort by price tier with slight randomness
-    // so regenerate produces different selections each time
-    for (const type of types) {
-      byType[type]
-        .sort(() => Math.random() - 0.5) // initial shuffle
-        .sort((a, b) => {
-          const priceDiff = a.finalPrice - b.finalPrice;
-          // Within same price tier (±50), keep random order
-          if (Math.abs(priceDiff) < 50) return Math.random() - 0.5;
-          return priceDiff; // cheaper first across tiers
-        });
-    }
-
-    // Flatten in category-defined order
-    const sorted = types.flatMap(type => byType[type] || []).filter(p => p.finalPrice > 0);
-
-    let prefSpent = 0;
-
-    for (const p of sorted) {
-      if (prefSpent + p.finalPrice > phase1Budget) continue;
-      if (tempCart[p.serial_number]) continue;
-
-      if (p.product_type === "sparklers" || p.product_type === "premium_sparklers") {
-        const size = getSparklerSize(p.productname) || "unknown";
-        if ((sparklerSizeCount[size] || 0) >= 3) continue;
-        sparklerSizeCount[size] = (sparklerSizeCount[size] || 0) + 1;
-      }
-
-      tempCart[p.serial_number] = 1;
-      prefSpent += p.finalPrice;
-      categorySpentMap[pref] = (categorySpentMap[pref] || 0) + p.finalPrice;
-    }
-  }
-
-  // ── Phase 2: Quantity boost per category using remaining 30% ──
-  for (const pref of selectedPrefs) {
-    const phase2Budget = budgetPerPref * 0.30;
-    const types = categories[pref];
-
-    const boostCandidates = types
-      .flatMap(type =>
-        Object.keys(tempCart)
-          .map(serial => {
-            const p = products.find(x => x.serial_number === serial);
-            if (!p) return null;
-            if (p.product_type?.toLowerCase() !== type) return null;
-            return { ...p, finalPrice: p.price * (1 - (p.discount || 0) / 100) };
-          })
-          .filter(Boolean)
-          .sort(() => Math.random() - 0.5) // shuffle so different products get boosted on regenerate
-      );
-
-    if (!boostCandidates.length) continue;
-
-    let boostRemaining = phase2Budget;
-    const boostThreshold = budgetPerPref * 0.02;
-    let safetyLimit = 500;
-
-    while (boostRemaining > boostThreshold && safetyLimit-- > 0) {
-      let addedAny = false;
-      for (const p of boostCandidates) {
-        if (boostRemaining < p.finalPrice) continue;
-        const maxQty = Math.max(1, Math.floor((budgetPerPref * 0.25) / p.finalPrice));
-        const currentQty = tempCart[p.serial_number] || 0;
-        if (currentQty >= maxQty) continue;
-        tempCart[p.serial_number] = currentQty + 1;
-        boostRemaining -= p.finalPrice;
-        addedAny = true;
-        if (boostRemaining <= boostThreshold) break;
-      }
-      if (!addedAny) break;
-    }
-  }
-
-  // ── Phase 3: Global mop-up of leftover budget ──
-  const totalSpent = Object.entries(tempCart).reduce((sum, [serial, qty]) => {
-    const p = products.find(x => x.serial_number === serial);
-    if (!p) return sum;
-    return sum + (p.price * (1 - (p.discount || 0) / 100)) * qty;
-  }, 0);
-
-  let globalRemaining = budget - totalSpent;
-  const globalThreshold = budget * 0.03;
-
-  if (globalRemaining > globalThreshold && Object.keys(tempCart).length > 0) {
-    const globalCandidates = selectedPrefs
-      .flatMap(pref =>
-        categories[pref].flatMap(type =>
-          Object.keys(tempCart)
-            .map(serial => {
-              const p = products.find(x => x.serial_number === serial);
-              if (!p) return null;
-              if (p.product_type?.toLowerCase() !== type) return null;
-              return { ...p, finalPrice: p.price * (1 - (p.discount || 0) / 100) };
-            })
-            .filter(Boolean)
-            .sort(() => Math.random() - 0.5) // shuffle for variety on regenerate
-        )
-      );
-
-    let safetyLimit = 500;
-    while (globalRemaining > globalThreshold && safetyLimit-- > 0) {
-      let addedAny = false;
-      for (const p of globalCandidates) {
-        if (globalRemaining < p.finalPrice) continue;
-        const maxQty = Math.max(1, Math.floor((budget * 0.20) / p.finalPrice));
-        const currentQty = tempCart[p.serial_number] || 0;
-        if (currentQty >= maxQty) continue;
-        tempCart[p.serial_number] = currentQty + 1;
-        globalRemaining -= p.finalPrice;
-        addedAny = true;
-        if (globalRemaining <= globalThreshold) break;
-      }
-      if (!addedAny) break;
-    }
-  }
-
-  setSuggestedCart(tempCart);
-}, [aiBudget, aiPreferences, products]);
-
-  const handleAiNext = () => {
-    if (aiStep === 0 && !aiBudget) return showError("Please enter a budget.");
-    if (aiStep < 2) { setAiStep(aiStep + 1); }
-    else { generateSuggestions(); }
-  };
-
-  const handleAiBack = () => {
-    if (aiStep > 0) {
-      if (aiStep === 2) setSuggestedCart({});
-      setAiStep(aiStep - 1);
-    }
-  };
-
-  const addSuggestedToCart = () => {
-    setCart(prev => {
-      const updated = { ...prev };
-      Object.entries(suggestedCart).forEach(([serial, qty]) => {
-        updated[serial] = (updated[serial] || 0) + qty;
-      });
-      return updated;
-    });
-    setShowAiModal(false);
-    setAiStep(0);
-    setAiBudget("");
-    setAiPreferences({ kids: false, sound: false, night: false, kidsnight: false });
-    setSuggestedCart({});
-  };
-
-  const handleFinalCheckout = async () => {
-    setIsBookingLoading(true);
-    const order_id = `ORD-${Date.now()}`;
-    const selectedProducts = Object.entries(cart).map(([serial, qty]) => {
-      const product = products.find(p => p.serial_number === serial);
-      return {
-        id: product.id,
-        product_type: product.product_type,
-        quantity: qty,
-        per: product.per,
-        price: product.price,
-        discount: product.discount,
-        serial_number: product.serial_number,
-        productname: product.productname,
-        status: product.status,
-      };
-    });
-
-    if (!selectedProducts.length) { showError("Your cart is empty."); setIsBookingLoading(false); return; }
-    if (!customerDetails.customer_name || !customerDetails.address || !customerDetails.district || !customerDetails.state || !customerDetails.mobile_number) {
-      showError("Please fill all required customer details."); setIsBookingLoading(false); return;
-    }
-
-    const mobile = customerDetails.mobile_number.replace(/\D/g, "").slice(-10);
-    if (mobile.length !== 10) { showError("Mobile number must be 10 digits."); setIsBookingLoading(false); return; }
-
-    const selectedState = customerDetails.state?.trim();
-    const minOrder = states.find(s => s.name === selectedState)?.min_rate;
-    if (minOrder && Number.parseFloat(originalTotal) < minOrder) {
-      showError(`Minimum order for ${selectedState} is ₹${minOrder}. Your total is ₹${originalTotal}.`);
-      setIsBookingLoading(false); return;
-    }
-
-    try {
-      setShowLoader(true);
-      const response = await fetch(`${API_BASE_URL}/api/direct/bookings`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          order_id,
-          products: selectedProducts,
-          net_rate: Number.parseFloat(totals.net),
-          you_save: Number.parseFloat(totals.save),
-          processing_fee: Number.parseFloat(totals.processing_fee),
-          total: Number.parseFloat(totals.total),
-          promo_discount: Number.parseFloat(totals.promo_discount || "0.00"),
-          customer_type: customerDetails.customer_type,
-          customer_name: customerDetails.customer_name,
-          address: customerDetails.address,
-          mobile_number: mobile,
-          email: customerDetails.email,
-          district: customerDetails.district,
-          state: customerDetails.state,
-          promocode: appliedPromo?.code || null,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: "blob" });
-        const blob = await pdfResponse.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        const safeName = (customerDetails.customer_name || "order").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-        link.download = `${safeName}-${data.order_id}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
+    // Only add to cart when user directly taps ON the 3D product mesh
+    // Crosshair just highlights — ADD button in HUD or direct tap on box adds to cart
+    const clickRay=new THREE.Raycaster()
+    const onDirectTap=e=>{
+      const rect=canvas.getBoundingClientRect()
+      let nx=0,ny=0
+      if(e.changedTouches){
+        const t=e.changedTouches[0]
+        if(!t)return
+        // Ignore left-side joystick area on mobile
+        if(t.clientX<window.innerWidth*0.4)return
+        nx=((t.clientX-rect.left)/rect.width)*2-1
+        ny=-((t.clientY-rect.top)/rect.height)*2+1
       } else {
-        const data = await response.json();
-        showError(data.message || "Booking failed.");
+        // PC click — use actual mouse position
+        nx=((e.clientX-rect.left)/rect.width)*2-1
+        ny=-((e.clientY-rect.top)/rect.height)*2+1
       }
-    } catch (err) {
-      showError("Something went wrong during checkout.");
-    } finally {
-      setShowLoader(false);
-      setIsBookingLoading(false);
-    }
-  };
-
-  const handleRocketComplete = () => {
-    setShowLoader(false);
-    setIsBookingLoading(false);
-    setIsCartOpen(false);
-    setShowModal(false);
-    setShowDetailsModal(false);
-    setShowMinOrderModal(false);
-    setCart({});
-    setCustomerDetails({ customer_name: "", address: "", district: "", state: "", mobile_number: "", email: "", customer_type: "User" });
-    setAppliedPromo(null);
-    setPromocode("");
-    setOriginalTotal(0);
-    setTotalDiscount(0);
-    setTimeout(() => setShowToaster(true), 500);
-  };
-
-  const handleCheckoutClick = () => {
-    Object.keys(cart).length ? (setShowModal(true), setIsCartOpen(false)) : showError("Your cart is empty.");
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    if (name === "mobile_number") {
-      const cleaned = value.replace(/\D/g, "").slice(-10);
-      setCustomerDetails(prev => ({ ...prev, [name]: cleaned }));
-    } else {
-      setCustomerDetails(prev => ({ ...prev, [name]: value }));
-    }
-  };
-
-  const handleShowDetails = useCallback((product) => {
-    setSelectedProduct(product);
-    setShowDetailsModal(true);
-  }, []);
-
-  const handleCloseDetails = useCallback(() => {
-    setSelectedProduct(null);
-    setShowDetailsModal(false);
-  }, []);
-
-  const handleImageClick = useCallback((media) => {
-    const items = Array.isArray(media) ? media : [];
-    setSelectedImages(items);
-    setCurrentImageIndex(0);
-    setShowImageModal(true);
-  }, []);
-
-  const handleCloseImageModal = useCallback(() => {
-    setShowImageModal(false);
-    setSelectedImages([]);
-    setCurrentImageIndex(0);
-  }, []);
-
-  const handleApplyPromo = useCallback(async (code) => {
-    if (!code) { setAppliedPromo(null); setPromocode(""); return; }
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/promocodes`);
-      const promos = await res.json();
-      const found = promos.find(p => p.code.toLowerCase() === code.toLowerCase());
-      if (!found) return showError("Invalid promocode.");
-      if (found.min_amount && Number.parseFloat(originalTotal) < Number.parseFloat(found.min_amount)) {
-        return showError(`Minimum order amount for this promocode is ₹${found.min_amount}.`);
-      }
-      if (found.end_date && new Date(found.end_date) < new Date()) {
-        return showError("This promocode has expired.");
-      }
-      setAppliedPromo(found);
-    } catch {
-      showError("Could not validate promocode.");
-    }
-  }, [originalTotal]);
-
-  const totals = useMemo(() => {
-    let net = 0, save = 0, total = 0, productDiscount = 0, promoDiscount = 0;
-    for (const serial in cart) {
-      const qty = cart[serial];
-      const p = products.find(x => x.serial_number === serial);
-      if (!p) continue;
-      const orig = Number.parseFloat(p.price);
-      const disc = orig * (p.discount / 100);
-      const after = orig - disc;
-      net += orig * qty;
-      productDiscount += disc * qty;
-      total += after * qty;
-      if (appliedPromo && (!appliedPromo.product_type || p.product_type === appliedPromo.product_type)) {
-        promoDiscount += (after * qty * appliedPromo.discount) / 100;
+      clickRay.setFromCamera(new THREE.Vector2(nx,ny),camera)
+      const hits=clickRay.intersectObjects(s.productMeshes,false)
+      if(hits.length>0&&hits[0].distance<20){
+        const prod=hits[0].object?.userData?.product
+        if(prod) addToCartDirect(prod)
       }
     }
-    setOriginalTotal(total);
-    setTotalDiscount(productDiscount);
-    total -= promoDiscount;
-    const fee = total * 0.01;
-    total += fee;
-    save = productDiscount + promoDiscount;
-    return {
-      net: formatPrice(net),
-      save: formatPrice(save),
-      total: formatPrice(total),
-      promo_discount: formatPrice(promoDiscount),
-      product_discount: formatPrice(productDiscount),
-      processing_fee: formatPrice(fee),
-    };
-  }, [cart, products, appliedPromo]);
-
-  const suggestedTotals = useMemo(() => {
-    let total = 0;
-    for (const serial in suggestedCart) {
-      const qty = suggestedCart[serial];
-      const p = products.find(x => x.serial_number === serial);
-      if (!p) continue;
-      total += (p.price * (1 - p.discount / 100)) * qty;
+    // PC only: click directly on product (when not pointer-locked)
+    // Mobile: handled inside onTE (touchend) to avoid preventDefault conflicts
+    if(!isMob()){
+      canvas.addEventListener('click',e=>{
+        if(document.pointerLockElement===canvas)return
+        onDirectTap(e)
+      })
     }
-    return formatPrice(total);
-  }, [suggestedCart, products]);
 
-  const productTypes = useMemo(() => {
-    const ordered = [
-      "One sound crackers","Ground Chakkar","Flower Pots","Twinkling Star","Rockets","Bombs",
-      "Repeating Shots","Comets Sky Shots","Fancy pencil varieties","Fountain and Fancy Novelties",
-      "Matches","Guns and Caps","Sparklers","Premium Sparklers","Gift Boxes","Kids Special "
-    ];
-    const available = [...new Set(products.filter(p => p.product_type !== "gift_box_dealers").map(p => p.product_type || "Others"))];
-    const filtered = ordered.filter(t => available.includes(t.replace(/ /g, "_").toLowerCase()));
-    return ["All", ...filtered];
-  }, [products]);
+    const resize=()=>{camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight)}
+    window.addEventListener('resize',resize)
+    const onKD=e=>{s.keys[e.code]=true}
+    const onKU=e=>{s.keys[e.code]=false}
+    document.addEventListener('keydown',onKD)
+    document.addEventListener('keyup',onKU)
 
-  const grouped = useMemo(() => {
-    const ordered = [
-      "One sound crackers","Ground Chakkar","Flower Pots","Twinkling Star","Rockets","Bombs",
-      "Repeating Shots","Comets Sky Shots","Fancy pencil varieties","Fountain and Fancy Novelties",
-      "Matches","Guns and Caps","Sparklers","Premium Sparklers","Gift Boxes","Kids Special "
-    ];
-    const result = products
-      .filter(p => p.product_type !== "gift_box_dealers" &&
-        (selectedType === "All" || p.product_type === selectedType.replace(/ /g, "_").toLowerCase()) &&
-        (!searchTerm || p.productname.toLowerCase().includes(searchTerm.toLowerCase()) || p.serial_number.toLowerCase().includes(searchTerm.toLowerCase())))
-      .reduce((acc, p) => {
-        const key = p.product_type || "Others";
-        acc[key] = acc[key] || [];
-        acc[key].push(p);
-        return acc;
-      }, {});
-    const orderedResult = {};
-    ordered.map(t => t.replace(/ /g, "_").toLowerCase()).forEach(t => {
-      if (result[t]) orderedResult[t] = result[t].sort(serialSort);
-    });
-    return orderedResult;
-  }, [products, selectedType, searchTerm]);
+    // PC pointer lock mouse look
+    let locked=false
+    const onPLC=()=>{locked=document.pointerLockElement===canvas}
+    const onMM=e=>{if(!locked)return;s.euler.y-=e.movementX*0.0018;s.euler.x-=e.movementY*0.0018;s.euler.x=Math.max(-Math.PI/2.5,Math.min(Math.PI/2.5,s.euler.x));camera.quaternion.setFromEuler(s.euler)}
+    canvas.addEventListener('click',()=>{if(!isMob())canvas.requestPointerLock()})
+    document.addEventListener('pointerlockchange',onPLC)
+    document.addEventListener('mousemove',onMM)
 
-  const cartItemCount = Object.values(cart).reduce((a, b) => a + b, 0);
+    // Mobile touch controls
+    if(isMob()){
+      const JR=60,LOOK_SENS=0.004
+      const onTS=e=>{
+        e.preventDefault()
+        Array.from(e.changedTouches).forEach(t=>{
+          if(t.clientX<window.innerWidth*0.4&&s.moveTouchId===null){
+            s.moveTouchId=t.identifier;s.moveTouchStart={x:t.clientX,y:t.clientY}
+            s.moveJoy={active:true,x:0,y:0};setJoyVis({active:true,baseX:t.clientX,baseY:t.clientY,dx:0,dy:0})
+          }else{
+            s.lookTouches[t.identifier]={lastX:t.clientX,lastY:t.clientY}
+          }
+        })
+      }
+      const onTM=e=>{
+        e.preventDefault()
+        Array.from(e.changedTouches).forEach(t=>{
+          if(t.identifier===s.moveTouchId){
+            const jx=Math.max(-1,Math.min(1,(t.clientX-s.moveTouchStart.x)/JR))
+            const jy=Math.max(-1,Math.min(1,(t.clientY-s.moveTouchStart.y)/JR))
+            s.moveJoy={active:true,x:jx,y:jy};setJoyVis(v=>({...v,dx:jx*JR,dy:jy*JR}))
+          }else if(s.lookTouches[t.identifier]){
+            const prev=s.lookTouches[t.identifier]
+            s.euler.y-=(t.clientX-prev.lastX)*LOOK_SENS
+            s.euler.x-=(t.clientY-prev.lastY)*LOOK_SENS
+            s.euler.x=Math.max(-Math.PI/2.3,Math.min(Math.PI/2.3,s.euler.x))
+            camera.quaternion.setFromEuler(s.euler)
+            s.lookTouches[t.identifier]={lastX:t.clientX,lastY:t.clientY}
+          }
+        })
+      }
+      const onTE=e=>{
+        e.preventDefault()
+        Array.from(e.changedTouches).forEach(t=>{
+          if(t.identifier===s.moveTouchId){
+            s.moveTouchId=null;s.moveJoy={active:false,x:0,y:0};setJoyVis({active:false,baseX:0,baseY:0,dx:0,dy:0})
+          } else {
+            // Right-side tap that was a look touch — check if it directly hit a product mesh
+            const rect=canvas.getBoundingClientRect()
+            const nx=((t.clientX-rect.left)/rect.width)*2-1
+            const ny=-((t.clientY-rect.top)/rect.height)*2+1
+            clickRay.setFromCamera(new THREE.Vector2(nx,ny),camera)
+            const hits=clickRay.intersectObjects(s.productMeshes,false)
+            if(hits.length>0&&hits[0].distance<20){
+              const prod=hits[0].object?.userData?.product
+              if(prod) addToCartDirect(prod)
+            }
+          }
+          delete s.lookTouches[t.identifier]
+        })
+      }
+      const O={passive:false}
+      canvas.addEventListener('touchstart',onTS,O);canvas.addEventListener('touchmove',onTM,O)
+      canvas.addEventListener('touchend',onTE,O);canvas.addEventListener('touchcancel',onTE,O)
+      return()=>{
+        cancelAnimationFrame(raf)
+        canvas.removeEventListener('touchstart',onTS);canvas.removeEventListener('touchmove',onTM)
+        canvas.removeEventListener('touchend',onTE);canvas.removeEventListener('touchcancel',onTE)
+        window.removeEventListener('resize',resize);document.removeEventListener('keydown',onKD);document.removeEventListener('keyup',onKU)
+        document.removeEventListener('pointerlockchange',onPLC);document.removeEventListener('mousemove',onMM)
+        renderer.dispose()
+      }
+    }
+    return()=>{
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize',resize);document.removeEventListener('keydown',onKD);document.removeEventListener('keyup',onKU)
+      document.removeEventListener('pointerlockchange',onPLC);document.removeEventListener('mousemove',onMM)
+      canvas.removeEventListener('click',onDirectTap);canvas.removeEventListener('touchend',onDirectTap)
+      renderer.dispose()
+    }
+  },[loading,products,addToCartDirect])
 
-  if (isLoading) return <LoadingSpinner />;
+  const applyPromo=useCallback(async code=>{
+    if(!code){setAppliedPromo(null);setPromoErr('');return}
+    try{
+      const promos=await fetch(`${API_BASE_URL}/api/promocodes`).then(r=>r.json())
+      const found=promos.find(p=>p.code.toLowerCase()===code.toLowerCase())
+      if(!found){setPromoErr('Invalid promocode.');return}
+      if(found.min_amount&&cartRaw<+found.min_amount){setPromoErr(`Min order ₹${found.min_amount} required.`);return}
+      if(found.end_date&&new Date(found.end_date)<new Date()){setPromoErr('Promocode expired.');return}
+      setAppliedPromo(found);setPromoErr('')
+    }catch{setPromoErr('Could not validate.')}
+  },[cartRaw])
 
-  /* ── Reusable summary rows ── */
-  const SummaryRows = () => (
-    <div className="space-y-2 text-sm">
-      <div className="flex justify-between text-gray-600"><span>Net Total</span><span className="font-medium text-gray-800">₹{totals.net}</span></div>
-      <div className="flex justify-between text-emerald-600"><span>Product Discount</span><span>−₹{totals.product_discount}</span></div>
-      {appliedPromo && <div className="flex justify-between text-emerald-600"><span>Promo ({appliedPromo.code})</span><span>−₹{totals.promo_discount}</span></div>}
-      <div className="flex justify-between text-emerald-600 font-medium"><span>You Save</span><span>−₹{totals.save}</span></div>
-      <div className="flex justify-between text-gray-500"><span>Processing Fee (1%)</span><span>₹{totals.processing_fee}</span></div>
-      <div className="flex justify-between text-orange-600 font-bold text-base pt-2 border-t border-orange-100"><span>Total</span><span>₹{totals.total}</span></div>
+  const handleBook=async()=>{
+    setErrMsg('')
+    const{customer_name,address,district,state,mobile_number}=customerDetails
+    if(!customer_name||!address||!district||!state||!mobile_number){setErrMsg('Fill all required fields.');return}
+    const mob=mobile_number.replace(/\D/g,'').slice(-10)
+    if(mob.length!==10){setErrMsg('Mobile must be 10 digits.');return}
+    const stObj=states.find(s=>s.name===state)
+    if(stObj?.min_rate&&totals.rawAfterDiscount<stObj.min_rate){setErrMsg(`Min order for ${state} is ₹${stObj.min_rate}.`);return}
+    if(!Object.keys(cart).length){setErrMsg('Cart is empty.');return}
+    const order_id=`ORD-${Date.now()}`
+    const selProds=Object.values(cart).map(({product:p,qty})=>({id:p.id,product_type:p.product_type,quantity:qty,per:p.per,price:p.price,discount:p.discount,serial_number:p.serial_number,productname:p.productname,status:p.status}))
+    try{
+      setBookingLoading(true)
+      const res=await fetch(`${API_BASE_URL}/api/direct/bookings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_id,products:selProds,net_rate:+totals.net,you_save:+totals.save,processing_fee:+totals.processing_fee,total:+totals.total,promo_discount:+(totals.promo_discount||'0'),customer_type:customerDetails.customer_type,customer_name,address,mobile_number:mob,email:customerDetails.email,district,state,promocode:appliedPromo?.code||null})})
+      if(res.ok){
+        const data=await res.json()
+        // Download invoice PDF directly — no modal
+        try{const blob=await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`).then(r=>r.blob());const url=window.URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${customer_name.toLowerCase().replace(/\s+/g,'_')}-${data.order_id}.pdf`;document.body.appendChild(a);a.click();document.body.removeChild(a);window.URL.revokeObjectURL(url)}catch{}
+        setShowCheckout(false)
+        showHintMsg('✓ Order placed! Invoice downloading…')
+        setCart({});setCustomerDetails({customer_name:'',address:'',district:'',state:'',mobile_number:'',email:'',customer_type:'User'});setAppliedPromo(null);setPromoSel('');setPromoCustom('')
+      }else{const d=await res.json();setErrMsg(d.message||'Booking failed.')}
+    }catch{setErrMsg('Something went wrong.')}
+    finally{setBookingLoading(false)}
+  }
+
+  const viewImages=useMemo(()=>viewProduct?(viewProduct.images||[]).filter(i=>i&&typeof i==='string'):[],[viewProduct])
+
+  if(loading)return(
+    <div style={{position:'fixed',inset:0,background:'#0a0a1a',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:9999}}>
+      <div style={{fontSize:'3rem',marginBottom:16}}>🎆</div>
+      <div style={{color:'#ff6600',fontFamily:'"Arial Black",Arial',fontSize:'1.1rem',letterSpacing:'0.2em',marginBottom:10}}>MADHU NISHA CRACKERS</div>
+      <div style={{color:'rgba(255,255,255,0.6)',fontSize:'0.78rem',fontFamily:'Arial',textAlign:'center',padding:'0 20px',marginBottom:16}}>{loadMsg}</div>
+      <div style={{width:220,height:5,background:'rgba(255,255,255,0.12)',borderRadius:3,overflow:'hidden'}}><div style={{height:'100%',background:'#ff6600',borderRadius:3,animation:'ld 1.5s ease-in-out infinite'}}/></div>
+      <style>{`@keyframes ld{0%,100%{width:15%}50%{width:90%}}`}</style>
     </div>
-  );
+  )
 
-  const PromoSelector = () => (
-    <div className="space-y-2">
-      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Promo Code</label>
-      <select value={promocode} onChange={e => setPromocode(e.target.value)}
-        className="w-full px-3 py-2.5 rounded-xl border border-orange-200 bg-orange-50 text-sm focus:ring-2 focus:ring-orange-400 focus:border-transparent transition-all">
-        <option value="">Select a promocode</option>
-        {promocodes.map(promo => (
-          <option key={promo.id} value={promo.code}>
-            {promo.code} ({formatPercentage(promo.discount)}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}{promo.product_type ? `, Type: ${promo.product_type.replace(/_/g, " ")}` : ""}{promo.end_date ? `, Exp: ${new Date(promo.end_date).toLocaleDateString()}` : ""})
-          </option>
-        ))}
-        <option value="custom">Enter custom code</option>
+  const M={fontFamily:'"Arial Black",Arial,sans-serif'}
+  const MS={fontFamily:'Arial,sans-serif'}
+  const INP={width:'100%',padding:'10px 14px',border:'1px solid #ffd4b8',borderRadius:12,fontSize:'0.83rem',outline:'none',boxSizing:'border-box',background:'#fffaf5',fontFamily:'Arial'}
+
+  const SummaryRows=()=>(
+    <div style={{...MS,fontSize:'0.78rem'}}>
+      {[['Net Total',`₹${totals.net}`,'#555'],['Product Discount',`−₹${totals.product_discount}`,'#22aa44'],...(appliedPromo?[[`Promo (${appliedPromo.code})`,`−₹${totals.promo_discount}`,'#22aa44']]:[]),['You Save',`−₹${totals.save}`,'#22aa44'],['Processing Fee (1%)',`₹${totals.processing_fee}`,'#888']].map(([l,v,c])=>(
+      <div key={l} style={{display:'flex',justifyContent:'space-between',marginBottom:4}}><span style={{color:'#666'}}>{l}</span><span style={{color:c}}>{v}</span></div>
+      ))}
+      <div style={{display:'flex',justifyContent:'space-between',borderTop:'1px solid #ffd4b8',paddingTop:7,marginTop:5}}>
+        <span style={{...M,color:'#cc2200',fontSize:'0.88rem'}}>GRAND TOTAL</span><span style={{...M,color:'#cc2200',fontSize:'0.88rem'}}>₹{totals.total}</span>
+      </div>
+    </div>
+  )
+
+  const PromoSelector=()=>(
+    <div style={{marginBottom:10}}>
+      <label style={{...M,fontSize:'0.6rem',color:'#888',letterSpacing:'0.1em',display:'block',marginBottom:5}}>PROMO CODE</label>
+      <select value={promoSel} onChange={e=>{setPromoSel(e.target.value);if(e.target.value&&e.target.value!=='custom')applyPromo(e.target.value);else if(!e.target.value){setAppliedPromo(null);setPromoErr('')}}} style={INP}>
+        <option value=''>Select a promocode</option>
+        {promocodes.map(pr=><option key={pr.id} value={pr.code}>{pr.code} ({fmtPct(pr.discount)}% OFF{pr.min_amount?`, Min ₹${pr.min_amount}`:''})</option>)}
+        <option value='custom'>Enter custom code</option>
       </select>
-      {promocode === "custom" && (
-        <input type="text" value={promocode === "custom" ? "" : promocode} onChange={e => setPromocode(e.target.value)}
-          placeholder="Enter custom code"
-          className="w-full px-3 py-2.5 rounded-xl border border-orange-200 bg-orange-50 text-sm focus:ring-2 focus:ring-orange-400 transition-all" />
-      )}
-      {appliedPromo && (
-        <p className="text-emerald-600 text-xs bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">
-          ✓ {appliedPromo.code} — {formatPercentage(appliedPromo.discount)}% OFF applied
-        </p>
-      )}
+      {promoSel==='custom'&&<input type='text' placeholder='Enter custom code' value={promoCustom} onChange={e=>setPromoCustom(e.target.value)} onBlur={()=>applyPromo(promoCustom)} style={{...INP,marginTop:6}}/>}
+      {appliedPromo&&<div style={{...MS,fontSize:'0.72rem',color:'#22aa44',marginTop:4}}>✓ {appliedPromo.code} — {fmtPct(appliedPromo.discount)}% OFF applied</div>}
+      {promoErr&&<div style={{...MS,fontSize:'0.72rem',color:'#cc0000',marginTop:4}}>{promoErr}</div>}
     </div>
-  );
+  )
 
-  return (
-    <>
-      <Navbar />
-      <ToasterNotification show={showToaster} onClose={() => setShowToaster(false)} />
+  return(
+    <div style={{position:'fixed',inset:0,overflow:'hidden',userSelect:'none',touchAction:'none'}}>
+      <canvas ref={canvasRef} style={{position:'absolute',inset:0,width:'100%',height:'100%',cursor:'none'}}/>
 
-      <AnimatePresence>
-        {showLoader && <RocketLoader onComplete={handleRocketComplete} />}
-        {showSuccess && <SuccessAnimation />}
+      {/* CENTER CROSSHAIR – turns green when aimed at a product */}
+      {!showCheckout&&!showAi&&!viewProduct&&(
+        <div style={{position:'fixed',left:'50%',top:'50%',transform:'translate(-50%,-50%)',zIndex:30,pointerEvents:'none'}}>
+          <svg width="36" height="36" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="12" fill="none" stroke={crosshairHit?'#00ff88':'rgba(255,255,255,0.7)'} strokeWidth={crosshairHit?3:1.8}/>
+            <line x1="18" y1="6" x2="18" y2="14" stroke={crosshairHit?'#00ff88':'rgba(255,255,255,0.7)'} strokeWidth={crosshairHit?3:1.8}/>
+            <line x1="18" y1="22" x2="18" y2="30" stroke={crosshairHit?'#00ff88':'rgba(255,255,255,0.7)'} strokeWidth={crosshairHit?3:1.8}/>
+            <line x1="6" y1="18" x2="14" y2="18" stroke={crosshairHit?'#00ff88':'rgba(255,255,255,0.7)'} strokeWidth={crosshairHit?3:1.8}/>
+            <line x1="22" y1="18" x2="30" y2="18" stroke={crosshairHit?'#00ff88':'rgba(255,255,255,0.7)'} strokeWidth={crosshairHit?3:1.8}/>
+            <circle cx="18" cy="18" r="2" fill={crosshairHit?'#00ff88':'rgba(255,255,255,0.9)'}/>
+          </svg>
+        </div>
+      )}
 
-        {/* ── Error Modal ── */}
-        {showMinOrderModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 flex items-center justify-center z-[96] bg-black/60 backdrop-blur-md px-4">
-            <motion.div initial={{ scale: 0.85, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.85, opacity: 0 }}
-              className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-red-100">
-              <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <X className="w-7 h-7 text-red-500" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-800 mb-2">Hold on!</h3>
-              <p className="text-gray-500 text-sm leading-relaxed mb-6">{minOrderMessage}</p>
-              <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                onClick={() => setShowMinOrderModal(false)}
-                className="bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold px-8 py-3 rounded-2xl shadow-lg shadow-red-200">
-                Got it
-              </motion.button>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* ── Product Details Modal ── */}
-        {showDetailsModal && selectedProduct && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-md px-4"
-            onClick={handleCloseDetails}>
-            <motion.div initial={{ scale: 0.85, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.85, opacity: 0 }}
-              onClick={e => e.stopPropagation()}
-              className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-800 mb-2">{selectedProduct.productname}</h2>
-                    <div className="flex items-center gap-2">
-                      {selectedProduct.discount > 0 && (
-                        <span className="bg-orange-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
-                          {formatPercentage(selectedProduct.discount)}% OFF
-                        </span>
-                      )}
-                      <span className="text-orange-600 font-bold text-lg">
-                        ₹{formatPrice(selectedProduct.price * (1 - selectedProduct.discount / 100))}
-                        <span className="text-sm font-normal text-gray-500 ml-1">/ {selectedProduct.per}</span>
-                      </span>
-                    </div>
-                  </div>
-                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                    onClick={handleCloseDetails}
-                    className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors">
-                    <X className="w-4 h-4 text-gray-600" />
-                  </motion.button>
-                </div>
-                <ModernCarousel media={selectedProduct.images} onImageClick={handleImageClick} />
-                <div className="space-y-4 mt-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Description</h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">{selectedProduct.description || "Experience the magic of celebrations with our premium quality fireworks."}</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                      onClick={() => { addToCart(selectedProduct); handleCloseDetails(); }}
-                      className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold py-3 rounded-2xl shadow-lg shadow-orange-200 flex items-center justify-center gap-2">
-                      <FaPlus className="w-3 h-3" /> Add to Cart
-                    </motion.button>
-                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                      onClick={handleCloseDetails}
-                      className="px-5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl transition-colors">
-                      Close
-                    </motion.button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* ── Cart Modal ── */}
-        {isCartOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-md"
-            onClick={() => { setIsCartOpen(false); setIsExpandedCart(false); }}>
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 40 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 40 }}
-              onClick={e => e.stopPropagation()}
-              className={`${isExpandedCart ? 'w-full max-w-4xl h-[90vh]' : 'w-full max-w-lg sm:mx-4 max-h-[90vh] sm:rounded-3xl rounded-t-3xl'} bg-white flex flex-col shadow-2xl overflow-hidden`}>
-
-              {/* Cart Header */}
-              <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-orange-100 rounded-xl flex items-center justify-center">
-                    <ShoppingCart className="w-4 h-4 text-orange-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-800">Your Cart</h3>
-                    <p className="text-xs text-gray-400">{cartItemCount} item{cartItemCount !== 1 ? 's' : ''}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {!isExpandedCart && Object.keys(cart).length > 0 && (
-                    <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                      onClick={() => setIsExpandedCart(true)}
-                      className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors">
-                      <FaExpand className="w-3.5 h-3.5 text-gray-600" />
-                    </motion.button>
-                  )}
-                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                    onClick={() => { setIsCartOpen(false); setIsExpandedCart(false); }}
-                    className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors">
-                    <X className="w-4 h-4 text-gray-600" />
-                  </motion.button>
-                </div>
-              </div>
-
-              {/* Cart Items */}
-              <div className={`flex-1 overflow-y-auto px-4 py-4 space-y-3 ${isExpandedCart ? '' : 'max-h-[38vh]'}`}>
-                {Object.keys(cart).length === 0 ? (
-                  <div className="text-center py-16">
-                    <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      <ShoppingCart className="w-8 h-8 text-orange-300" />
-                    </div>
-                    <p className="text-gray-400 font-medium">Your cart is empty</p>
-                    <p className="text-gray-300 text-sm mt-1">Add some fireworks to get started!</p>
-                  </div>
-                ) : (
-                  Object.entries(cart).map(([serial, qty]) => {
-                    const product = products.find(p => p.serial_number === serial);
-                    if (!product) return null;
-                    const discount = (product.price * product.discount) / 100;
-                    const priceAfterDiscount = formatPrice(product.price - discount);
-                    const imageSrc = Array.isArray(product.images) ? product.images.filter(item => !item.includes("/video/") && !item.toLowerCase().endsWith(".gif"))[0] || need : need;
-                    return (
-                      <motion.div key={serial} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                        className="flex items-center gap-3 p-3 bg-orange-50 rounded-2xl border border-orange-100 hover:border-orange-200 transition-colors">
-                        <img src={imageSrc} alt={product.productname}
-                          className="w-16 h-16 rounded-xl object-cover bg-white border border-orange-100 cursor-pointer flex-shrink-0"
-                          onClick={() => handleImageClick(product.images)} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-800 line-clamp-2 leading-tight">{product.productname}</p>
-                          <p className="text-xs text-orange-600 font-bold mt-0.5">₹{priceAfterDiscount} × {qty}</p>
-                          <p className="text-xs text-gray-400">= ₹{formatPrice((product.price - discount) * qty)}</p>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                            onClick={() => removeFromCart(product)}
-                            className="w-7 h-7 bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex items-center justify-center transition-colors">
-                            <FaMinus className="w-2.5 h-2.5" />
-                          </motion.button>
-                          <span className="text-sm font-bold w-7 text-center text-gray-800">{qty}</span>
-                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                            onClick={() => addToCart(product)}
-                            className="w-7 h-7 bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex items-center justify-center transition-colors">
-                            <FaPlus className="w-2.5 h-2.5" />
-                          </motion.button>
-                        </div>
-                      </motion.div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Cart Footer */}
-              {isExpandedCart ? (
-                <div className="px-6 py-5 border-t border-gray-100 bg-white">
-                  <SummaryRows />
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    onClick={() => setIsExpandedCart(false)}
-                    className="mt-4 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl flex items-center justify-center gap-2 transition-colors">
-                    <FaCompress className="w-3.5 h-3.5" /> Collapse View
-                  </motion.button>
-                </div>
-              ) : (
-                <div className="px-5 py-5 border-t border-gray-100 bg-white space-y-4">
-                  {/* Min order marquee */}
-                  <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-2.5 overflow-hidden">
-                    <p className="text-xs font-semibold text-amber-700 mb-1">Minimum Purchase Rates</p>
-                    <div className="text-xs text-amber-600 overflow-hidden">
-                      <div className="animate-marquee whitespace-nowrap">
-                        {states.map(s => `${s.name}: ₹${s.min_rate}`).join(" • ")}
-                      </div>
-                    </div>
-                  </div>
-                  <PromoSelector />
-                  <div className="text-xs text-red-500 space-y-1 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">
-                    <p>⚠ Product images are for reference only — actual products may vary.</p>
-                    <p>⚠ Delivery charges are payable to transport. Pickup at your own cost.</p>
-                  </div>
-                  <SummaryRows />
-                  <div className="flex gap-3 pt-1">
-                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                      onClick={() => setCart({})}
-                      className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl transition-colors text-sm">
-                      Clear Cart
-                    </motion.button>
-                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                      onClick={handleCheckoutClick}
-                      className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg shadow-orange-200 text-sm">
-                      Checkout →
-                    </motion.button>
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* ── Image Lightbox Modal ── */}
-        {showImageModal && selectedImages.length > 0 && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center backdrop-blur-sm"
-            onClick={handleCloseImageModal}>
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={e => e.stopPropagation()}
-              className="relative max-w-4xl max-h-[90vh] w-full mx-4">
-              <AnimatePresence mode="wait">
-                <motion.div key={currentImageIndex} initial={{ opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.25 }}>
-                  {selectedImages[currentImageIndex]?.includes("/video/") ? (
-                    <video src={selectedImages[currentImageIndex]} autoPlay muted loop className="w-full max-h-[80vh] object-contain rounded-2xl" />
-                  ) : (
-                    <img src={selectedImages[currentImageIndex] || "/placeholder.svg"} alt="Product"
-                      className="w-full max-h-[80vh] object-contain rounded-2xl" />
-                  )}
-                </motion.div>
-              </AnimatePresence>
-              <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                onClick={handleCloseImageModal}
-                className="absolute top-3 right-3 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white transition-colors">
-                <X className="w-5 h-5" />
-              </motion.button>
-              {selectedImages.length > 1 && (
-                <>
-                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                    onClick={() => setCurrentImageIndex(prev => prev === 0 ? selectedImages.length - 1 : prev - 1)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white transition-colors">
-                    <FaArrowLeft className="w-4 h-4" />
-                  </motion.button>
-                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                    onClick={() => setCurrentImageIndex(prev => prev === selectedImages.length - 1 ? 0 : prev + 1)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white transition-colors">
-                    <FaArrowRight className="w-4 h-4" />
-                  </motion.button>
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1 text-white text-xs">
-                    {currentImageIndex + 1} / {selectedImages.length}
-                  </div>
-                  <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex gap-2 max-w-sm overflow-x-auto p-1 mobile:translate-y-40">
-                    {selectedImages.map((image, index) => (
-                      <motion.button key={index} whileHover={{ scale: 1.1 }}
-                        onClick={() => setCurrentImageIndex(index)}
-                        className={`flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden border-2 transition-all ${index === currentImageIndex ? "border-orange-400 opacity-100" : "border-white/20 hover:border-white/50 opacity-60 hover:opacity-80"}`}>
-                        {image?.includes("/video/") ? <video src={image} className="w-full h-full object-cover" /> : <img src={image || "/placeholder.svg"} alt={`Thumb ${index + 1}`} className="w-full h-full object-cover" />}
-                      </motion.button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* ── AI Assistant Modal ── */}
-        {showAiModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-md px-4"
-            onClick={() => { setShowAiModal(false); setAiStep(0); setAiBudget(""); setAiPreferences({ kids: false, sound: false, night: false, kidsnight: false }); setSuggestedCart({}); }}>
-            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={e => e.stopPropagation()}
-              className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-
-              {/* AI Modal Header */}
-              <div className="px-6 pt-6 pb-4 border-b border-gray-100">
-                <div className="flex items-center gap-3 mb-1">
-                  <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-200">
-                    <span className="text-xl">🤖</span>
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-gray-800">Smart AI Assistant</h2>
-                    <p className="text-xs text-gray-400">Let me build your perfect cart</p>
-                  </div>
-                </div>
-                {/* Step indicator */}
-                <div className="flex items-center gap-2 mt-4">
-                  {["Budget", "Preferences", "Suggestions"].map((label, i) => (
-                    <div key={i} className="flex-1 flex items-center gap-1">
-                      <div className={`flex-1 h-1 rounded-full transition-all duration-300 ${i <= aiStep ? 'bg-orange-500' : 'bg-gray-200'}`} />
-                      {i < 2 && <div className={`w-1 h-1 rounded-full ${i < aiStep ? 'bg-orange-500' : 'bg-gray-200'}`} />}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-between text-xs text-gray-400 mt-1 px-0.5">
-                  {["Budget", "Preferences", "Suggestions"].map((label, i) => (
-                    <span key={i} className={i === aiStep ? 'text-orange-500 font-medium' : ''}>{label}</span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="p-6">
-                <AnimatePresence mode="wait">
-                  {aiStep === 0 && (
-                    <motion.div key="step0" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-4">
-                      <p className="text-gray-600 text-sm">What's your total budget for fireworks?</p>
-                      <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">₹</span>
-                        <input type="number" value={aiBudget} onChange={e => setAiBudget(e.target.value)}
-                          className="w-full pl-8 pr-4 py-3.5 border border-orange-200 rounded-2xl bg-orange-50 focus:ring-2 focus:ring-orange-400 focus:border-transparent text-lg font-semibold text-gray-800 transition-all"
-                          placeholder="Enter amount" />
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {aiStep === 1 && (
-                    <motion.div key="step1" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-4">
-                      <p className="text-gray-600 text-sm">What kind of fireworks do you prefer?</p>
-                      <div className="space-y-3">
-                        { [  
-                            { key: 'kids',      emoji: '🧒', label: 'Kids Friendly',       desc: 'Twinkling Star, Fancy Pencil, Novelties' },
-                            { key: 'sound',     emoji: '💥', label: 'Sound Crackers',       desc: 'Bombs, Atom Bombs, One Sound' },
-                            { key: 'night',     emoji: '🚀', label: 'Night Sky Display',    desc: 'Rockets, Repeating Shots, Sky Shots' },
-                            { key: 'kidsnight', emoji: '✨', label: 'Kids Night Crackers',  desc: 'Sparklers, Flower Pots, Fountains, Ground Chakkar' },
-                          ].map(({ key, emoji, label, desc }) => (
-                          <label key={key}
-                            className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all ${aiPreferences[key] ? 'border-orange-400 bg-orange-50' : 'border-gray-100 bg-gray-50 hover:border-orange-200'}`}>
-                            <input type="checkbox" checked={aiPreferences[key]}
-                              onChange={e => setAiPreferences(prev => ({ ...prev, [key]: e.target.checked }))}
-                              className="sr-only" />
-                            <span className="text-2xl">{emoji}</span>
-                            <div className="flex-1">
-                              <p className={`font-semibold text-sm ${aiPreferences[key] ? 'text-orange-700' : 'text-gray-700'}`}>{label}</p>
-                              <p className="text-xs text-gray-400">{desc}</p>
-                            </div>
-                            <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all ${aiPreferences[key] ? 'bg-orange-500 border-orange-500' : 'border-gray-300'}`}>
-                              {aiPreferences[key] && <span className="text-white text-xs">✓</span>}
-                            </div>
-                          </label>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {aiStep === 2 && (
-                    <motion.div key="step2" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="font-semibold text-gray-800">Suggested Items</p>
-                          <p className="text-xs text-gray-400">{Object.keys(suggestedCart).length} items · ≈ ₹{suggestedTotals}</p>
-                        </div>
-                        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                          onClick={generateSuggestions}
-                          className="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors">
-                          <span>Regenerate</span>
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                        </motion.button>
-                      </div>
-
-                      {Object.keys(suggestedCart).length === 0 ? (
-                        <div className="text-center py-10 text-gray-400">
-                          <p className="text-sm">No suggestions generated.</p>
-                          <p className="text-xs mt-1">Try increasing the budget or changing preferences.</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
-                          {Object.entries(suggestedCart).map(([serial, qty]) => {
-                            const product = products.find(p => p.serial_number === serial);
-                            if (!product) return null;
-                            const discount = (product.price * product.discount) / 100;
-                            const priceAfterDiscount = formatPrice(product.price - discount);
-                            const imageSrc = Array.isArray(product.images) && product.images.length > 0
-                              ? product.images.find(img => !img.includes("/video/")) || product.images[0] : need;
-                            return (
-                              <div key={serial} className="flex items-center gap-3 p-3 bg-orange-50 rounded-2xl border border-orange-100">
-                                <img src={imageSrc} alt={product.productname}
-                                  className="w-14 h-14 rounded-xl object-cover bg-white border border-orange-100 flex-shrink-0"
-                                  onError={e => e.target.src = need} />
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-gray-800 text-sm line-clamp-2 leading-tight">{product.productname}</p>
-                                  <p className="text-xs text-orange-600 mt-0.5">₹{priceAfterDiscount} × {qty}</p>
-                                </div>
-                                <div className="flex items-center gap-1.5 flex-shrink-0">
-                                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                                    onClick={() => removeFromSuggestedCart(product)}
-                                    className="w-7 h-7 bg-orange-100 hover:bg-orange-200 rounded-lg flex items-center justify-center text-orange-700 transition-colors">
-                                    <FaMinus className="w-2.5 h-2.5" />
-                                  </motion.button>
-                                  <span className="w-8 text-center font-bold text-sm text-gray-800">{qty}</span>
-                                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                                    onClick={() => addToSuggestedCart(product)}
-                                    className="w-7 h-7 bg-orange-100 hover:bg-orange-200 rounded-lg flex items-center justify-center text-orange-700 transition-colors">
-                                    <FaPlus className="w-2.5 h-2.5" />
-                                  </motion.button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {Object.keys(suggestedCart).length > 0 && (
-                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                          onClick={addSuggestedToCart}
-                          className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white py-3.5 rounded-2xl font-semibold shadow-lg shadow-emerald-200 text-sm transition-all">
-                          ✓ Add All to Cart
-                        </motion.button>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                <div className="mt-6 flex justify-between items-center">
-                  {aiStep > 0 ? (
-                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                      onClick={handleAiBack}
-                      className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2.5 rounded-2xl text-sm font-medium transition-colors">
-                      ← Back
-                    </motion.button>
-                  ) : <div />}
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    onClick={handleAiNext}
-                    className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-6 py-2.5 rounded-2xl text-sm font-semibold shadow-lg shadow-orange-200 transition-all">
-                    {aiStep < 2 ? "Next →" : "Generate"}
-                  </motion.button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Main Content ── */}
-      <main className="hundred:pt-48 mobile:pt-34 px-4 sm:px-8 max-w-7xl mx-auto pb-32">
-
-        {/* ── Top Controls Bar ── */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col sm:flex-row gap-3 mb-6 mobile:-mt-20">
-          {/* Search */}
-          <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input type="text" placeholder="Search by name or code…"
-              value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-white border border-orange-100 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent shadow-sm text-sm transition-all" />
-          </div>
-          {/* Filter */}
-          <div className="relative">
-            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            <select value={selectedType} onChange={e => setSelectedType(e.target.value)}
-              className="pl-11 pr-10 py-3 bg-white border border-orange-100 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent shadow-sm text-sm appearance-none cursor-pointer min-w-[200px] transition-all">
-              {productTypes.map(type => <option key={type} value={type}>{type}</option>)}
-            </select>
-          </div>
-        </motion.div>
-
-        {/* ── Action Buttons ── */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-center gap-4 mb-10">
-          <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
-            onClick={downloadPDF}
-            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-6 py-3 rounded-2xl shadow-lg shadow-orange-200 flex items-center gap-2.5 text-sm transition-all">
-            <Download className="w-4 h-4" />
-            Download Pricelist
-          </motion.button>
-
-          <div className="relative">
-            <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.95 }}
-              onClick={() => setShowAiModal(true)}
-              className="relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-2xl shadow-lg shadow-orange-200 w-14 h-14 flex items-center justify-center transition-all">
-              <span className="text-2xl">🤖</span>
-            </motion.button>
-            <motion.span initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-              className="absolute -top-2 -right-12 px-2.5 py-1 bg-red-500 text-white text-xs font-bold rounded-full shadow-md whitespace-nowrap">
-              Need Help?
-            </motion.span>
-          </div>
-        </motion.div>
-
-        {/* ── Product Groups ── */}
-        {Object.entries(grouped).map(([type, items], groupIndex) => (
-          <motion.section key={type}
-            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: groupIndex * 0.05 }}
-            className="mb-16">
-            {/* Section Header */}
-            <div className="flex items-center gap-4 mb-7">
-              <div className="w-1 h-8 bg-gradient-to-b from-orange-500 to-orange-300 rounded-full flex-shrink-0" />
-              <h2 className="text-2xl font-bold text-gray-800 capitalize">{type.replace(/_/g, " ")}</h2>
-              <div className="flex-1 h-px bg-gradient-to-r from-orange-200 to-transparent" />
-              <span className="text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-100 px-3 py-1.5 rounded-full">
-                {items.length} items
-              </span>
-            </div>
-
-            {/* Product Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {items.map((product, idx) => {
-                if (!product) return null;
-                const originalPrice = Number.parseFloat(product.price);
-                const discount = originalPrice * (product.discount / 100);
-                const finalPrice = product.discount > 0 ? formatPrice(originalPrice - discount) : formatPrice(originalPrice);
-                const count = cart[product.serial_number] || 0;
-                return (
-                  <motion.div key={product.serial_number}
-                    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.03 }}
-                    whileHover={{ y: -6, scale: 1.015 }}
-                    className="group bg-white rounded-3xl shadow-sm hover:shadow-xl border border-gray-100 hover:border-orange-100 transition-all duration-300 overflow-hidden">
-                    {/* Image area */}
-                    <div className="relative">
-                      <ModernCarousel media={product.images} onImageClick={handleImageClick} />
-                      {product.discount > 0 && (
-                        <div className="absolute top-3 left-3 bg-gradient-to-r from-red-500 to-rose-500 text-white text-xs font-bold px-2.5 py-1 rounded-xl shadow-lg">
-                          {formatPercentage(product.discount)}% OFF
-                        </div>
-                      )}
-                      <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                        onClick={() => handleShowDetails(product)}
-                        className="absolute top-3 right-3 w-8 h-8 bg-white/90 hover:bg-white backdrop-blur-sm rounded-xl flex items-center justify-center shadow-md transition-colors">
-                        <FaInfoCircle className="text-orange-500 w-3.5 h-3.5" />
-                      </motion.button>
-                    </div>
-
-                    {/* Info area */}
-                    <div className="p-4">
-                      <p className="text-xs text-gray-400 font-mono mb-1">{product.serial_number}</p>
-                      <h3 className="text-sm font-bold text-gray-800 line-clamp-2 leading-snug mb-2 group-hover:text-orange-600 transition-colors">
-                        {product.productname}
-                      </h3>
-                      <div className="flex items-baseline gap-2 mb-3">
-                        {product.discount > 0 && (
-                          <span className="text-xs text-gray-400 line-through">₹{formatPrice(originalPrice)}</span>
-                        )}
-                        <span className="text-base font-bold text-orange-600">₹{finalPrice}</span>
-                        <span className="text-xs text-gray-400">/ {product.per}</span>
-                      </div>
-
-                      {/* Cart controls */}
-                      <AnimatePresence mode="wait">
-                        {count > 0 ? (
-                          <motion.div key="qty"
-                            initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.85, opacity: 0 }}
-                            className="flex items-center justify-between bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-1.5 shadow-md shadow-orange-200">
-                            <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
-                              onClick={() => removeFromCart(product)}
-                              className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center text-white transition-colors">
-                              <FaMinus className="w-2.5 h-2.5" />
-                            </motion.button>
-                            <span className="text-white font-bold text-sm px-2 min-w-[2rem] text-center">{count}</span>
-                            <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
-                              onClick={() => addToCart(product)}
-                              className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center text-white transition-colors">
-                              <FaPlus className="w-2.5 h-2.5" />
-                            </motion.button>
-                          </motion.div>
-                        ) : (
-                          <motion.button key="add"
-                            initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.85, opacity: 0 }}
-                            whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
-                            onClick={() => addToCart(product)}
-                            className="w-full bg-orange-50 hover:bg-gradient-to-r hover:from-orange-500 hover:to-orange-600 text-orange-600 hover:text-white border border-orange-200 hover:border-transparent font-semibold py-2.5 rounded-xl transition-all duration-300 text-sm flex items-center justify-center gap-1.5">
-                            <FaPlus className="w-2.5 h-2.5" />
-                            Add
-                          </motion.button>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </motion.section>
-        ))}
-      </main>
-
-      {/* ── Floating Cart Button ── */}
-      <div className="fixed hundred:bottom-6 mobile:bottom-22 right-6 z-20">
-        <motion.button onClick={() => setIsCartOpen(true)}
-          whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
-          className={`relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-2xl shadow-2xl shadow-orange-300 w-16 h-16 flex items-center justify-center transition-all ${isCartOpen ? "hidden" : ""}`}>
-          <ShoppingCart className="w-6 h-6" />
-          {cartItemCount > 0 && (
-            <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
-              className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-6 h-6 flex items-center justify-center rounded-full font-bold shadow-md">
-              {cartItemCount}
-            </motion.span>
-          )}
-        </motion.button>
+      {/* TOP NAVBAR */}
+      <div style={{position:'fixed',top:0,left:0,right:0,zIndex:40,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 14px',background:'rgba(0,0,0,0.78)',backdropFilter:'blur(12px)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          {onClose&&<button onClick={onClose} style={{...M,background:'rgba(255,85,0,0.9)',color:'#fff',border:'none',padding:'5px 12px',borderRadius:7,cursor:'pointer',fontSize:'0.68rem'}}>← EXIT</button>}
+          <span style={{...M,color:'#ffaa00',fontSize:'0.72rem',letterSpacing:'0.1em'}}>MNC</span>
+          <button onClick={()=>window.location.href='/'} style={{...M,background:'#ff5500',color:'#fff',border:'none',padding:'5px 14px',borderRadius:8,cursor:'pointer',fontSize:'0.72rem',letterSpacing:'0.06em'}}>Go back to HOME</button>
+        </div>
+        <button onClick={()=>setShowCheckout(true)} style={{...M,background:cartCount>0?'#ff5500':'rgba(255,255,255,0.1)',color:'#fff',border:'1px solid rgba(255,85,0,0.5)',padding:'6px 14px',borderRadius:20,cursor:'pointer',fontSize:'0.7rem',letterSpacing:'0.06em'}}>
+          🛒 {cartCount} · ₹{fmt(cartRaw)}
+        </button>
       </div>
 
-      {/* ── Checkout / Customer Details Modal ── */}
-      <AnimatePresence>
-        {showModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-md px-4">
-            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-                    <ShoppingCart className="w-5 h-5 text-orange-600" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-gray-800">Customer Details</h2>
-                    <p className="text-xs text-gray-400">Fill in your details to confirm booking</p>
-                  </div>
+      {/* HOW TO SHOP hint — only when nothing is aimed */}
+      {!aimedProduct&&!nearBilling&&!showCheckout&&!showAi&&!viewProduct&&(
+        <div style={{position:'fixed',top:62,left:'50%',transform:'translateX(-50%)',zIndex:25,background:'rgba(0,0,0,0.82)',backdropFilter:'blur(12px)',padding:'10px 18px',borderRadius:12,color:'#fff',fontSize:'0.7rem',textAlign:'center',maxWidth:'320px',border:'1px solid rgba(255,255,255,0.15)',pointerEvents:'none'}}>
+          <div style={{fontWeight:'bold',marginBottom:5,color:'#ffaa00'}}>HOW TO SHOP</div>
+          <div>Aim the crosshair at any product on the shelf</div>
+          <div style={{marginTop:4,color:'#88ffaa'}}>Crosshair turns green → tap screen to add to cart</div>
+          <div style={{marginTop:6,fontSize:'0.62rem',opacity:0.6}}>Drag right side to look · Left side to move · Walk to Billing to checkout</div>
+        </div>
+      )}
+
+      {/* BILLING COUNTER HUD */}
+      {nearBilling&&!showCheckout&&!showAi&&(
+        <div style={{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',zIndex:35,width:'min(360px,90vw)',pointerEvents:'all'}}>
+          <div style={{background:'rgba(0,26,0,0.97)',backdropFilter:'blur(20px)',border:'2px solid #00dd55',borderRadius:18,padding:'20px 24px',boxShadow:'0 0 50px rgba(0,200,80,0.2)',textAlign:'center'}}>
+            <div style={{fontSize:'1.8rem',marginBottom:4}}>💳</div>
+            <div style={{...M,color:'#00ff88',fontSize:'1rem',letterSpacing:'0.12em',marginBottom:3}}>BILLING COUNTER</div>
+            <div style={{...MS,color:'rgba(255,255,255,0.65)',fontSize:'0.78rem',marginBottom:14}}>{cartCount} item{cartCount!==1?'s':''} · ₹{fmt(cartRaw)}</div>
+            <div style={{display:'flex',gap:10,flexDirection:isMobile?'column':'row'}}>
+              <button onClick={()=>setShowCheckout(true)} style={{...M,flex:1,background:'linear-gradient(135deg,#00cc44,#009933)',color:'#fff',border:'none',padding:'13px 16px',borderRadius:12,cursor:'pointer',fontSize:'0.85rem',letterSpacing:'0.06em',boxShadow:'0 4px 20px rgba(0,180,60,0.4)'}}>🧾 PROCEED TO BILL →</button>
+              <button onClick={()=>{setShowAi(true);setAiStep(0)}} style={{...M,flex:1,background:'linear-gradient(135deg,#ff9900,#ff5500)',color:'#fff',border:'none',padding:'13px 16px',borderRadius:12,cursor:'pointer',fontSize:'0.85rem',letterSpacing:'0.06em',boxShadow:'0 4px 20px rgba(255,140,0,0.3)'}}>🤖 AI CART</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AIMED PRODUCT POPUP — small card just below crosshair */}
+      {aimedProduct&&!nearBilling&&!showCheckout&&!showAi&&!viewProduct&&(
+        <div style={{position:'fixed',bottom:isMobile?140:60,left:'50%',transform:'translateX(-50%)',zIndex:35,pointerEvents:'all',width:'min(380px,90vw)'}}>
+          <div style={{background:'rgba(0,0,0,0.93)',backdropFilter:'blur(18px)',border:'1px solid rgba(255,100,0,0.55)',borderRadius:16,overflow:'hidden',boxShadow:'0 8px 40px rgba(0,0,0,0.6)'}}>
+            <div style={{display:'flex',gap:12,alignItems:'center',padding:'12px 16px 8px'}}>
+              {(()=>{const url=(aimedProduct.images||[]).find(i=>i&&!i.includes('/video/')&&!i.toLowerCase().endsWith('.gif'));return url?<img src={url} alt="" style={{width:60,height:60,borderRadius:10,objectFit:'cover',background:'#111',flexShrink:0,border:'1px solid rgba(255,100,0,0.4)'}} onError={e=>e.target.style.display='none'}/>:null})()}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{...MS,color:'#fff',fontSize:'0.9rem',fontWeight:'bold',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{aimedProduct.productname}</div>
+                <div style={{display:'flex',alignItems:'baseline',gap:8,marginTop:4,flexWrap:'wrap'}}>
+                  <span style={{...M,color:'#ffcc00',fontSize:'1.05rem'}}>₹{fmt(aimedProduct.price*(1-(aimedProduct.discount||0)/100))}</span>
+                  {aimedProduct.discount>0&&<><span style={{color:'rgba(255,255,255,0.4)',textDecoration:'line-through',fontSize:'0.75rem'}}>₹{fmt(aimedProduct.price)}</span><span style={{background:'#ff5500',color:'#fff',fontSize:'0.65rem',padding:'2px 8px',borderRadius:12}}>{Math.round(aimedProduct.discount)}% OFF</span></>}
+                  <span style={{color:'rgba(255,255,255,0.4)',fontSize:'0.68rem'}}>/{aimedProduct.per}</span>
                 </div>
-
-                <div className="space-y-3">
-                  {["customer_name", "address", "mobile_number", "email"].map(field => (
-                    <div key={field}>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                        {field.replace(/_/g, " ")}{field !== "email" && " *"}
-                      </label>
-                      <input name={field} type={field === "email" ? "email" : "text"}
-                        placeholder={`Enter ${field.replace(/_/g, " ")}`}
-                        value={customerDetails[field]} onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-orange-100 rounded-2xl bg-orange-50 focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm transition-all"
-                        required={field !== "email"} />
-                    </div>
-                  ))}
-
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">State *</label>
-                    <select name="state" value={customerDetails.state}
-                      onChange={e => setCustomerDetails(prev => ({ ...prev, state: e.target.value, district: "" }))}
-                      className="w-full px-4 py-3 border border-orange-100 rounded-2xl bg-orange-50 focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm transition-all" required>
-                      <option value="">Select State</option>
-                      {states.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
-                    </select>
-                  </div>
-
-                  {customerDetails.state && (
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">City / Place *</label>
-                      <select name="district" value={customerDetails.district} onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-orange-100 rounded-2xl bg-orange-50 focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm transition-all" required>
-                        <option value="">Select Place / City</option>
-                        {districts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-                      </select>
-                    </div>
-                  )}
-
-                  <PromoSelector />
-
-                  {/* Order Summary */}
-                  <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Order Summary</p>
-                    <SummaryRows />
-                  </div>
-                </div>
-
-                <div className="mt-6 flex gap-3">
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowModal(false)}
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl text-sm transition-colors">
-                    Cancel
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: isBookingLoading ? 1 : 1.02 }}
-                    whileTap={{ scale: isBookingLoading ? 1 : 0.98 }}
-                    onClick={handleFinalCheckout} disabled={isBookingLoading}
-                    className={`flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg shadow-orange-200 flex items-center justify-center gap-2 text-sm transition-all ${isBookingLoading ? "opacity-75 cursor-not-allowed" : ""}`}>
-                    {isBookingLoading ? (
-                      <>
-                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                        Booking…
-                      </>
-                    ) : "Confirm Booking →"}
-                  </motion.button>
-                </div>
+                <div style={{...MS,fontSize:'0.62rem',color:'rgba(255,255,255,0.3)',marginTop:2}}>Code: {aimedProduct.serial_number}</div>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </div>
+            <div style={{display:'flex',borderTop:'1px solid rgba(255,100,0,0.3)'}}>
+              <button onClick={()=>addToCartDirect(aimedProduct)} style={{...M,flex:1,background:'#ff5500',color:'#fff',border:'none',borderRight:'1px solid rgba(255,130,0,0.35)',padding:'14px',cursor:'pointer',fontSize:'0.85rem',letterSpacing:'0.04em'}}>🛒 ADD TO CART</button>
+              <button onClick={()=>{setViewProduct(aimedProduct);setViewImgIdx(0)}} style={{...M,flex:1,background:'rgba(80,150,255,0.3)',color:'#aaccff',border:'none',padding:'14px',cursor:'pointer',fontSize:'0.85rem',letterSpacing:'0.04em'}}>👁 VIEW DETAILS</button>
+            </div>
+          </div>
+        </div>
+      )}
 
-      <style jsx>{`
-        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .animate-marquee { display: inline-block; white-space: nowrap; animation: marquee 15s linear infinite; }
-        @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
-      `}</style>
-    </>
-  );
-};
+      {/* HINT TOAST */}
+      {hint&&<div style={{position:'fixed',top:60,left:'50%',transform:'translateX(-50%)',zIndex:36,pointerEvents:'none'}}><div style={{...MS,background:'rgba(0,180,80,0.9)',color:'#fff',padding:'8px 20px',borderRadius:20,fontSize:'0.78rem',fontWeight:'bold',boxShadow:'0 4px 16px rgba(0,180,80,0.4)',whiteSpace:'nowrap'}}>{hint}</div></div>}
 
-export default Pricelist;
+      {/* CART SIDEBAR — collapsed by default, expand on click */}
+      {cartCount>0&&(
+        <div style={{position:'fixed',top:50,right:0,zIndex:35,width:220,background:'rgba(0,0,0,0.9)',backdropFilter:'blur(16px)',borderLeft:'1px solid rgba(255,85,0,0.35)'}}>
+          {/* Header — always visible, click to toggle */}
+          <button onClick={()=>setCartSideOpen(o=>!o)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',background:'none',border:'none',padding:'10px 12px',cursor:'pointer'}}>
+            <span style={{...M,color:'#ff8800',fontSize:'0.7rem',letterSpacing:'0.1em'}}>🛒 CART ({cartCount})</span>
+            <span style={{color:'#ff8800',fontSize:'0.7rem',transition:'transform 0.2s',display:'inline-block',transform:cartSideOpen?'rotate(180deg)':'rotate(0deg)'}}>▼</span>
+          </button>
+          {/* Collapsed: just show total */}
+          {!cartSideOpen&&(
+            <div style={{padding:'0 12px 8px',textAlign:'right',...M,color:'#ffcc00',fontSize:'0.72rem'}}>₹{fmt(cartRaw)}</div>
+          )}
+          {/* Expanded: full list */}
+          {cartSideOpen&&(
+            <div style={{maxHeight:'55vh',overflowY:'auto',padding:'0 12px 12px'}}>
+              {Object.values(cart).map(({product:p,qty})=>(
+                <div key={p.serial_number} style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,background:'rgba(255,85,0,0.1)',borderRadius:8,padding:'6px',border:'1px solid rgba(255,85,0,0.2)'}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{...MS,color:'rgba(255,255,255,0.9)',fontSize:'0.65rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.productname}</div>
+                    <div style={{...MS,color:'#ff8800',fontSize:'0.65rem'}}>₹{fmt(p.price*(1-(p.discount||0)/100))} × {qty}</div>
+                  </div>
+                  <button onClick={()=>removeFromCart(p.serial_number)} style={{background:'rgba(255,60,60,0.4)',color:'#ffaaaa',border:'none',borderRadius:6,width:24,height:24,fontSize:'1rem',cursor:'pointer'}}>−</button>
+                </div>
+              ))}
+              <div style={{marginTop:4,textAlign:'right',...M,color:'#ffcc00',fontSize:'0.75rem'}}>₹{fmt(cartRaw)}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MOBILE MOVE JOYSTICK */}
+      {isMobile&&joyVis.active&&(
+        <div style={{position:'fixed',left:joyVis.baseX-60,top:joyVis.baseY-60,width:120,height:120,borderRadius:'50%',border:'2px solid rgba(255,180,60,0.6)',background:'rgba(0,0,0,0.4)',backdropFilter:'blur(8px)',pointerEvents:'none',zIndex:28}}>
+          <div style={{position:'absolute',width:52,height:52,borderRadius:'50%',background:'rgba(255,160,0,0.9)',border:'2px solid #ffaa00',left:`calc(50% + ${joyVis.dx}px - 26px)`,top:`calc(50% + ${joyVis.dy}px - 26px)`,boxShadow:'0 0 20px rgba(255,160,0,0.6)'}}/>
+        </div>
+      )}
+
+      {/* AI CART MODAL */}
+      {showAi&&(
+        <div style={{position:'fixed',inset:0,zIndex:60,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.75)',backdropFilter:'blur(14px)',padding:16}} onClick={()=>{setShowAi(false);setAiStep(0);setSuggestedCart({})}}>
+          <div style={{background:'#fff',borderRadius:20,maxWidth:420,width:'100%',maxHeight:'90vh',overflowY:'auto',boxShadow:'0 24px 80px rgba(0,0,0,0.6)'}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:'18px 18px 12px',borderBottom:'1px solid #f0e0e0'}}>
+              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+                <div style={{width:42,height:42,background:'linear-gradient(135deg,#ff8800,#ff5500)',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.3rem'}}>🤖</div>
+                <div><div style={{...M,color:'#333',fontSize:'0.9rem'}}>Smart AI Cart Builder</div><div style={{...MS,color:'#888',fontSize:'0.7rem'}}>Let me build your perfect cart</div></div>
+              </div>
+              <div style={{display:'flex',gap:4}}>
+                {['Budget','Preferences','Review'].map((lbl,i)=>(
+                  <div key={i} style={{flex:1}}><div style={{height:4,borderRadius:2,background:i<=aiStep?'#ff5500':'#eee'}}/><div style={{...MS,fontSize:'0.6rem',color:i===aiStep?'#ff5500':'#aaa',marginTop:3,textAlign:'center'}}>{lbl}</div></div>
+                ))}
+              </div>
+            </div>
+            <div style={{padding:'16px 18px'}}>
+              {aiStep===0&&<div><div style={{...MS,color:'#555',fontSize:'0.85rem',marginBottom:12}}>What's your total budget?</div><div style={{position:'relative'}}><span style={{position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',color:'#aaa',...MS,fontSize:'1rem'}}>₹</span><input type='number' value={aiBudget} onChange={e=>setAiBudget(e.target.value)} style={{...INP,paddingLeft:30,fontSize:'1.1rem',fontWeight:'bold'}} placeholder='Enter amount'/></div></div>}
+              {aiStep===1&&<div>
+                <div style={{...MS,color:'#555',fontSize:'0.85rem',marginBottom:12}}>What type of fireworks?</div>
+                {[{k:'kids',e:'🧒',l:'Kids Friendly',d:'Twinkling Star, Fancy Pencil'},{k:'sound',e:'💥',l:'Sound Crackers',d:'Bombs, One Sound'},{k:'night',e:'🚀',l:'Night Sky Display',d:'Rockets, Repeating Shots'},{k:'kidsnight',e:'✨',l:'Kids Night',d:'Sparklers, Flower Pots'}].map(({k,e,l,d})=>(
+                  <label key={k} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',borderRadius:12,border:`2px solid ${aiPrefs[k]?'#ff5500':'#f0f0f0'}`,background:aiPrefs[k]?'#fff8f5':'#fafafa',marginBottom:8,cursor:'pointer'}}>
+                    <input type='checkbox' checked={aiPrefs[k]} onChange={ev=>setAiPrefs(p=>({...p,[k]:ev.target.checked}))} style={{display:'none'}}/>
+                    <span style={{fontSize:'1.5rem'}}>{e}</span>
+                    <div style={{flex:1}}><div style={{...M,fontSize:'0.78rem',color:aiPrefs[k]?'#cc3300':'#333'}}>{l}</div><div style={{...MS,fontSize:'0.68rem',color:'#999'}}>{d}</div></div>
+                    <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${aiPrefs[k]?'#ff5500':'#ddd'}`,background:aiPrefs[k]?'#ff5500':'#fff',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{aiPrefs[k]&&<span style={{color:'#fff',fontSize:'0.7rem'}}>✓</span>}</div>
+                  </label>
+                ))}
+              </div>}
+              {aiStep===2&&<div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                  <div><div style={{...M,color:'#333',fontSize:'0.82rem'}}>Suggested Cart</div><div style={{...MS,color:'#888',fontSize:'0.7rem'}}>{Object.keys(suggestedCart).length} items · ≈ ₹{suggestedTotal}</div></div>
+                  <button onClick={()=>setSuggestedCart({})} style={{...M,background:'#fff4ee',color:'#cc5500',border:'1px solid #ffd4b8',padding:'5px 12px',borderRadius:9,cursor:'pointer',fontSize:'0.68rem'}}>Clear</button>
+                </div>
+                <div style={{maxHeight:'36vh',overflowY:'auto'}}>
+                  {Object.entries(suggestedCart).map(([serial,qty])=>{const p=products.find(x=>x.serial_number===serial);if(!p)return null;const fp=p.price*(1-(p.discount||0)/100);return(
+                    <div key={serial} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 0',borderBottom:'1px solid #fff0e8'}}>
+                      <div style={{flex:1}}><div style={{...MS,fontSize:'0.75rem',color:'#333',fontWeight:'bold'}}>{p.productname}</div><div style={{...MS,fontSize:'0.68rem',color:'#888'}}>₹{fmt(fp)} ×{qty}</div></div>
+                      <div style={{display:'flex',gap:4,alignItems:'center'}}>
+                        <button onClick={()=>setSuggestedCart(prev=>{const u={...prev};if(u[serial]>1)u[serial]--;else delete u[serial];return u})} style={{background:'#ffe8e0',color:'#cc4400',border:'none',borderRadius:5,width:22,height:22,cursor:'pointer',fontSize:'0.8rem'}}>−</button>
+                        <span style={{...M,fontSize:'0.75rem',color:'#333',width:22,textAlign:'center'}}>{qty}</span>
+                        <button onClick={()=>setSuggestedCart(prev=>({...prev,[serial]:(prev[serial]||0)+1}))} style={{background:'#ffe8e0',color:'#cc4400',border:'none',borderRadius:5,width:22,height:22,cursor:'pointer',fontSize:'0.8rem'}}>+</button>
+                      </div>
+                    </div>
+                  )})}
+                </div>
+                {Object.keys(suggestedCart).length>0&&<button onClick={()=>{setCart(prev=>{const u={...prev};Object.entries(suggestedCart).forEach(([serial,qty])=>{const p=products.find(x=>x.serial_number===serial);if(p){const ex=u[serial];u[serial]=ex?{...ex,qty:ex.qty+qty}:{product:p,qty}}});return u});setShowAi(false);setSuggestedCart({});setAiBudget('');setAiPrefs({kids:false,sound:false,night:false,kidsnight:false});showHintMsg('AI cart added!')}} style={{...M,width:'100%',background:'linear-gradient(135deg,#22aa44,#1a8a33)',color:'#fff',border:'none',padding:'12px',borderRadius:14,cursor:'pointer',fontSize:'0.82rem',marginTop:12,letterSpacing:'0.08em',boxShadow:'0 4px 14px rgba(34,170,68,0.3)'}}>ADD ALL TO CART</button>}
+              </div>}
+              <div style={{display:'flex',justifyContent:'space-between',marginTop:16}}>
+                {aiStep>0?<button onClick={()=>{if(aiStep===2)setSuggestedCart({});setAiStep(s=>s-1)}} style={{...MS,background:'#f5f5f5',color:'#666',border:'none',padding:'10px 18px',borderRadius:12,cursor:'pointer',fontSize:'0.82rem'}}>← Back</button>:<div/>}
+                {aiStep<2&&<button onClick={()=>{if(aiStep===0&&!aiBudget)return;if(aiStep===1&&!Object.values(aiPrefs).some(Boolean))return;setAiStep(s=>s+1)}} style={{...M,background:'linear-gradient(135deg,#ff5500,#ff8800)',color:'#fff',border:'none',padding:'10px 22px',borderRadius:12,cursor:'pointer',fontSize:'0.82rem',letterSpacing:'0.08em',boxShadow:'0 4px 14px rgba(255,85,0,0.3)'}}>Next →</button>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PRODUCT VIEW MODAL */}
+      {viewProduct&&(
+        <div style={{position:'fixed',inset:0,zIndex:60,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.76)',backdropFilter:'blur(14px)',padding:16}} onClick={()=>setViewProduct(null)}>
+          <div style={{background:'#fff',borderRadius:20,maxWidth:420,width:'100%',maxHeight:'92vh',overflowY:'auto',boxShadow:'0 24px 80px rgba(0,0,0,0.6)'}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:'18px 18px 0'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
+                <div style={{flex:1,paddingRight:10}}>
+                  <div style={{...M,fontSize:'0.95rem',color:'#cc2200',marginBottom:5}}>{viewProduct.productname}</div>
+                  <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                    {viewProduct.discount>0&&<span style={{background:'#ff5500',color:'#fff',fontSize:'0.65rem',fontWeight:'bold',padding:'2px 8px',borderRadius:20}}>{Math.round(viewProduct.discount)}% OFF</span>}
+                    <span style={{...M,color:'#ff5500',fontSize:'1rem'}}>₹{fmt(viewProduct.price*(1-(viewProduct.discount||0)/100))}</span>
+                    <span style={{...MS,color:'#888',fontSize:'0.75rem'}}>/ {viewProduct.per}</span>
+                    {viewProduct.discount>0&&<span style={{...MS,color:'#bbb',fontSize:'0.72rem',textDecoration:'line-through'}}>₹{fmt(viewProduct.price)}</span>}
+                  </div>
+                  <div style={{...MS,fontSize:'0.7rem',color:'#aaa',marginTop:3}}>Code: {viewProduct.serial_number}</div>
+                </div>
+                <button onClick={()=>setViewProduct(null)} style={{background:'#f5f5f5',border:'none',borderRadius:8,width:30,height:30,cursor:'pointer',fontSize:'1rem',flexShrink:0}}>✕</button>
+              </div>
+              {viewImages.length>0&&(
+                <div style={{position:'relative',marginBottom:12}}>
+                  <div style={{width:'100%',height:220,borderRadius:12,overflow:'hidden',background:'#f8f8f8',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    {viewImages[viewImgIdx]?.includes('/video/')?<video src={viewImages[viewImgIdx]} autoPlay muted loop style={{width:'100%',height:'100%',objectFit:'contain'}}/>:<img src={viewImages[viewImgIdx]} alt="" style={{width:'100%',height:'100%',objectFit:'contain'}} onError={e=>e.target.style.display='none'}/>}
+                  </div>
+                  {viewImages.length>1&&<><button onClick={()=>setViewImgIdx(p=>(p-1+viewImages.length)%viewImages.length)} style={{position:'absolute',left:6,top:'50%',transform:'translateY(-50%)',background:'rgba(0,0,0,0.45)',color:'#fff',border:'none',borderRadius:8,width:30,height:30,cursor:'pointer',fontSize:'1.1rem'}}>‹</button><button onClick={()=>setViewImgIdx(p=>(p+1)%viewImages.length)} style={{position:'absolute',right:6,top:'50%',transform:'translateY(-50%)',background:'rgba(0,0,0,0.45)',color:'#fff',border:'none',borderRadius:8,width:30,height:30,cursor:'pointer',fontSize:'1.1rem'}}>›</button><div style={{position:'absolute',bottom:6,left:'50%',transform:'translateX(-50%)',background:'rgba(0,0,0,0.5)',color:'#fff',padding:'2px 10px',borderRadius:20,fontSize:'0.65rem'}}>{viewImgIdx+1}/{viewImages.length}</div></>}
+                  {viewImages.length>1&&<div style={{display:'flex',gap:5,marginTop:7,overflowX:'auto',paddingBottom:3}}>{viewImages.map((img,i)=><div key={i} onClick={()=>setViewImgIdx(i)} style={{width:50,height:50,borderRadius:7,overflow:'hidden',border:`2px solid ${i===viewImgIdx?'#ff5500':'#eee'}`,cursor:'pointer',flexShrink:0,background:'#f8f8f8'}}>{img.includes('/video/')?<video src={img} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<img src={img} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>}</div>)}</div>}
+                </div>
+              )}
+              <div style={{...MS,fontSize:'0.78rem',color:'#555',lineHeight:1.6,marginBottom:10}}>{viewProduct.description||'Premium quality firecracker for your celebrations.'}</div>
+            </div>
+            <div style={{padding:'0 18px 18px',display:'flex',gap:10}}>
+              <button onClick={()=>{addToCartDirect(viewProduct);setViewProduct(null)}} style={{...M,flex:1,background:'linear-gradient(135deg,#ff5500,#ff8800)',color:'#fff',border:'none',padding:'12px',borderRadius:14,cursor:'pointer',fontSize:'0.82rem',letterSpacing:'0.08em',boxShadow:'0 4px 16px rgba(255,85,0,0.3)'}}>+ ADD TO CART</button>
+              <button onClick={()=>setViewProduct(null)} style={{...MS,flex:'0 0 72px',background:'#f5f5f5',color:'#666',border:'none',padding:'12px',borderRadius:14,cursor:'pointer',fontSize:'0.82rem'}}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CHECKOUT MODAL */}
+      {showCheckout&&(
+        <div style={{position:'fixed',inset:0,zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.74)',backdropFilter:'blur(14px)',padding:16}}>
+          <div style={{background:'#fff',borderRadius:20,maxWidth:460,width:'100%',maxHeight:'92vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.5)'}}>
+            <div style={{padding:'18px 18px 0',borderBottom:'1px solid #ffe0cc'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                <div style={{display:'flex',alignItems:'center',gap:10}}>
+                  <div style={{width:36,height:36,background:'#fff4ee',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem'}}>🛒</div>
+                  <div><div style={{...M,color:'#cc2200',fontSize:'0.95rem',letterSpacing:'0.06em'}}>CHECKOUT</div><div style={{...MS,color:'#aaa',fontSize:'0.68rem'}}>Fill in your details to confirm booking</div></div>
+                </div>
+                <button onClick={()=>setShowCheckout(false)} style={{background:'#f5f5f5',border:'none',borderRadius:8,width:28,height:28,cursor:'pointer',fontSize:'1rem'}}>✕</button>
+              </div>
+              {/* ── Cart dropdown accordion ── */}
+              <button onClick={()=>setCartDropOpen(o=>!o)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',background:'#fff8f2',border:'1px solid #ffd4b8',borderRadius:10,padding:'9px 14px',cursor:'pointer',marginBottom:cartDropOpen?0:10}}>
+                <span style={{...M,fontSize:'0.72rem',color:'#cc4400',letterSpacing:'0.06em'}}>🛒 {cartCount} item{cartCount!==1?'s':''} · ₹{fmt(cartRaw)}</span>
+                <span style={{fontSize:'0.75rem',color:'#cc4400',transition:'transform 0.2s',display:'inline-block',transform:cartDropOpen?'rotate(180deg)':'rotate(0deg)'}}>▼</span>
+              </button>
+              {cartDropOpen&&(
+                <div style={{maxHeight:'26vh',overflowY:'auto',marginBottom:10,border:'1px solid #ffe0cc',borderTop:'none',borderRadius:'0 0 10px 10px',padding:'4px 0'}}>
+                  {Object.values(cart).map(({product:p,qty})=>{
+                    const imgUrl=(p.images||[]).find(i=>i&&!i.includes('/video/')&&!i.toLowerCase().endsWith('.gif'))
+                    const fp=p.price*(1-(p.discount||0)/100)
+                    return(
+                      <div key={p.serial_number} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 14px',borderBottom:'1px solid #fff0e8'}}>
+                        {imgUrl&&<img src={imgUrl} alt="" style={{width:42,height:42,borderRadius:7,objectFit:'cover',background:'#f8f8f8',border:'1px solid #ffe0cc',flexShrink:0}} onError={e=>e.target.style.display='none'}/>}
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{...MS,fontSize:'0.75rem',color:'#333',fontWeight:'bold',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.productname}</div>
+                          <div style={{...MS,fontSize:'0.67rem',color:'#888'}}>₹{fmt(fp)} × {qty}</div>
+                        </div>
+                        <span style={{...M,color:'#ff5500',fontSize:'0.78rem',flexShrink:0}}>₹{fmt(fp*qty)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            <div style={{padding:'14px 18px'}}>
+              {[{f:'customer_name',l:'FULL NAME *',t:'text'},{f:'address',l:'DELIVERY ADDRESS *',t:'text'},{f:'mobile_number',l:'MOBILE NUMBER *',t:'tel'},{f:'email',l:'EMAIL (optional)',t:'email'}].map(({f,l,t})=>(
+                <div key={f} style={{marginBottom:9}}><label style={{...M,fontSize:'0.6rem',color:'#888',letterSpacing:'0.1em',display:'block',marginBottom:4}}>{l}</label><input type={t} placeholder={l.replace(' *','')} value={customerDetails[f]} onChange={e=>setCustomerDetails(p=>({...p,[f]:f==='mobile_number'?e.target.value.replace(/\D/g,'').slice(-10):e.target.value}))} style={INP}/></div>
+              ))}
+              <div style={{marginBottom:9}}><label style={{...M,fontSize:'0.6rem',color:'#888',letterSpacing:'0.1em',display:'block',marginBottom:4}}>STATE *</label><select value={customerDetails.state} onChange={e=>setCustomerDetails(p=>({...p,state:e.target.value,district:''}))} style={INP}><option value=''>Select State</option>{states.map(s=><option key={s.name} value={s.name}>{s.name}{s.min_rate?` (Min ₹${s.min_rate})`:''}</option>)}</select></div>
+              {customerDetails.state&&<div style={{marginBottom:9}}><label style={{...M,fontSize:'0.6rem',color:'#888',letterSpacing:'0.1em',display:'block',marginBottom:4}}>CITY / DISTRICT *</label><select value={customerDetails.district} onChange={e=>setCustomerDetails(p=>({...p,district:e.target.value}))} style={INP}><option value=''>Select District</option>{districts.map(d=><option key={d.id} value={d.name}>{d.name}</option>)}</select></div>}
+              <PromoSelector/>
+              {states.length>0&&customerDetails.state&&(()=>{const st=states.find(s=>s.name===customerDetails.state);return st?.min_rate?<div style={{...MS,fontSize:'0.65rem',color:'#aa7700',background:'#fff8e0',border:'1px solid #ffd4aa',borderRadius:8,padding:'5px 10px',marginBottom:9}}>⚠ Minimum order for {st.name}: ₹{st.min_rate}</div>:null})()}
+              <div style={{background:'#fff8f0',border:'1px solid #ffd4b8',borderRadius:12,padding:'11px 14px',marginBottom:12}}><SummaryRows/></div>
+              {errMsg&&<div style={{...MS,fontSize:'0.75rem',color:'#cc0000',background:'#fff0f0',border:'1px solid #ffcccc',borderRadius:8,padding:'7px 12px',marginBottom:10}}>{errMsg}</div>}
+              <div style={{...MS,fontSize:'0.65rem',color:'#cc4400',background:'#fff8f0',border:'1px solid #ffd4cc',borderRadius:8,padding:'6px 10px',marginBottom:12,lineHeight:1.5}}>⚠ Product images for reference only. Delivery charges payable to transport.</div>
+              <div style={{display:'flex',gap:10}}>
+                <button onClick={()=>setShowCheckout(false)} style={{...MS,flex:'0 0 80px',background:'#f5f5f5',color:'#666',border:'none',padding:'12px',borderRadius:14,cursor:'pointer',fontSize:'0.82rem'}}>Cancel</button>
+                <button onClick={handleBook} disabled={bookingLoading} style={{...M,flex:1,background:'linear-gradient(135deg,#ff5500,#ff8800)',color:'#fff',border:'none',padding:'12px',borderRadius:14,cursor:'pointer',fontSize:'0.82rem',letterSpacing:'0.08em',boxShadow:'0 5px 18px rgba(255,85,0,0.32)',opacity:bookingLoading?0.75:1}}>
+                  {bookingLoading?'Booking…':'CONFIRM BOOKING →'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  )
+}

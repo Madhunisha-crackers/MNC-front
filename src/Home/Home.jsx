@@ -9,6 +9,7 @@ import "../App.css"
 import { API_BASE_URL } from "../../Config"
 import about from "../cont.jpg"
 import need from "../default.jpg"
+import Launch from './Launch';
 
 const categories = [
   { name: "Sparklers", icon: Sparkles, description: "Beautiful sparkling lights for celebrations" },
@@ -656,6 +657,7 @@ export default function Home() {
   const [promocodes, setPromocodes] = useState([])
   const [showRocketAnimation, setShowRocketAnimation] = useState(false)
   const [copiedPromos, setCopiedPromos] = useState([])
+  const [launched, setLaunched] = useState(false);
   const containerRef = useRef(null)
   const { scrollYProgress } = useScroll({ target: containerRef, offset: ["start start", "end start"] })
   const heroY = useTransform(scrollYProgress, [0, 1], ["0%", "30%"])
@@ -739,6 +741,7 @@ export default function Home() {
       ref={containerRef}
       className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 text-gray-800 overflow-x-hidden"
     >
+      {!launched && <Launch onComplete={() => setLaunched(true)} />}
       <Navbar />
 
       {/* Rocket Badge - Now at bottom */}
