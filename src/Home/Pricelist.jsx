@@ -1,1228 +1,1567 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import axios from 'axios';
-import Modal from 'react-modal';
-import { debounce } from 'lodash';
-import * as XLSX from 'xlsx';
-import '../../App.css';
-import { API_BASE_URL } from '../../../Config';
-import Sidebar from '../Sidebar/Sidebar';
-import Logout from '../Logout';
-import { FaEdit, FaArrowRight, FaTrash, FaDownload, FaSearch, FaCamera } from 'react-icons/fa';
-import Select, { components } from 'react-select';
-import Tesseract from 'tesseract.js';
-import Webcam from 'react-webcam';
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { FaPlus, FaMinus, FaArrowLeft, FaArrowRight, FaInfoCircle, FaExpand, FaCompress } from "react-icons/fa";
+import { ShoppingCart, Search, Filter, X, Download, Sparkles, ChevronRight } from "lucide-react";
+import Navbar from "../Component/Navbar";
+import { API_BASE_URL } from "../../Config";
+import RocketLoader from "../Component/RocketLoader";
+import ToasterNotification from "../Component/ToasterNotification";
+import SuccessAnimation from "../Component/SuccessAnimation";
+import ModernCarousel from "../Component/ModernCarousel";
+import LoadingSpinner from "../Component/LoadingSpinner";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import "../App.css";
+import need from '../default.jpg'
 
-Modal.setAppElement("#root");
+const Pricelist = () => {
+  const [products, setProducts] = useState([]);
+  const [cart, setCart] = useState({});
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isExpandedCart, setIsExpandedCart] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [showMinOrderModal, setShowMinOrderModal] = useState(false);
+  const [minOrderMessage, setMinOrderMessage] = useState("");
+  const [showToaster, setShowToaster] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isBookingLoading, setIsBookingLoading] = useState(false);
+  const [customerDetails, setCustomerDetails] = useState({
+    customer_name: "",
+    address: "",
+    district: "",
+    state: "",
+    mobile_number: "",
+    email: "",
+    customer_type: "User",
+  });
+  const [selectedType, setSelectedType] = useState("All");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [promocode, setPromocode] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState(null);
+  const [states, setStates] = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [promocodes, setPromocodes] = useState([]);
+  const [originalTotal, setOriginalTotal] = useState(0);
+  const [totalDiscount, setTotalDiscount] = useState(0);
+  const [showLoader, setShowLoader] = useState(false);
+  const debounceTimeout = useRef(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiStep, setAiStep] = useState(0);
+  const [aiBudget, setAiBudget] = useState("");
+  const [aiPreferences, setAiPreferences] = useState({
+    kids: false,
+    sound: false,
+    night: false,
+    kidsnight: false,
+  });
+  const [suggestedCart, setSuggestedCart] = useState({});
 
-const selectStyles = {
-  control: (base, { isFocused }) => ({
-    ...base,
-    padding: "0.2rem 0.4rem",
-    fontSize: "0.95rem",
-    borderRadius: "10px",
-    background: "#fff",
-    borderColor: isFocused ? "#6366f1" : "#e2e8f0",
-    boxShadow: isFocused ? "0 0 0 3px rgba(99,102,241,0.15)" : "0 1px 3px rgba(0,0,0,0.06)",
-    transition: "all 0.2s",
-    "&:hover": { borderColor: "#6366f1" },
-  }),
-  menu: (base) => ({ ...base, zIndex: 50, borderRadius: "10px", boxShadow: "0 10px 40px rgba(0,0,0,0.12)", border: "1px solid #e2e8f0", overflow: "hidden" }),
-  singleValue: (base) => ({ ...base, color: "#1e293b", fontWeight: 500 }),
-  option: (base, { isFocused, isSelected }) => ({
-    ...base,
-    background: isSelected ? "#6366f1" : isFocused ? "#f0f0ff" : "#fff",
-    color: isSelected ? "#fff" : "#1e293b",
-    fontWeight: isFocused || isSelected ? 500 : 400,
-    cursor: "pointer",
-    padding: "0.8rem",
-  }),
-  placeholder: (base) => ({ ...base, color: "#94a3b8" }),
-  clearIndicator: (base) => ({ ...base, color: "#94a3b8", "&:hover": { color: "#ef4444" } }),
-};
+  const formatPercentage = (value) => Math.round(Number.parseFloat(value)).toString();
+  const formatPrice = (price) => {
+    const num = Number.parseFloat(price);
+    return Number.isInteger(num) ? num.toString() : num.toFixed(2);
+  };
+  const capitalize = str => str ? str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : '';
 
-const Spinner = ({ white = false }) => (
-  <span className={`inline-block w-4 h-4 border-[3px] rounded-full animate-spin ${white ? "border-white/30 border-t-white" : "border-indigo-200 border-t-indigo-500"}`} />
-);
+  const serialSort = (a, b) => {
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+    return collator.compare(a.serial_number, b.serial_number);
+  };
 
-class DirectErrorBoundary extends React.Component {
-  state = { hasError: false, error: null };
-  static getDerivedStateFromError(error) { return { hasError: true, error }; }
-  componentDidCatch(error, errorInfo) { console.error("DirectErrorBoundary:", error, errorInfo); }
-  render() {
-    if (this.state.hasError) return (
-      <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl text-center">
-        An error occurred: {this.state.error?.message || 'Unknown error'}. Please refresh.
-      </div>
+  const showError = (message) => {
+    setMinOrderMessage(message);
+    setShowMinOrderModal(true);
+    setTimeout(() => setShowMinOrderModal(false), 5000);
+  };
+
+  const downloadPDF = async () => {
+    if (!products.length) return;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let yOffset = 20;
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('MADHU NISHA CRACKERS', pageWidth / 2, yOffset, { align: 'center' });
+    yOffset += 10;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Website - www.madhunishacrackers.com', pageWidth / 2, yOffset, { align: 'center' });
+    yOffset += 10;
+    doc.text('Retail Pricelist - 2025', pageWidth / 2, yOffset, { align: 'center' });
+    yOffset += 10;
+    doc.text('Contact Number - 9487524689', pageWidth / 2, yOffset, { align: 'center' });
+    yOffset += 20;
+
+    const orderedTypes = [
+      "One sound crackers", "Ground Chakkar", "Flower Pots", "Twinkling Star",
+      "Rockets", "Bombs", "Repeating Shots", "Comets Sky Shots",
+      "Fancy pencil varieties", "Fountain and Fancy Novelties", "Matches",
+      "Guns and Caps", "Sparklers", "Premium Sparklers", "Gift Boxes", "Kids Special "
+    ];
+
+    // Helper: fetch image as base64 data URL
+    const fetchImageAsBase64 = (url) => {
+      return new Promise((resolve) => {
+        if (!url) return resolve(null);
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const MAX = 80;
+            let w = img.naturalWidth, h = img.naturalHeight;
+            if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
+            else { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.75));
+          } catch { resolve(null); }
+        };
+        img.onerror = () => resolve(null);
+        // Use a CORS proxy if needed, or try direct
+        img.src = url;
+      });
+    };
+
+    // Pre-fetch all images
+    const imageCache = {};
+    const allProducts = orderedTypes.flatMap(type => {
+      const typeKey = type.replace(/ /g, "_").toLowerCase();
+      return products.filter(p => p.product_type.toLowerCase() === typeKey);
+    });
+
+    await Promise.all(
+      allProducts.map(async (product) => {
+        const images = Array.isArray(product.images) ? product.images : [];
+        const imgUrl = images.find(img => img && !img.includes('/video/') && !img.toLowerCase().endsWith('.gif'));
+        if (imgUrl) {
+          imageCache[product.serial_number] = await fetchImageAsBase64(imgUrl);
+        }
+      })
     );
-    return this.props.children;
-  }
-}
 
-class QuotationTableErrorBoundary extends React.Component {
-  state = { hasError: false, error: null };
-  static getDerivedStateFromError(error) { return { hasError: true, error }; }
-  componentDidCatch(error, errorInfo) { console.error("QuotationTableErrorBoundary:", error, errorInfo); }
-  render() {
-    if (this.state.hasError) return (
-      <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl text-center">
-        Error rendering quotation table. Please try again.
-      </div>
-    );
-    return this.props.children;
-  }
-}
+    const ROW_HEIGHT = 18; // mm per row
+    const IMG_SIZE = 14;   // mm image box
 
-const getEffectivePrice = (item) => Math.round(Number(item.price) || 0);
+    for (const type of orderedTypes) {
+      const typeKey = type.replace(/ /g, "_").toLowerCase();
+      const typeProducts = products.filter(p => p.product_type.toLowerCase() === typeKey).sort(serialSort);
+      if (!typeProducts.length) continue;
 
-const styles = { input: {}, button: {}, card: {} };
+      // Section header row
+      const sectionHeaderHeight = 10;
+      if (yOffset + sectionHeaderHeight > doc.internal.pageSize.getHeight() - 20) {
+        doc.addPage();
+        yOffset = 20;
+      }
 
-const SummaryChip = ({ label, value, color, large }) => {
-  const colorMap = {
-    "#64748b": "text-slate-500",
-    "#10b981": "text-emerald-500",
-    "#f59e0b": "text-amber-500",
-    "#94a3b8": "text-slate-400",
-    "#6366f1": "text-indigo-500",
+      // Draw section header
+      doc.setFillColor(200, 200, 200);
+      doc.rect(10, yOffset, pageWidth - 20, sectionHeaderHeight, 'F');
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(40, 40, 40);
+      doc.text(capitalize(type), 14, yOffset + 7);
+      yOffset += sectionHeaderHeight + 1;
+
+      // Column header row
+      const colHeaderHeight = 8;
+      doc.setFillColor(234, 88, 12);
+      doc.rect(10, yOffset, pageWidth - 20, colHeaderHeight, 'F');
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 255, 255);
+
+      // Col positions: Sl(10), Code(22), Image(38), Product Name(60), Rate(130), Disc Rate(150), Per(175)
+      const cols = { sl: 12, code: 23, img: 39, name: 61, rate: 131, disc: 152, per: 176 };
+      doc.text('Sl', cols.sl, yOffset + 5.5);
+      doc.text('Code', cols.code, yOffset + 5.5);
+      doc.text('Image', cols.img, yOffset + 5.5);
+      doc.text('Product Name', cols.name, yOffset + 5.5);
+      doc.text('Rate', cols.rate, yOffset + 5.5);
+      doc.text('Disc. Rate', cols.disc, yOffset + 5.5);
+      doc.text('Per', cols.per, yOffset + 5.5);
+      yOffset += colHeaderHeight + 1;
+
+      let slNo = 1;
+      for (const product of typeProducts) {
+        if (yOffset + ROW_HEIGHT > doc.internal.pageSize.getHeight() - 15) {
+          doc.addPage();
+          yOffset = 20;
+        }
+
+        const discount = product.price * (product.discount / 100);
+        const discountedRate = product.price - discount;
+
+        // Alternating row background
+        if (slNo % 2 === 0) {
+          doc.setFillColor(255, 247, 237); // light orange tint
+          doc.rect(10, yOffset, pageWidth - 20, ROW_HEIGHT, 'F');
+        }
+
+        // Draw grid borders
+        doc.setDrawColor(220, 220, 220);
+        doc.rect(10, yOffset, pageWidth - 20, ROW_HEIGHT);
+
+        // Cell dividers
+        [21, 37, 59, 129, 150, 173].forEach(x => {
+          doc.line(x, yOffset, x, yOffset + ROW_HEIGHT);
+        });
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(50, 50, 50);
+
+        const textY = yOffset + ROW_HEIGHT / 2 + 1.5;
+
+        doc.text(String(slNo++), cols.sl, textY);
+        doc.text(product.serial_number || '', cols.code, textY);
+
+        // Product name — wrap if needed
+        const nameLines = doc.splitTextToSize(product.productname, 66);
+        const nameY = nameLines.length > 1 ? yOffset + 5 : textY;
+        doc.text(nameLines.slice(0, 2), cols.name, nameY);
+
+        doc.text(`Rs.${formatPrice(product.price)}`, cols.rate, textY);
+        doc.text(`Rs.${formatPrice(discountedRate)}`, cols.disc, textY);
+        doc.text(product.per || '', cols.per, textY);
+
+        // Embed image if available
+        const imgData = imageCache[product.serial_number];
+        if (imgData) {
+          const imgX = cols.img - 1;
+          const imgY = yOffset + (ROW_HEIGHT - IMG_SIZE) / 2;
+          try {
+            doc.addImage(imgData, 'JPEG', imgX, imgY, IMG_SIZE, IMG_SIZE);
+          } catch { /* skip if image fails */ }
+        } else {
+          // Placeholder box
+          doc.setFillColor(245, 245, 245);
+          doc.rect(cols.img - 1, yOffset + (ROW_HEIGHT - IMG_SIZE) / 2, IMG_SIZE, IMG_SIZE, 'F');
+          doc.setFontSize(6);
+          doc.setTextColor(180, 180, 180);
+          doc.text('No img', cols.img + 2, yOffset + ROW_HEIGHT / 2 + 1);
+        }
+
+        yOffset += ROW_HEIGHT;
+      }
+
+      yOffset += 6; // gap between sections
+    }
+
+    doc.save('MNC_Pricelist_2025.pdf');
   };
-  const textColor = colorMap[color] || "text-slate-600";
-  return (
-    <div className="text-right">
-      <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</div>
-      <div className={`font-bold ${large ? "text-xl" : "text-sm"} ${textColor}`}>{value}</div>
-    </div>
-  );
-};
-
-const StatusBadge = ({ status }) => {
-  const map = {
-    pending: "text-amber-500 bg-amber-50 border-amber-200",
-    booked: "text-emerald-600 bg-emerald-50 border-emerald-200",
-    cancelled: "text-red-500 bg-red-50 border-red-200",
-  };
-  const icons = { pending: "⏳ Pending", booked: "✓ Booked", cancelled: "✕ Cancelled" };
-  const cls = map[status] || "text-slate-400 bg-slate-50 border-slate-200";
-  return (
-    <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${cls}`}>
-      {icons[status] || status}
-    </span>
-  );
-};
-
-const QuotActionBtn = ({ label, onClick, disabled, color, loading = false }) => {
-  const colorMap = {
-    "#f59e0b": {
-      idle: "bg-amber-50 text-amber-500 border border-amber-200 hover:bg-amber-500 hover:text-white hover:border-amber-500",
-      off: "bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed",
-    },
-    "#10b981": {
-      idle: "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500",
-      off: "bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed",
-    },
-    "#ef4444": {
-      idle: "bg-red-50 text-red-500 border border-red-200 hover:bg-red-500 hover:text-white hover:border-red-500",
-      off: "bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed",
-    },
-  };
-  const variant = colorMap[color] || colorMap["#6366f1"];
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled || loading}
-      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all duration-150 flex items-center justify-center gap-1.5 ${disabled || loading ? variant.off : variant.idle}`}
-    >
-      {loading ? <Spinner /> : label}
-    </button>
-  );
-};
-
-const PaginBtn = ({ label, onClick, disabled, active }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    className={`px-4 py-2 rounded-lg border text-sm font-bold transition-all duration-150
-      ${active ? "bg-indigo-600 border-indigo-600 text-white"
-      : disabled ? "bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed"
-        : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:text-indigo-600"}`}
-  >
-    {label}
-  </button>
-);
-
-const CustomOption = (props) => {
-  const { data, innerRef, innerProps, isFocused, isSelected, selectProps } = props;
-  const { onAddToCart, cart } = selectProps;
-  const cartItem = cart && cart.find(item => `${item.id}-${item.product_type}` === data.value);
-  const qty = cartItem ? cartItem.quantity : 0;
-
-  return (
-    <div
-      ref={innerRef}
-      {...innerProps}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "8px 12px",
-        background: isSelected ? "#6366f1" : isFocused ? "#f0f0ff" : "#fff",
-        color: isSelected ? "#fff" : "#1e293b",
-        cursor: "pointer",
-        gap: "8px",
-      }}
-    >
-      <span style={{ flex: 1, fontSize: "0.9rem", fontWeight: isFocused || isSelected ? 500 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {data.label}
-      </span>
-      <div
-        style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {qty > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            <button
-              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddToCart && onAddToCart(data.value, "minus"); }}
-              style={{
-                width: "22px", height: "22px", borderRadius: "50%", border: "1.5px solid",
-                borderColor: isSelected ? "rgba(255,255,255,0.6)" : "#e2e8f0",
-                background: isSelected ? "rgba(255,255,255,0.15)" : "#fff",
-                color: isSelected ? "#fff" : "#64748b",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "14px", fontWeight: "bold", cursor: "pointer", lineHeight: 1, flexShrink: 0,
-              }}
-            >−</button>
-            <input
-              type="number"
-              value={qty}
-              min="0"
-              onMouseDown={(e) => e.stopPropagation()}
-              onChange={(e) => { e.stopPropagation(); onAddToCart && onAddToCart(data.value, "set", parseInt(e.target.value) || 0); }}
-              style={{
-                width: "38px", height: "24px", borderRadius: "6px", border: "1.5px solid",
-                borderColor: isSelected ? "rgba(255,255,255,0.5)" : "#c7d2fe",
-                background: isSelected ? "rgba(255,255,255,0.2)" : "#eef2ff",
-                color: isSelected ? "#fff" : "#4338ca",
-                textAlign: "center", fontSize: "0.78rem", fontWeight: "700",
-                outline: "none", padding: "0 2px",
-              }}
-            />
-            <button
-              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddToCart && onAddToCart(data.value, "plus"); }}
-              style={{
-                width: "22px", height: "22px", borderRadius: "50%", border: "1.5px solid",
-                borderColor: isSelected ? "rgba(255,255,255,0.6)" : "#6366f1",
-                background: isSelected ? "rgba(255,255,255,0.2)" : "#6366f1",
-                color: "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "14px", fontWeight: "bold", cursor: "pointer", lineHeight: 1, flexShrink: 0,
-              }}
-            >+</button>
-          </div>
-        )}
-        {qty === 0 && (
-          <button
-            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddToCart && onAddToCart(data.value, "plus"); }}
-            style={{
-              width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid",
-              borderColor: isSelected ? "rgba(255,255,255,0.7)" : "#6366f1",
-              background: isSelected ? "rgba(255,255,255,0.2)" : "#6366f1",
-              color: "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "16px", fontWeight: "bold", cursor: "pointer", lineHeight: 1, flexShrink: 0,
-            }}
-          >+</button>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const QuotationTable = ({
-  cart = [], products = [], selectedProduct, setSelectedProduct,
-  addToCart, updateQuantity, updateDiscount, updatePrice, removeFromCart,
-  calculateNetRate, calculateYouSave, calculateProcessingFee, calculateTotal,
-  isModal = false, additionalDiscount, setAdditionalDiscount,
-  changeDiscount, setChangeDiscount, openNewProductModal,
-  lastAddedProduct, setLastAddedProduct, setCart, setModalCart,
-}) => {
-  const quantityInputRefs = useRef({});
-  const productSelectRef = useRef(null);
 
   useEffect(() => {
-    if (lastAddedProduct) {
-      const key = `${lastAddedProduct.id}-${lastAddedProduct.product_type}`;
-      const input = quantityInputRefs.current[key];
-      if (input) { input.focus(); input.select(); setLastAddedProduct(null); }
-    }
-  }, [lastAddedProduct, setLastAddedProduct]);
-
-  const handleQuantityKeyDown = (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); productSelectRef.current?.focus(); }
-  };
-
-  const handleChangeDiscount = (value) => {
-    const newDiscount = Math.max(0, Math.min(100, parseFloat(value) || 0));
-    setChangeDiscount(newDiscount);
-    const updatedCart = cart.map(item => ({ ...item, discount: item.initialDiscount === 0 ? 0 : newDiscount }));
-    if (isModal) setModalCart(updatedCart); else setCart(updatedCart);
-  };
-
-  const handleOptionCartAction = useCallback((productValue, action, setValue) => {
-    const [id, type] = productValue.split("-");
-    const product = products.find(p => p.id.toString() === id && p.product_type === type);
-    if (!product) return;
-    const setTargetCart = isModal ? setModalCart : setCart;
-    const currentDiscount = changeDiscount;
-
-    setTargetCart(prev => {
-      const exists = prev.find(item => item.id.toString() === id && item.product_type === type);
-      if (action === "plus") {
-        if (exists) {
-          return prev.map(item => item.id.toString() === id && item.product_type === type ? { ...item, quantity: item.quantity + 1 } : item);
-        } else {
-          const newItem = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: 1, discount: parseFloat(product.discount) || currentDiscount, initialDiscount: parseFloat(product.discount) || 0, per: product.per || 'Unit' };
-          return [...prev, newItem];
-        }
-      } else if (action === "minus") {
-        if (!exists) return prev;
-        if (exists.quantity <= 1) return prev.filter(item => !(item.id.toString() === id && item.product_type === type));
-        return prev.map(item => item.id.toString() === id && item.product_type === type ? { ...item, quantity: item.quantity - 1 } : item);
-      } else if (action === "set") {
-        const qty = parseInt(setValue) || 0;
-        if (!exists && qty > 0) {
-          const newItem = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: qty, discount: parseFloat(product.discount) || currentDiscount, initialDiscount: parseFloat(product.discount) || 0, per: product.per || 'Unit' };
-          return [...prev, newItem];
-        }
-        if (qty <= 0) return prev.filter(item => !(item.id.toString() === id && item.product_type === type));
-        return prev.map(item => item.id.toString() === id && item.product_type === type ? { ...item, quantity: qty } : item);
+    const initializeData = async () => {
+      setIsLoading(true);
+      try {
+        const savedCart = localStorage.getItem("firecracker-cart");
+        if (savedCart) setCart(JSON.parse(savedCart));
+        const [statesRes, productsRes, promocodesRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/locations/states`),
+          fetch(`${API_BASE_URL}/api/products`),
+          fetch(`${API_BASE_URL}/api/promocodes`),
+        ]);
+        const [statesData, productsData, promocodesData] = await Promise.all([
+          statesRes.json(),
+          productsRes.json(),
+          promocodesRes.json(),
+        ]);
+        setStates(Array.isArray(statesData) ? statesData : []);
+        const naturalSort = (a, b) => new Intl.Collator(undefined, { numeric: true, sensitivity: "base" }).compare(a.productname, b.productname);
+        const seenSerials = new Set();
+        const normalizedProducts = productsData.data
+          .filter(p => p.status === "on" && !seenSerials.has(p.serial_number) && seenSerials.add(p.serial_number))
+          .map(product => ({
+            ...product,
+            images: product.image ? (typeof product.image === "string" ? JSON.parse(product.image) : product.image) : [],
+          }))
+          .sort(naturalSort);
+        setProducts(normalizedProducts);
+        setPromocodes(Array.isArray(promocodesData) ? promocodesData : []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setTimeout(() => setIsLoading(false), 1500);
       }
-      return prev;
+    };
+    initializeData();
+  }, []);
+
+  useEffect(() => {
+    if (customerDetails.state) {
+      fetch(`${API_BASE_URL}/api/locations/states/${customerDetails.state}/districts`)
+        .then(res => res.json())
+        .then(data => setDistricts(Array.isArray(data) ? data : []))
+        .catch(err => console.error(err));
+    }
+  }, [customerDetails.state]);
+
+  useEffect(() => {
+    localStorage.setItem("firecracker-cart", JSON.stringify(cart));
+  }, [cart]);
+
+  useEffect(() => {
+    if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+    debounceTimeout.current = setTimeout(() => {
+      if (promocode && promocode !== "custom") handleApplyPromo(promocode);
+      else {
+        setAppliedPromo(null);
+        setPromocode("");
+      }
+    }, 500);
+    return () => clearTimeout(debounceTimeout.current);
+  }, [promocode, cart]);
+
+  const addToCart = useCallback((product) => {
+    if (!product?.serial_number) return;
+    setCart(prev => ({ ...prev, [product.serial_number]: (prev[product.serial_number] || 0) + 1 }));
+  }, []);
+
+  const removeFromCart = useCallback((product) => {
+    if (!product?.serial_number) return;
+    setCart(prev => {
+      const count = (prev[product.serial_number] || 1) - 1;
+      const updated = { ...prev };
+      if (count <= 0) delete updated[product.serial_number];
+      else updated[product.serial_number] = count;
+      return updated;
     });
-  }, [cart, products, isModal, setCart, setModalCart, changeDiscount]);
+  }, []);
 
-  const total = parseFloat(calculateTotal(cart, additionalDiscount));
-  const cartInputCls = "w-20 px-2 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 text-center bg-slate-50 outline-none focus:border-indigo-400 transition-colors";
+  const updateCartQuantity = useCallback((product, quantity) => {
+    if (!product?.serial_number) return;
+    if (quantity < 0) quantity = 0;
+    setCart(prev => {
+      const updated = { ...prev };
+      if (quantity === 0) delete updated[product.serial_number];
+      else updated[product.serial_number] = quantity;
+      return updated;
+    });
+  }, []);
 
-  return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <label className="block text-xs font-semibold text-amber-500 uppercase tracking-widest mb-2">
-            Additional Discount (%)
-          </label>
-          <div className="relative">
-            <input
-              type="number"
-              value={additionalDiscount || ''}
-              onChange={(e) => setAdditionalDiscount(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
-              placeholder="0"
-              min="0" max="100" step="1"
-              className="w-full pl-3 pr-8 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 bg-slate-50 outline-none focus:border-amber-400 transition-colors box-border"
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">%</span>
-          </div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <label className="block text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-2">
-            Bulk Change Discount (%)
-          </label>
-          <div className="relative">
-            <input
-              type="number"
-              value={changeDiscount || ''}
-              onChange={(e) => handleChangeDiscount(e.target.value)}
-              placeholder="0"
-              min="0" max="100" step="1"
-              className="w-full pl-3 pr-8 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">%</span>
-          </div>
-        </div>
-      </div>
+  const addToSuggestedCart = useCallback((product) => {
+    if (!product?.serial_number) return;
+    setSuggestedCart(prev => ({ ...prev, [product.serial_number]: (prev[product.serial_number] || 0) + 1 }));
+  }, []);
 
-      {cart.length === 0 ? (
-        <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl py-12 text-center">
-          <div className="text-4xl mb-3">🛒</div>
-          <p className="text-slate-400 font-medium text-sm">Cart is empty — search and add products above</p>
-        </div>
-      ) : (
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-gradient-to-r from-indigo-50 to-slate-50 border-b-2 border-indigo-100">
-                  {["#", "Product", "Price (₹)", "Discount", "Qty", "Total", ""].map((h, i) => (
-                    <th
-                      key={i}
-                      className={`px-3.5 py-3 text-xs font-bold text-indigo-500 uppercase tracking-widest whitespace-nowrap
-                        ${i === 0 || i === 6 ? "text-center" : "text-left"}`}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {cart.map((item, index) => {
-                  const lineTotal = Math.round(getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity);
-                  return (
-                    <tr
-                      key={`${item.id}-${item.product_type}`}
-                      className="border-b border-slate-100 hover:bg-indigo-50/30 transition-colors duration-150"
-                    >
-                      <td className="px-3.5 py-2.5 text-center text-xs font-bold text-slate-400">{index + 1}</td>
-                      <td className="px-3.5 py-2.5">
-                        <div className="font-semibold text-slate-800">{item.productname}</div>
-                        <div className="text-xs text-slate-400 mt-0.5">{item.product_type}{item.serial_number ? ` · ${item.serial_number}` : ""}</div>
-                      </td>
-                      <td className="px-3.5 py-2.5">
-                        <input
-                          type="number" value={getEffectivePrice(item)} min="0" step="1"
-                          onChange={(e) => updatePrice(item.id, item.product_type, parseFloat(e.target.value) || 0, isModal)}
-                          className={`${cartInputCls} focus:border-emerald-400`}
-                        />
-                      </td>
-                      <td className="px-3.5 py-2.5">
-                        <div className="relative inline-block">
-                          <input
-                            type="number" value={item.discount} min="0" max="100" step="0.01"
-                            onChange={(e) => updateDiscount(item.id, item.product_type, parseFloat(e.target.value) || 0, isModal)}
-                            className={`${cartInputCls} pr-6 focus:border-amber-400`}
-                          />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">%</span>
-                        </div>
-                      </td>
-                      <td className="px-3.5 py-2.5">
-                        <input
-                          type="number" value={item.quantity} min="0"
-                          onChange={(e) => updateQuantity(item.id, item.product_type, parseInt(e.target.value) || 0, isModal)}
-                          onKeyDown={handleQuantityKeyDown}
-                          ref={(el) => (quantityInputRefs.current[`${item.id}-${item.product_type}`] = el)}
-                          className={`${cartInputCls} focus:border-indigo-400`}
-                        />
-                      </td>
-                      <td className="px-3.5 py-2.5">
-                        <span className="font-bold text-slate-800">₹{lineTotal.toLocaleString('en-IN')}</span>
-                      </td>
-                      <td className="px-3.5 py-2.5 text-center">
-                        <button
-                          onClick={() => removeFromCart(item.id, item.product_type, isModal)}
-                          className="bg-red-50 border border-red-200 text-red-500 rounded-lg px-2.5 py-1.5 hundred:text-md hundred:w-20 mobile:w-8 mobile:text-xs font-bold hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200"
-                        >
-                          ✕
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+  const removeFromSuggestedCart = useCallback((product) => {
+    if (!product?.serial_number) return;
+    setSuggestedCart(prev => {
+      const count = (prev[product.serial_number] || 1) - 1;
+      const updated = { ...prev };
+      if (count <= 0) delete updated[product.serial_number];
+      else updated[product.serial_number] = count;
+      return updated;
+    });
+  }, []);
 
-          <div className="bg-gradient-to-r from-indigo-50 to-slate-50 border-t-2 border-indigo-100 px-5 py-4">
-            <div className="flex justify-end flex-wrap gap-6">
-              <SummaryChip label="Net Rate" value={`₹${parseFloat(calculateNetRate(cart)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} color="#64748b" />
-              <SummaryChip label="You Save" value={`₹${parseFloat(calculateYouSave(cart)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} color="#10b981" />
-              {additionalDiscount > 0 && <SummaryChip label="Extra Discount" value={`${additionalDiscount}%`} color="#f59e0b" />}
-              <SummaryChip label="Processing Fee (1%)" value={`₹${parseFloat(calculateProcessingFee(cart, additionalDiscount)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} color="#94a3b8" />
-              <SummaryChip label="Total" value={`₹${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} color="#6366f1" large />
-            </div>
-          </div>
-        </div>
-      )}
+  const updateSuggestedQuantity = useCallback((product, quantity) => {
+    if (!product?.serial_number) return;
+    if (quantity < 0) quantity = 0;
+    setSuggestedCart(prev => {
+      const updated = { ...prev };
+      if (quantity === 0) delete updated[product.serial_number];
+      else updated[product.serial_number] = quantity;
+      return updated;
+    });
+  }, []);
 
-      <div className="bg-gradient-to-br from-slate-50 to-indigo-50 border border-indigo-100 rounded-2xl p-5">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-60">
-            <label className="block text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-1.5">
-              Search Product
-            </label>
-            <Select
-              ref={productSelectRef}
-              value={selectedProduct}
-              onChange={(option) => {
-                if (!option) return setSelectedProduct(null);
-                setSelectedProduct(option);
-                const [id, type] = option.value.split("-");
-                const product = products.find(p => p.id.toString() === id && p.product_type === type);
-                if (!product) return;
-                const setTargetCart = isModal ? setModalCart : setCart;
-                const setTargetLastAddedProduct = isModal ? null : setLastAddedProduct;
-                const currentDiscount = changeDiscount;
-                const newItem = {
-                  ...product,
-                  id: product.id,
-                  price: Math.round(Number(product.price) || 0),
-                  quantity: 1,
-                  discount: parseFloat(product.discount) || currentDiscount,
-                  initialDiscount: parseFloat(product.discount) || 0,
-                  per: product.per || 'Unit',
-                };
-                setTargetCart(prev => {
-                  const exists = prev.find(item => item.id === product.id && item.product_type === product.product_type);
-                  return exists
-                    ? prev.map(item => item.id === product.id && item.product_type === product.product_type
-                      ? { ...item, quantity: item.quantity + 1 } : item)
-                    : [...prev, newItem];
-                });
-                if (setTargetLastAddedProduct) {
-                  setTargetLastAddedProduct({ id: product.id, product_type: product.product_type });
-                } else {
-                  setLastAddedProduct({ id: product.id, product_type: product.product_type });
-                }
-                setSelectedProduct(null);
-              }}
-              options={products.map((p) => ({
-                value: `${p.id}-${p.product_type}`,
-                label: `${p.serial_number ? `[${p.serial_number}] ` : ''}${p.productname} · ${p.product_type} · ₹${getEffectivePrice(p)}`,
-              }))}
-              placeholder="Type to search products..."
-              isClearable
-              isSearchable
-              styles={selectStyles}
-              components={{ Option: CustomOption }}
-              onAddToCart={handleOptionCartAction}
-              cart={cart}
-            />
-          </div>
-          <button
-            onClick={() => openNewProductModal(isModal)}
-            className="h-11 px-5 rounded-xl font-bold text-sm flex items-center gap-2 whitespace-nowrap bg-gradient-to-br from-emerald-500 to-emerald-400 text-white shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-500 transition-all duration-200"
-          >
-            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
-            Custom Product
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+const generateSuggestions = useCallback(() => {
+  const budget = Number(aiBudget);
+  if (!budget || budget <= 0) { showError("Please enter a valid budget"); return; }
 
-const FormFields = ({
-  isEdit, customers, modalSelectedCustomer, setModalSelectedCustomer,
-  modalCart, setModalCart, products, modalSelectedProduct, setModalSelectedProduct,
-  addToCart, updateQuantity, updateDiscount, updatePrice, removeFromCart,
-  calculateNetRate, calculateYouSave, calculateProcessingFee, calculateTotal,
-  handleSubmit, closeModal, modalAdditionalDiscount, setModalAdditionalDiscount,
-  modalChangeDiscount, setModalChangeDiscount, openNewProductModal,
-  modalLastAddedProduct, setModalLastAddedProduct, submitLoading,
-}) => (
-  <div className="space-y-5">
-    <div>
-      <label className="block text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2">
-        Customer
-      </label>
-      <Select
-        value={modalSelectedCustomer}
-        onChange={setModalSelectedCustomer}
-        options={customers.map((c) => ({
-          value: c.id.toString(),
-          label: `${c.name} (${c.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : c.customer_type || "User"} - ${c.district || "N/A"})`,
-        }))}
-        placeholder="Search for a customer..."
-        isClearable
-        styles={selectStyles}
-      />
-    </div>
-    <QuotationTableErrorBoundary>
-      <QuotationTable
-        cart={modalCart} setCart={setModalCart} setModalCart={setModalCart}
-        products={products || []} selectedProduct={modalSelectedProduct}
-        setSelectedProduct={setModalSelectedProduct} addToCart={addToCart}
-        updateQuantity={updateQuantity} updateDiscount={updateDiscount}
-        updatePrice={updatePrice} removeFromCart={removeFromCart}
-        calculateNetRate={calculateNetRate} calculateYouSave={calculateYouSave}
-        calculateProcessingFee={calculateProcessingFee} calculateTotal={calculateTotal}
-        styles={styles} isModal={true}
-        additionalDiscount={modalAdditionalDiscount} setAdditionalDiscount={setModalAdditionalDiscount}
-        changeDiscount={modalChangeDiscount} setChangeDiscount={setModalChangeDiscount}
-        openNewProductModal={openNewProductModal}
-        lastAddedProduct={modalLastAddedProduct} setLastAddedProduct={setModalLastAddedProduct}
-      />
-    </QuotationTableErrorBoundary>
-    <div className="flex justify-end gap-2.5 pt-2">
-      <button
-        onClick={closeModal}
-        disabled={submitLoading}
-        className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors disabled:opacity-50"
-      >
-        Cancel
-      </button>
-      <button
-        onClick={handleSubmit}
-        disabled={!modalSelectedCustomer || !modalCart.length || submitLoading}
-        className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all duration-200 flex items-center gap-2
-          ${!modalSelectedCustomer || !modalCart.length || submitLoading
-            ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-            : isEdit
-              ? "bg-gradient-to-br from-amber-500 to-amber-400 shadow-lg shadow-amber-200 hover:from-amber-600 hover:to-amber-500"
-              : "bg-gradient-to-br from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500"
-          }`}
-      >
-        {submitLoading ? <><Spinner white />{isEdit ? "Updating..." : "Confirming..."}</> : (isEdit ? "Update Quotation" : "Confirm Booking")}
-      </button>
-    </div>
-  </div>
-);
+  const categories = {
+    kids: [
+      "new_arrivals",
+      "fancy_pencil_varieties",
+      "twinkling_star",
+      "guns_and_caps",
+      "matches"
+    ],
+    sound: [
+      "bombs",
+      "one_sound_crackers"
+    ],
+    night: [
+      "repeating_shots",
+      "comets_sky_shots",
+      "new_arrivals",
+      "rockets"
+    ],
+    kidsnight: [
+      "fountain_and_fancy_novelties",
+      "flower_pots",
+      "ground_chakkar",
+      "sparklers",
+      "premium_sparklers"
+    ]
+  };
 
-const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProductData }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [localProductData, setLocalProductData] = useState(newProductData);
+  const selectedPrefs = ["night", "kids", "sound", "kidsnight"].filter(p => aiPreferences[p]);
+  if (!selectedPrefs.length) { showError("Select at least one preference"); return; }
 
-  useEffect(() => { setLocalProductData(newProductData); }, [newProductData]);
+  const budgetPerPref = budget / selectedPrefs.length;
+
+  const tempCart = {};
+  const sparklerSizeCount = {};
+  const categorySpentMap = {};
+  selectedPrefs.forEach(p => { categorySpentMap[p] = 0; });
+
+  const getSparklerSize = name => {
+    const m = name?.match(/(\d+)\s*cm/i);
+    return m ? m[1] : null;
+  };
+
+  // ── Phase 1: Add products per category in defined type order with randomness ──
+  for (const pref of selectedPrefs) {
+    const phase1Budget = budgetPerPref * 0.70;
+    const types = categories[pref];
+
+    const byType = {};
+    for (const type of types) byType[type] = [];
+
+    products
+      .filter(p => types.includes(p.product_type?.toLowerCase()))
+      .forEach(p => {
+        const type = p.product_type?.toLowerCase();
+        if (byType[type]) {
+          byType[type].push({
+            ...p,
+            finalPrice: p.price * (1 - (p.discount || 0) / 100),
+          });
+        }
+      });
+
+    // Shuffle first, then sort by price tier with slight randomness
+    // so regenerate produces different selections each time
+    for (const type of types) {
+      byType[type]
+        .sort(() => Math.random() - 0.5) // initial shuffle
+        .sort((a, b) => {
+          const priceDiff = a.finalPrice - b.finalPrice;
+          // Within same price tier (±50), keep random order
+          if (Math.abs(priceDiff) < 50) return Math.random() - 0.5;
+          return priceDiff; // cheaper first across tiers
+        });
+    }
+
+    // Flatten in category-defined order
+    const sorted = types.flatMap(type => byType[type] || []).filter(p => p.finalPrice > 0);
+
+    let prefSpent = 0;
+
+    for (const p of sorted) {
+      if (prefSpent + p.finalPrice > phase1Budget) continue;
+      if (tempCart[p.serial_number]) continue;
+
+      if (p.product_type === "sparklers" || p.product_type === "premium_sparklers") {
+        const size = getSparklerSize(p.productname) || "unknown";
+        if ((sparklerSizeCount[size] || 0) >= 3) continue;
+        sparklerSizeCount[size] = (sparklerSizeCount[size] || 0) + 1;
+      }
+
+      tempCart[p.serial_number] = 1;
+      prefSpent += p.finalPrice;
+      categorySpentMap[pref] = (categorySpentMap[pref] || 0) + p.finalPrice;
+    }
+  }
+
+  // ── Phase 2: Quantity boost per category using remaining 30% ──
+  for (const pref of selectedPrefs) {
+    const phase2Budget = budgetPerPref * 0.30;
+    const types = categories[pref];
+
+    const boostCandidates = types
+      .flatMap(type =>
+        Object.keys(tempCart)
+          .map(serial => {
+            const p = products.find(x => x.serial_number === serial);
+            if (!p) return null;
+            if (p.product_type?.toLowerCase() !== type) return null;
+            return { ...p, finalPrice: p.price * (1 - (p.discount || 0) / 100) };
+          })
+          .filter(Boolean)
+          .sort(() => Math.random() - 0.5) // shuffle so different products get boosted on regenerate
+      );
+
+    if (!boostCandidates.length) continue;
+
+    let boostRemaining = phase2Budget;
+    const boostThreshold = budgetPerPref * 0.02;
+    let safetyLimit = 500;
+
+    while (boostRemaining > boostThreshold && safetyLimit-- > 0) {
+      let addedAny = false;
+      for (const p of boostCandidates) {
+        if (boostRemaining < p.finalPrice) continue;
+        const maxQty = Math.max(1, Math.floor((budgetPerPref * 0.25) / p.finalPrice));
+        const currentQty = tempCart[p.serial_number] || 0;
+        if (currentQty >= maxQty) continue;
+        tempCart[p.serial_number] = currentQty + 1;
+        boostRemaining -= p.finalPrice;
+        addedAny = true;
+        if (boostRemaining <= boostThreshold) break;
+      }
+      if (!addedAny) break;
+    }
+  }
+
+  // ── Phase 3: Global mop-up of leftover budget ──
+  const totalSpent = Object.entries(tempCart).reduce((sum, [serial, qty]) => {
+    const p = products.find(x => x.serial_number === serial);
+    if (!p) return sum;
+    return sum + (p.price * (1 - (p.discount || 0) / 100)) * qty;
+  }, 0);
+
+  let globalRemaining = budget - totalSpent;
+  const globalThreshold = budget * 0.03;
+
+  if (globalRemaining > globalThreshold && Object.keys(tempCart).length > 0) {
+    const globalCandidates = selectedPrefs
+      .flatMap(pref =>
+        categories[pref].flatMap(type =>
+          Object.keys(tempCart)
+            .map(serial => {
+              const p = products.find(x => x.serial_number === serial);
+              if (!p) return null;
+              if (p.product_type?.toLowerCase() !== type) return null;
+              return { ...p, finalPrice: p.price * (1 - (p.discount || 0) / 100) };
+            })
+            .filter(Boolean)
+            .sort(() => Math.random() - 0.5) // shuffle for variety on regenerate
+        )
+      );
+
+    let safetyLimit = 500;
+    while (globalRemaining > globalThreshold && safetyLimit-- > 0) {
+      let addedAny = false;
+      for (const p of globalCandidates) {
+        if (globalRemaining < p.finalPrice) continue;
+        const maxQty = Math.max(1, Math.floor((budget * 0.20) / p.finalPrice));
+        const currentQty = tempCart[p.serial_number] || 0;
+        if (currentQty >= maxQty) continue;
+        tempCart[p.serial_number] = currentQty + 1;
+        globalRemaining -= p.finalPrice;
+        addedAny = true;
+        if (globalRemaining <= globalThreshold) break;
+      }
+      if (!addedAny) break;
+    }
+  }
+
+  setSuggestedCart(tempCart);
+}, [aiBudget, aiPreferences, products]);
+
+  const handleAiNext = () => {
+    if (aiStep === 0 && !aiBudget) return showError("Please enter a budget.");
+    if (aiStep < 2) { setAiStep(aiStep + 1); }
+    else { generateSuggestions(); }
+  };
+
+  const handleAiBack = () => {
+    if (aiStep > 0) {
+      if (aiStep === 2) setSuggestedCart({});
+      setAiStep(aiStep - 1);
+    }
+  };
+
+  const addSuggestedToCart = () => {
+    setCart(prev => {
+      const updated = { ...prev };
+      Object.entries(suggestedCart).forEach(([serial, qty]) => {
+        updated[serial] = (updated[serial] || 0) + qty;
+      });
+      return updated;
+    });
+    setShowAiModal(false);
+    setAiStep(0);
+    setAiBudget("");
+    setAiPreferences({ kids: false, sound: false, night: false, kidsnight: false });
+    setSuggestedCart({});
+  };
+
+  const handleFinalCheckout = async () => {
+    setIsBookingLoading(true);
+    const order_id = `ORD-${Date.now()}`;
+    const selectedProducts = Object.entries(cart).map(([serial, qty]) => {
+      const product = products.find(p => p.serial_number === serial);
+      return {
+        id: product.id,
+        product_type: product.product_type,
+        quantity: qty,
+        per: product.per,
+        price: product.price,
+        discount: product.discount,
+        serial_number: product.serial_number,
+        productname: product.productname,
+        status: product.status,
+      };
+    });
+
+    if (!selectedProducts.length) { showError("Your cart is empty."); setIsBookingLoading(false); return; }
+    if (!customerDetails.customer_name || !customerDetails.address || !customerDetails.district || !customerDetails.state || !customerDetails.mobile_number) {
+      showError("Please fill all required customer details."); setIsBookingLoading(false); return;
+    }
+
+    const mobile = customerDetails.mobile_number.replace(/\D/g, "").slice(-10);
+    if (mobile.length !== 10) { showError("Mobile number must be 10 digits."); setIsBookingLoading(false); return; }
+
+    const selectedState = customerDetails.state?.trim();
+    const minOrder = states.find(s => s.name === selectedState)?.min_rate;
+    if (minOrder && Number.parseFloat(originalTotal) < minOrder) {
+      showError(`Minimum order for ${selectedState} is ₹${minOrder}. Your total is ₹${originalTotal}.`);
+      setIsBookingLoading(false); return;
+    }
+
+    try {
+      setShowLoader(true);
+      const response = await fetch(`${API_BASE_URL}/api/direct/bookings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id,
+          products: selectedProducts,
+          net_rate: Number.parseFloat(totals.net),
+          you_save: Number.parseFloat(totals.save),
+          processing_fee: Number.parseFloat(totals.processing_fee),
+          total: Number.parseFloat(totals.total),
+          promo_discount: Number.parseFloat(totals.promo_discount || "0.00"),
+          customer_type: customerDetails.customer_type,
+          customer_name: customerDetails.customer_name,
+          address: customerDetails.address,
+          mobile_number: mobile,
+          email: customerDetails.email,
+          district: customerDetails.district,
+          state: customerDetails.state,
+          promocode: appliedPromo?.code || null,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: "blob" });
+        const blob = await pdfResponse.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        const safeName = (customerDetails.customer_name || "order").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+        link.download = `${safeName}-${data.order_id}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } else {
+        const data = await response.json();
+        showError(data.message || "Booking failed.");
+      }
+    } catch (err) {
+      showError("Something went wrong during checkout.");
+    } finally {
+      setShowLoader(false);
+      setIsBookingLoading(false);
+    }
+  };
+
+  const handleRocketComplete = () => {
+    setShowLoader(false);
+    setIsBookingLoading(false);
+    setIsCartOpen(false);
+    setShowModal(false);
+    setShowDetailsModal(false);
+    setShowMinOrderModal(false);
+    setCart({});
+    setCustomerDetails({ customer_name: "", address: "", district: "", state: "", mobile_number: "", email: "", customer_type: "User" });
+    setAppliedPromo(null);
+    setPromocode("");
+    setOriginalTotal(0);
+    setTotalDiscount(0);
+    setTimeout(() => setShowToaster(true), 500);
+  };
+
+  const handleCheckoutClick = () => {
+    Object.keys(cart).length ? (setShowModal(true), setIsCartOpen(false)) : showError("Your cart is empty.");
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    const updatedData = {
-      ...localProductData,
-      [name]: ['price', 'discount', 'quantity'].includes(name) ? (value === '' ? '' : parseFloat(value) || 0) : value,
+    if (name === "mobile_number") {
+      const cleaned = value.replace(/\D/g, "").slice(-10);
+      setCustomerDetails(prev => ({ ...prev, [name]: cleaned }));
+    } else {
+      setCustomerDetails(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleShowDetails = useCallback((product) => {
+    setSelectedProduct(product);
+    setShowDetailsModal(true);
+  }, []);
+
+  const handleCloseDetails = useCallback(() => {
+    setSelectedProduct(null);
+    setShowDetailsModal(false);
+  }, []);
+
+  const handleImageClick = useCallback((media) => {
+    const items = Array.isArray(media) ? media : [];
+    setSelectedImages(items);
+    setCurrentImageIndex(0);
+    setShowImageModal(true);
+  }, []);
+
+  const handleCloseImageModal = useCallback(() => {
+    setShowImageModal(false);
+    setSelectedImages([]);
+    setCurrentImageIndex(0);
+  }, []);
+
+  const handleApplyPromo = useCallback(async (code) => {
+    if (!code) { setAppliedPromo(null); setPromocode(""); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/promocodes`);
+      const promos = await res.json();
+      const found = promos.find(p => p.code.toLowerCase() === code.toLowerCase());
+      if (!found) return showError("Invalid promocode.");
+      if (found.min_amount && Number.parseFloat(originalTotal) < Number.parseFloat(found.min_amount)) {
+        return showError(`Minimum order amount for this promocode is ₹${found.min_amount}.`);
+      }
+      if (found.end_date && new Date(found.end_date) < new Date()) {
+        return showError("This promocode has expired.");
+      }
+      setAppliedPromo(found);
+    } catch {
+      showError("Could not validate promocode.");
+    }
+  }, [originalTotal]);
+
+  const totals = useMemo(() => {
+    let net = 0, save = 0, total = 0, productDiscount = 0, promoDiscount = 0;
+    for (const serial in cart) {
+      const qty = cart[serial];
+      const p = products.find(x => x.serial_number === serial);
+      if (!p) continue;
+      const orig = Number.parseFloat(p.price);
+      const disc = orig * (p.discount / 100);
+      const after = orig - disc;
+      net += orig * qty;
+      productDiscount += disc * qty;
+      total += after * qty;
+      if (appliedPromo && (!appliedPromo.product_type || p.product_type === appliedPromo.product_type)) {
+        promoDiscount += (after * qty * appliedPromo.discount) / 100;
+      }
+    }
+    setOriginalTotal(total);
+    setTotalDiscount(productDiscount);
+    total -= promoDiscount;
+    const fee = total * 0.01;
+    total += fee;
+    save = productDiscount + promoDiscount;
+    return {
+      net: formatPrice(net),
+      save: formatPrice(save),
+      total: formatPrice(total),
+      promo_discount: formatPrice(promoDiscount),
+      product_discount: formatPrice(productDiscount),
+      processing_fee: formatPrice(fee),
     };
-    setLocalProductData(updatedData);
-    setNewProductData(updatedData);
-  };
+  }, [cart, products, appliedPromo]);
 
-  const handleSubmit = async () => {
-    setIsSubmitting(true);
-    try { await onSubmit(localProductData); onClose(); }
-    catch (err) { console.error('NewProductModal error:', err); }
-    finally { setIsSubmitting(false); }
-  };
+  const suggestedTotals = useMemo(() => {
+    let total = 0;
+    for (const serial in suggestedCart) {
+      const qty = suggestedCart[serial];
+      const p = products.find(x => x.serial_number === serial);
+      if (!p) continue;
+      total += (p.price * (1 - p.discount / 100)) * qty;
+    }
+    return formatPrice(total);
+  }, [suggestedCart, products]);
 
-  const fields = [
-    { name: "productname", label: "Product Name", type: "text", placeholder: "e.g. Ground Chakkar", required: true, full: true },
-    { name: "price", label: "Price (₹)", type: "number", placeholder: "0", min: 0, step: 1, required: true },
-    { name: "discount", label: "Discount (%)", type: "number", placeholder: "0", min: 0, max: 100, step: 0.01 },
-    { name: "quantity", label: "Quantity", type: "number", placeholder: "1", min: 1, step: 1, required: true },
-    { name: "per", label: "Unit", type: "text", placeholder: "Box / Piece" },
-    { name: "product_type", label: "Product Type", type: "text", placeholder: "custom", required: true },
-  ];
+  const productTypes = useMemo(() => {
+    const ordered = [
+      "One sound crackers","Ground Chakkar","Flower Pots","Twinkling Star","Rockets","Bombs",
+      "Repeating Shots","Comets Sky Shots","Fancy pencil varieties","Fountain and Fancy Novelties",
+      "Matches","Guns and Caps","Sparklers","Premium Sparklers","Gift Boxes","Kids Special "
+    ];
+    const available = [...new Set(products.filter(p => p.product_type !== "gift_box_dealers").map(p => p.product_type || "Others"))];
+    const filtered = ordered.filter(t => available.includes(t.replace(/ /g, "_").toLowerCase()));
+    return ["All", ...filtered];
+  }, [products]);
 
-  const isValid = localProductData.productname && localProductData.price !== '' && localProductData.quantity !== '' && localProductData.product_type;
+  const grouped = useMemo(() => {
+    const ordered = [
+      "One sound crackers","Ground Chakkar","Flower Pots","Twinkling Star","Rockets","Bombs",
+      "Repeating Shots","Comets Sky Shots","Fancy pencil varieties","Fountain and Fancy Novelties",
+      "Matches","Guns and Caps","Sparklers","Premium Sparklers","Gift Boxes","Kids Special "
+    ];
+    const result = products
+      .filter(p => p.product_type !== "gift_box_dealers" &&
+        (selectedType === "All" || p.product_type === selectedType.replace(/ /g, "_").toLowerCase()) &&
+        (!searchTerm || p.productname.toLowerCase().includes(searchTerm.toLowerCase()) || p.serial_number.toLowerCase().includes(searchTerm.toLowerCase())))
+      .reduce((acc, p) => {
+        const key = p.product_type || "Others";
+        acc[key] = acc[key] || [];
+        acc[key].push(p);
+        return acc;
+      }, {});
+    const orderedResult = {};
+    ordered.map(t => t.replace(/ /g, "_").toLowerCase()).forEach(t => {
+      if (result[t]) orderedResult[t] = result[t].sort(serialSort);
+    });
+    return orderedResult;
+  }, [products, selectedType, searchTerm]);
+
+  const cartItemCount = Object.values(cart).reduce((a, b) => a + b, 0);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  /* ── Reusable summary rows ── */
+  const SummaryRows = () => (
+    <div className="space-y-2 text-sm">
+      <div className="flex justify-between text-gray-600"><span>Net Total</span><span className="font-medium text-gray-800">₹{totals.net}</span></div>
+      <div className="flex justify-between text-emerald-600"><span>Product Discount</span><span>−₹{totals.product_discount}</span></div>
+      {appliedPromo && <div className="flex justify-between text-emerald-600"><span>Promo ({appliedPromo.code})</span><span>−₹{totals.promo_discount}</span></div>}
+      <div className="flex justify-between text-emerald-600 font-medium"><span>You Save</span><span>−₹{totals.save}</span></div>
+      <div className="flex justify-between text-gray-500"><span>Processing Fee (1%)</span><span>₹{totals.processing_fee}</span></div>
+      <div className="flex justify-between text-orange-600 font-bold text-base pt-2 border-t border-orange-100"><span>Total</span><span>₹{totals.total}</span></div>
+    </div>
+  );
+
+  const PromoSelector = () => (
+    <div className="space-y-2">
+      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Promo Code</label>
+      <select value={promocode} onChange={e => setPromocode(e.target.value)}
+        className="w-full px-3 py-2.5 rounded-xl border border-orange-200 bg-orange-50 text-sm focus:ring-2 focus:ring-orange-400 focus:border-transparent transition-all">
+        <option value="">Select a promocode</option>
+        {promocodes.map(promo => (
+          <option key={promo.id} value={promo.code}>
+            {promo.code} ({formatPercentage(promo.discount)}% OFF{promo.min_amount ? `, Min: ₹${promo.min_amount}` : ""}{promo.product_type ? `, Type: ${promo.product_type.replace(/_/g, " ")}` : ""}{promo.end_date ? `, Exp: ${new Date(promo.end_date).toLocaleDateString()}` : ""})
+          </option>
+        ))}
+        <option value="custom">Enter custom code</option>
+      </select>
+      {promocode === "custom" && (
+        <input type="text" value={promocode === "custom" ? "" : promocode} onChange={e => setPromocode(e.target.value)}
+          placeholder="Enter custom code"
+          className="w-full px-3 py-2.5 rounded-xl border border-orange-200 bg-orange-50 text-sm focus:ring-2 focus:ring-orange-400 transition-all" />
+      )}
+      {appliedPromo && (
+        <p className="text-emerald-600 text-xs bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">
+          ✓ {appliedPromo.code} — {formatPercentage(appliedPromo.discount)}% OFF applied
+        </p>
+      )}
+    </div>
+  );
 
   return (
-    <Modal isOpen={isOpen} onRequestClose={onClose} className="fixed inset-0 flex items-center justify-center p-4" overlayClassName="fixed inset-0 bg-black/50">
-      <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl">
-        <h2 className="text-xl font-extrabold text-slate-800 mb-6 text-center">✦ Add Custom Product</h2>
-        <div className="grid grid-cols-2 gap-3.5">
-          {fields.map(({ name, label, type, placeholder, min, max, step, required, full }) => (
-            <div key={name} className={full ? "col-span-2" : "col-span-1"}>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
-                {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-              </label>
-              <input
-                name={name} type={type} value={localProductData[name] || ''} onChange={handleInputChange}
-                placeholder={placeholder}
-                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
-                {...(min !== undefined ? { min } : {})} {...(max !== undefined ? { max } : {})} {...(step !== undefined ? { step } : {})}
-              />
+    <>
+      <Navbar />
+      <ToasterNotification show={showToaster} onClose={() => setShowToaster(false)} />
+
+      <AnimatePresence>
+        {showLoader && <RocketLoader onComplete={handleRocketComplete} />}
+        {showSuccess && <SuccessAnimation />}
+
+        {/* ── Error Modal ── */}
+        {showMinOrderModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 flex items-center justify-center z-[96] bg-black/60 backdrop-blur-md px-4">
+            <motion.div initial={{ scale: 0.85, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-red-100">
+              <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <X className="w-7 h-7 text-red-500" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-800 mb-2">Hold on!</h3>
+              <p className="text-gray-500 text-sm leading-relaxed mb-6">{minOrderMessage}</p>
+              <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                onClick={() => setShowMinOrderModal(false)}
+                className="bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold px-8 py-3 rounded-2xl shadow-lg shadow-red-200">
+                Got it
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* ── Product Details Modal ── */}
+        {showDetailsModal && selectedProduct && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-md px-4"
+            onClick={handleCloseDetails}>
+            <motion.div initial={{ scale: 0.85, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-800 mb-2">{selectedProduct.productname}</h2>
+                    <div className="flex items-center gap-2">
+                      {selectedProduct.discount > 0 && (
+                        <span className="bg-orange-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                          {formatPercentage(selectedProduct.discount)}% OFF
+                        </span>
+                      )}
+                      <span className="text-orange-600 font-bold text-lg">
+                        ₹{formatPrice(selectedProduct.price * (1 - selectedProduct.discount / 100))}
+                        <span className="text-sm font-normal text-gray-500 ml-1">/ {selectedProduct.per}</span>
+                      </span>
+                    </div>
+                  </div>
+                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                    onClick={handleCloseDetails}
+                    className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors">
+                    <X className="w-4 h-4 text-gray-600" />
+                  </motion.button>
+                </div>
+                <ModernCarousel media={selectedProduct.images} onImageClick={handleImageClick} />
+                <div className="space-y-4 mt-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Description</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed">{selectedProduct.description || "Experience the magic of celebrations with our premium quality fireworks."}</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={() => { addToCart(selectedProduct); handleCloseDetails(); }}
+                      className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold py-3 rounded-2xl shadow-lg shadow-orange-200 flex items-center justify-center gap-2">
+                      <FaPlus className="w-3 h-3" /> Add to Cart
+                    </motion.button>
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={handleCloseDetails}
+                      className="px-5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl transition-colors">
+                      Close
+                    </motion.button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* ── Cart Modal ── */}
+        {isCartOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-md"
+            onClick={() => { setIsCartOpen(false); setIsExpandedCart(false); }}>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 40 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 40 }}
+              onClick={e => e.stopPropagation()}
+              className={`${isExpandedCart ? 'w-full max-w-4xl h-[90vh]' : 'w-full max-w-lg sm:mx-4 max-h-[90vh] sm:rounded-3xl rounded-t-3xl'} bg-white flex flex-col shadow-2xl overflow-hidden`}>
+
+              {/* Cart Header */}
+              <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-orange-100 rounded-xl flex items-center justify-center">
+                    <ShoppingCart className="w-4 h-4 text-orange-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-800">Your Cart</h3>
+                    <p className="text-xs text-gray-400">{cartItemCount} item{cartItemCount !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!isExpandedCart && Object.keys(cart).length > 0 && (
+                    <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                      onClick={() => setIsExpandedCart(true)}
+                      className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors">
+                      <FaExpand className="w-3.5 h-3.5 text-gray-600" />
+                    </motion.button>
+                  )}
+                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                    onClick={() => { setIsCartOpen(false); setIsExpandedCart(false); }}
+                    className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors">
+                    <X className="w-4 h-4 text-gray-600" />
+                  </motion.button>
+                </div>
+              </div>
+
+              {/* Cart Items */}
+              <div className={`flex-1 overflow-y-auto px-4 py-4 space-y-3 ${isExpandedCart ? '' : 'max-h-[38vh]'}`}>
+                {Object.keys(cart).length === 0 ? (
+                  <div className="text-center py-16">
+                    <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <ShoppingCart className="w-8 h-8 text-orange-300" />
+                    </div>
+                    <p className="text-gray-400 font-medium">Your cart is empty</p>
+                    <p className="text-gray-300 text-sm mt-1">Add some fireworks to get started!</p>
+                  </div>
+                ) : (
+                  Object.entries(cart).map(([serial, qty]) => {
+                    const product = products.find(p => p.serial_number === serial);
+                    if (!product) return null;
+                    const discount = (product.price * product.discount) / 100;
+                    const priceAfterDiscount = formatPrice(product.price - discount);
+                    const imageSrc = Array.isArray(product.images) ? product.images.filter(item => !item.includes("/video/") && !item.toLowerCase().endsWith(".gif"))[0] || need : need;
+                    return (
+                      <motion.div key={serial} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                        className="flex items-center gap-3 p-3 bg-orange-50 rounded-2xl border border-orange-100 hover:border-orange-200 transition-colors">
+                        <img src={imageSrc} alt={product.productname}
+                          className="w-16 h-16 rounded-xl object-cover bg-white border border-orange-100 cursor-pointer flex-shrink-0"
+                          onClick={() => handleImageClick(product.images)} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 line-clamp-2 leading-tight">{product.productname}</p>
+                          <p className="text-xs text-orange-600 font-bold mt-0.5">₹{priceAfterDiscount} × {qty}</p>
+                          <p className="text-xs text-gray-400">= ₹{formatPrice((product.price - discount) * qty)}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                            onClick={() => removeFromCart(product)}
+                            className="w-7 h-7 bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex items-center justify-center transition-colors">
+                            <FaMinus className="w-2.5 h-2.5" />
+                          </motion.button>
+                          <span className="text-sm font-bold w-7 text-center text-gray-800">{qty}</span>
+                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                            onClick={() => addToCart(product)}
+                            className="w-7 h-7 bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex items-center justify-center transition-colors">
+                            <FaPlus className="w-2.5 h-2.5" />
+                          </motion.button>
+                        </div>
+                      </motion.div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Cart Footer */}
+              {isExpandedCart ? (
+                <div className="px-6 py-5 border-t border-gray-100 bg-white">
+                  <SummaryRows />
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    onClick={() => setIsExpandedCart(false)}
+                    className="mt-4 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl flex items-center justify-center gap-2 transition-colors">
+                    <FaCompress className="w-3.5 h-3.5" /> Collapse View
+                  </motion.button>
+                </div>
+              ) : (
+                <div className="px-5 py-5 border-t border-gray-100 bg-white space-y-4">
+                  {/* Min order marquee */}
+                  <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-2.5 overflow-hidden">
+                    <p className="text-xs font-semibold text-amber-700 mb-1">Minimum Purchase Rates</p>
+                    <div className="text-xs text-amber-600 overflow-hidden">
+                      <div className="animate-marquee whitespace-nowrap">
+                        {states.map(s => `${s.name}: ₹${s.min_rate}`).join(" • ")}
+                      </div>
+                    </div>
+                  </div>
+                  <PromoSelector />
+                  <div className="text-xs text-red-500 space-y-1 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">
+                    <p>⚠ Product images are for reference only — actual products may vary.</p>
+                    <p>⚠ Delivery charges are payable to transport. Pickup at your own cost.</p>
+                  </div>
+                  <SummaryRows />
+                  <div className="flex gap-3 pt-1">
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={() => setCart({})}
+                      className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl transition-colors text-sm">
+                      Clear Cart
+                    </motion.button>
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={handleCheckoutClick}
+                      className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg shadow-orange-200 text-sm">
+                      Checkout →
+                    </motion.button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* ── Image Lightbox Modal ── */}
+        {showImageModal && selectedImages.length > 0 && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center backdrop-blur-sm"
+            onClick={handleCloseImageModal}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="relative max-w-4xl max-h-[90vh] w-full mx-4">
+              <AnimatePresence mode="wait">
+                <motion.div key={currentImageIndex} initial={{ opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.25 }}>
+                  {selectedImages[currentImageIndex]?.includes("/video/") ? (
+                    <video src={selectedImages[currentImageIndex]} autoPlay muted loop className="w-full max-h-[80vh] object-contain rounded-2xl" />
+                  ) : (
+                    <img src={selectedImages[currentImageIndex] || "/placeholder.svg"} alt="Product"
+                      className="w-full max-h-[80vh] object-contain rounded-2xl" />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+              <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                onClick={handleCloseImageModal}
+                className="absolute top-3 right-3 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white transition-colors">
+                <X className="w-5 h-5" />
+              </motion.button>
+              {selectedImages.length > 1 && (
+                <>
+                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                    onClick={() => setCurrentImageIndex(prev => prev === 0 ? selectedImages.length - 1 : prev - 1)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white transition-colors">
+                    <FaArrowLeft className="w-4 h-4" />
+                  </motion.button>
+                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                    onClick={() => setCurrentImageIndex(prev => prev === selectedImages.length - 1 ? 0 : prev + 1)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white transition-colors">
+                    <FaArrowRight className="w-4 h-4" />
+                  </motion.button>
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1 text-white text-xs">
+                    {currentImageIndex + 1} / {selectedImages.length}
+                  </div>
+                  <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex gap-2 max-w-sm overflow-x-auto p-1 mobile:translate-y-40">
+                    {selectedImages.map((image, index) => (
+                      <motion.button key={index} whileHover={{ scale: 1.1 }}
+                        onClick={() => setCurrentImageIndex(index)}
+                        className={`flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden border-2 transition-all ${index === currentImageIndex ? "border-orange-400 opacity-100" : "border-white/20 hover:border-white/50 opacity-60 hover:opacity-80"}`}>
+                        {image?.includes("/video/") ? <video src={image} className="w-full h-full object-cover" /> : <img src={image || "/placeholder.svg"} alt={`Thumb ${index + 1}`} className="w-full h-full object-cover" />}
+                      </motion.button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* ── AI Assistant Modal ── */}
+        {showAiModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-md px-4"
+            onClick={() => { setShowAiModal(false); setAiStep(0); setAiBudget(""); setAiPreferences({ kids: false, sound: false, night: false, kidsnight: false }); setSuggestedCart({}); }}>
+            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+
+              {/* AI Modal Header */}
+              <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-200">
+                    <span className="text-xl">🤖</span>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-800">Smart AI Assistant</h2>
+                    <p className="text-xs text-gray-400">Let me build your perfect cart</p>
+                  </div>
+                </div>
+                {/* Step indicator */}
+                <div className="flex items-center gap-2 mt-4">
+                  {["Budget", "Preferences", "Suggestions"].map((label, i) => (
+                    <div key={i} className="flex-1 flex items-center gap-1">
+                      <div className={`flex-1 h-1 rounded-full transition-all duration-300 ${i <= aiStep ? 'bg-orange-500' : 'bg-gray-200'}`} />
+                      {i < 2 && <div className={`w-1 h-1 rounded-full ${i < aiStep ? 'bg-orange-500' : 'bg-gray-200'}`} />}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between text-xs text-gray-400 mt-1 px-0.5">
+                  {["Budget", "Preferences", "Suggestions"].map((label, i) => (
+                    <span key={i} className={i === aiStep ? 'text-orange-500 font-medium' : ''}>{label}</span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-6">
+                <AnimatePresence mode="wait">
+                  {aiStep === 0 && (
+                    <motion.div key="step0" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-4">
+                      <p className="text-gray-600 text-sm">What's your total budget for fireworks?</p>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">₹</span>
+                        <input type="number" value={aiBudget} onChange={e => setAiBudget(e.target.value)}
+                          className="w-full pl-8 pr-4 py-3.5 border border-orange-200 rounded-2xl bg-orange-50 focus:ring-2 focus:ring-orange-400 focus:border-transparent text-lg font-semibold text-gray-800 transition-all"
+                          placeholder="Enter amount" />
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {aiStep === 1 && (
+                    <motion.div key="step1" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-4">
+                      <p className="text-gray-600 text-sm">What kind of fireworks do you prefer?</p>
+                      <div className="space-y-3">
+                        { [  
+                            { key: 'kids',      emoji: '🧒', label: 'Kids Friendly',       desc: 'Twinkling Star, Fancy Pencil, Novelties' },
+                            { key: 'sound',     emoji: '💥', label: 'Sound Crackers',       desc: 'Bombs, Atom Bombs, One Sound' },
+                            { key: 'night',     emoji: '🚀', label: 'Night Sky Display',    desc: 'Rockets, Repeating Shots, Sky Shots' },
+                            { key: 'kidsnight', emoji: '✨', label: 'Kids Night Crackers',  desc: 'Sparklers, Flower Pots, Fountains, Ground Chakkar' },
+                          ].map(({ key, emoji, label, desc }) => (
+                          <label key={key}
+                            className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all ${aiPreferences[key] ? 'border-orange-400 bg-orange-50' : 'border-gray-100 bg-gray-50 hover:border-orange-200'}`}>
+                            <input type="checkbox" checked={aiPreferences[key]}
+                              onChange={e => setAiPreferences(prev => ({ ...prev, [key]: e.target.checked }))}
+                              className="sr-only" />
+                            <span className="text-2xl">{emoji}</span>
+                            <div className="flex-1">
+                              <p className={`font-semibold text-sm ${aiPreferences[key] ? 'text-orange-700' : 'text-gray-700'}`}>{label}</p>
+                              <p className="text-xs text-gray-400">{desc}</p>
+                            </div>
+                            <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all ${aiPreferences[key] ? 'bg-orange-500 border-orange-500' : 'border-gray-300'}`}>
+                              {aiPreferences[key] && <span className="text-white text-xs">✓</span>}
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {aiStep === 2 && (
+                    <motion.div key="step2" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-semibold text-gray-800">Suggested Items</p>
+                          <p className="text-xs text-gray-400">{Object.keys(suggestedCart).length} items · ≈ ₹{suggestedTotals}</p>
+                        </div>
+                        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                          onClick={generateSuggestions}
+                          className="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors">
+                          <span>Regenerate</span>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </motion.button>
+                      </div>
+
+                      {Object.keys(suggestedCart).length === 0 ? (
+                        <div className="text-center py-10 text-gray-400">
+                          <p className="text-sm">No suggestions generated.</p>
+                          <p className="text-xs mt-1">Try increasing the budget or changing preferences.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
+                          {Object.entries(suggestedCart).map(([serial, qty]) => {
+                            const product = products.find(p => p.serial_number === serial);
+                            if (!product) return null;
+                            const discount = (product.price * product.discount) / 100;
+                            const priceAfterDiscount = formatPrice(product.price - discount);
+                            const imageSrc = Array.isArray(product.images) && product.images.length > 0
+                              ? product.images.find(img => !img.includes("/video/")) || product.images[0] : need;
+                            return (
+                              <div key={serial} className="flex items-center gap-3 p-3 bg-orange-50 rounded-2xl border border-orange-100">
+                                <img src={imageSrc} alt={product.productname}
+                                  className="w-14 h-14 rounded-xl object-cover bg-white border border-orange-100 flex-shrink-0"
+                                  onError={e => e.target.src = need} />
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-gray-800 text-sm line-clamp-2 leading-tight">{product.productname}</p>
+                                  <p className="text-xs text-orange-600 mt-0.5">₹{priceAfterDiscount} × {qty}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                                    onClick={() => removeFromSuggestedCart(product)}
+                                    className="w-7 h-7 bg-orange-100 hover:bg-orange-200 rounded-lg flex items-center justify-center text-orange-700 transition-colors">
+                                    <FaMinus className="w-2.5 h-2.5" />
+                                  </motion.button>
+                                  <span className="w-8 text-center font-bold text-sm text-gray-800">{qty}</span>
+                                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                                    onClick={() => addToSuggestedCart(product)}
+                                    className="w-7 h-7 bg-orange-100 hover:bg-orange-200 rounded-lg flex items-center justify-center text-orange-700 transition-colors">
+                                    <FaPlus className="w-2.5 h-2.5" />
+                                  </motion.button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {Object.keys(suggestedCart).length > 0 && (
+                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                          onClick={addSuggestedToCart}
+                          className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white py-3.5 rounded-2xl font-semibold shadow-lg shadow-emerald-200 text-sm transition-all">
+                          ✓ Add All to Cart
+                        </motion.button>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div className="mt-6 flex justify-between items-center">
+                  {aiStep > 0 ? (
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={handleAiBack}
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2.5 rounded-2xl text-sm font-medium transition-colors">
+                      ← Back
+                    </motion.button>
+                  ) : <div />}
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    onClick={handleAiNext}
+                    className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-6 py-2.5 rounded-2xl text-sm font-semibold shadow-lg shadow-orange-200 transition-all">
+                    {aiStep < 2 ? "Next →" : "Generate"}
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Main Content ── */}
+      <main className="hundred:pt-48 mobile:pt-34 px-4 sm:px-8 max-w-7xl mx-auto pb-32">
+
+        {/* ── Top Controls Bar ── */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col sm:flex-row gap-3 mb-6 mobile:-mt-20">
+          {/* Search */}
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input type="text" placeholder="Search by name or code…"
+              value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 bg-white border border-orange-100 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent shadow-sm text-sm transition-all" />
+          </div>
+          {/* Filter */}
+          <div className="relative">
+            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <select value={selectedType} onChange={e => setSelectedType(e.target.value)}
+              className="pl-11 pr-10 py-3 bg-white border border-orange-100 rounded-2xl focus:ring-2 focus:ring-orange-400 focus:border-transparent shadow-sm text-sm appearance-none cursor-pointer min-w-[200px] transition-all">
+              {productTypes.map(type => <option key={type} value={type}>{type}</option>)}
+            </select>
+          </div>
+        </motion.div>
+
+        {/* ── Action Buttons ── */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-center gap-4 mb-10">
+          <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+            onClick={downloadPDF}
+            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-6 py-3 rounded-2xl shadow-lg shadow-orange-200 flex items-center gap-2.5 text-sm transition-all">
+            <Download className="w-4 h-4" />
+            Download Pricelist
+          </motion.button>
+
+          <div className="relative">
+            <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.95 }}
+              onClick={() => setShowAiModal(true)}
+              className="relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-2xl shadow-lg shadow-orange-200 w-14 h-14 flex items-center justify-center transition-all">
+              <span className="text-2xl">🤖</span>
+            </motion.button>
+            <motion.span initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+              className="absolute -top-2 -right-12 px-2.5 py-1 bg-red-500 text-white text-xs font-bold rounded-full shadow-md whitespace-nowrap">
+              Need Help?
+            </motion.span>
+          </div>
+        </motion.div>
+
+        {/* ── Product Groups ── */}
+        {Object.entries(grouped).map(([type, items], groupIndex) => (
+          <motion.section key={type}
+            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: groupIndex * 0.05 }}
+            className="mb-16">
+            {/* Section Header */}
+            <div className="flex items-center gap-4 mb-7">
+              <div className="w-1 h-8 bg-gradient-to-b from-orange-500 to-orange-300 rounded-full flex-shrink-0" />
+              <h2 className="text-2xl font-bold text-gray-800 capitalize">{type.replace(/_/g, " ")}</h2>
+              <div className="flex-1 h-px bg-gradient-to-r from-orange-200 to-transparent" />
+              <span className="text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-100 px-3 py-1.5 rounded-full">
+                {items.length} items
+              </span>
             </div>
-          ))}
-        </div>
-        <div className="flex gap-2.5 mt-6 justify-end">
-          <button
-            onClick={onClose} disabled={isSubmitting}
-            className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit} disabled={isSubmitting || !isValid}
-            className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all duration-200 flex items-center gap-2
-              ${isSubmitting || !isValid
-                ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                : "bg-gradient-to-br from-emerald-500 to-emerald-400 shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-500"
-              }`}
-          >
-            {isSubmitting ? <><Spinner white />Adding...</> : "Add to Cart"}
-          </button>
-        </div>
+
+            {/* Product Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {items.map((product, idx) => {
+                if (!product) return null;
+                const originalPrice = Number.parseFloat(product.price);
+                const discount = originalPrice * (product.discount / 100);
+                const finalPrice = product.discount > 0 ? formatPrice(originalPrice - discount) : formatPrice(originalPrice);
+                const count = cart[product.serial_number] || 0;
+                return (
+                  <motion.div key={product.serial_number}
+                    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.03 }}
+                    whileHover={{ y: -6, scale: 1.015 }}
+                    className="group bg-white rounded-3xl shadow-sm hover:shadow-xl border border-gray-100 hover:border-orange-100 transition-all duration-300 overflow-hidden">
+                    {/* Image area */}
+                    <div className="relative">
+                      <ModernCarousel media={product.images} onImageClick={handleImageClick} />
+                      {product.discount > 0 && (
+                        <div className="absolute top-3 left-3 bg-gradient-to-r from-red-500 to-rose-500 text-white text-xs font-bold px-2.5 py-1 rounded-xl shadow-lg">
+                          {formatPercentage(product.discount)}% OFF
+                        </div>
+                      )}
+                      <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                        onClick={() => handleShowDetails(product)}
+                        className="absolute top-3 right-3 w-8 h-8 bg-white/90 hover:bg-white backdrop-blur-sm rounded-xl flex items-center justify-center shadow-md transition-colors">
+                        <FaInfoCircle className="text-orange-500 w-3.5 h-3.5" />
+                      </motion.button>
+                    </div>
+
+                    {/* Info area */}
+                    <div className="p-4">
+                      <p className="text-xs text-gray-400 font-mono mb-1">{product.serial_number}</p>
+                      <h3 className="text-sm font-bold text-gray-800 line-clamp-2 leading-snug mb-2 group-hover:text-orange-600 transition-colors">
+                        {product.productname}
+                      </h3>
+                      <div className="flex items-baseline gap-2 mb-3">
+                        {product.discount > 0 && (
+                          <span className="text-xs text-gray-400 line-through">₹{formatPrice(originalPrice)}</span>
+                        )}
+                        <span className="text-base font-bold text-orange-600">₹{finalPrice}</span>
+                        <span className="text-xs text-gray-400">/ {product.per}</span>
+                      </div>
+
+                      {/* Cart controls */}
+                      <AnimatePresence mode="wait">
+                        {count > 0 ? (
+                          <motion.div key="qty"
+                            initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.85, opacity: 0 }}
+                            className="flex items-center justify-between bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-1.5 shadow-md shadow-orange-200">
+                            <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
+                              onClick={() => removeFromCart(product)}
+                              className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center text-white transition-colors">
+                              <FaMinus className="w-2.5 h-2.5" />
+                            </motion.button>
+                            <span className="text-white font-bold text-sm px-2 min-w-[2rem] text-center">{count}</span>
+                            <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
+                              onClick={() => addToCart(product)}
+                              className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center text-white transition-colors">
+                              <FaPlus className="w-2.5 h-2.5" />
+                            </motion.button>
+                          </motion.div>
+                        ) : (
+                          <motion.button key="add"
+                            initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.85, opacity: 0 }}
+                            whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+                            onClick={() => addToCart(product)}
+                            className="w-full bg-orange-50 hover:bg-gradient-to-r hover:from-orange-500 hover:to-orange-600 text-orange-600 hover:text-white border border-orange-200 hover:border-transparent font-semibold py-2.5 rounded-xl transition-all duration-300 text-sm flex items-center justify-center gap-1.5">
+                            <FaPlus className="w-2.5 h-2.5" />
+                            Add
+                          </motion.button>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.section>
+        ))}
+      </main>
+
+      {/* ── Floating Cart Button ── */}
+      <div className="fixed hundred:bottom-6 mobile:bottom-22 right-6 z-20">
+        <motion.button onClick={() => setIsCartOpen(true)}
+          whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}
+          className={`relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-2xl shadow-2xl shadow-orange-300 w-16 h-16 flex items-center justify-center transition-all ${isCartOpen ? "hidden" : ""}`}>
+          <ShoppingCart className="w-6 h-6" />
+          {cartItemCount > 0 && (
+            <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
+              className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-6 h-6 flex items-center justify-center rounded-full font-bold shadow-md">
+              {cartItemCount}
+            </motion.span>
+          )}
+        </motion.button>
       </div>
-    </Modal>
+
+      {/* ── Checkout / Customer Details Modal ── */}
+      <AnimatePresence>
+        {showModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-md px-4">
+            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                    <ShoppingCart className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-800">Customer Details</h2>
+                    <p className="text-xs text-gray-400">Fill in your details to confirm booking</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {["customer_name", "address", "mobile_number", "email"].map(field => (
+                    <div key={field}>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        {field.replace(/_/g, " ")}{field !== "email" && " *"}
+                      </label>
+                      <input name={field} type={field === "email" ? "email" : "text"}
+                        placeholder={`Enter ${field.replace(/_/g, " ")}`}
+                        value={customerDetails[field]} onChange={handleInputChange}
+                        className="w-full px-4 py-3 border border-orange-100 rounded-2xl bg-orange-50 focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm transition-all"
+                        required={field !== "email"} />
+                    </div>
+                  ))}
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">State *</label>
+                    <select name="state" value={customerDetails.state}
+                      onChange={e => setCustomerDetails(prev => ({ ...prev, state: e.target.value, district: "" }))}
+                      className="w-full px-4 py-3 border border-orange-100 rounded-2xl bg-orange-50 focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm transition-all" required>
+                      <option value="">Select State</option>
+                      {states.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </div>
+
+                  {customerDetails.state && (
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">City / Place *</label>
+                      <select name="district" value={customerDetails.district} onChange={handleInputChange}
+                        className="w-full px-4 py-3 border border-orange-100 rounded-2xl bg-orange-50 focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm transition-all" required>
+                        <option value="">Select Place / City</option>
+                        {districts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  <PromoSelector />
+
+                  {/* Order Summary */}
+                  <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Order Summary</p>
+                    <SummaryRows />
+                  </div>
+                </div>
+
+                <div className="mt-6 flex gap-3">
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowModal(false)}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl text-sm transition-colors">
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: isBookingLoading ? 1 : 1.02 }}
+                    whileTap={{ scale: isBookingLoading ? 1 : 0.98 }}
+                    onClick={handleFinalCheckout} disabled={isBookingLoading}
+                    className={`flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg shadow-orange-200 flex items-center justify-center gap-2 text-sm transition-all ${isBookingLoading ? "opacity-75 cursor-not-allowed" : ""}`}>
+                    {isBookingLoading ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Booking…
+                      </>
+                    ) : "Confirm Booking →"}
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <style jsx>{`
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .animate-marquee { display: inline-block; white-space: nowrap; animation: marquee 15s linear infinite; }
+        @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+      `}</style>
+    </>
   );
 };
 
-const CancelConfirmModal = ({ isOpen, onClose, onConfirm, quotationId, loading = false }) => (
-  <Modal isOpen={isOpen} onRequestClose={onClose} className="fixed inset-0 flex items-center justify-center p-4" overlayClassName="fixed inset-0 bg-black/50">
-    <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl text-center">
-      <div className="text-5xl mb-4">⚠️</div>
-      <h3 className="text-lg font-extrabold text-slate-800 mb-2.5">Cancel Quotation?</h3>
-      <p className="text-slate-500 text-sm mb-6">
-        Are you sure you want to cancel <strong className="text-slate-800">{quotationId}</strong>? This cannot be undone.
-      </p>
-      <div className="flex gap-2.5 justify-center">
-        <button
-          onClick={onClose} disabled={loading}
-          className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors disabled:opacity-50"
-        >
-          Keep It
-        </button>
-        <button
-          onClick={onConfirm} disabled={loading}
-          className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-red-500 to-red-400 shadow-lg shadow-red-200 hover:from-red-600 hover:to-red-500 transition-all duration-200 flex items-center gap-2 disabled:opacity-50"
-        >
-          {loading ? <><Spinner white />Cancelling...</> : "Yes, Cancel"}
-        </button>
-      </div>
-    </div>
-  </Modal>
-);
-
-const PDFDownloadConfirmModal = ({ isOpen, onClose, onYes, fileName }) => (
-  <Modal isOpen={isOpen} onRequestClose={onClose} className="fixed inset-0 flex items-center justify-center p-4" overlayClassName="fixed inset-0 bg-black/50">
-    <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl text-center">
-      <div className="text-5xl mb-4">📄</div>
-      <h3 className="text-lg font-extrabold text-slate-800 mb-2.5">Download PDF?</h3>
-      <p className="text-slate-500 text-sm mb-6">Quotation created successfully. Would you like to download the PDF now?</p>
-      <div className="flex gap-2.5 justify-center">
-        <button
-          onClick={onClose}
-          className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors"
-        >
-          No Thanks
-        </button>
-        <button
-          onClick={onYes}
-          className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-indigo-500 to-indigo-400 shadow-lg shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500 transition-all duration-200"
-        >
-          Download PDF
-        </button>
-      </div>
-    </div>
-  </Modal>
-);
-
-export default function Direct() {
-  const [customers, setCustomers] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [quotations, setQuotations] = useState([]);
-  const [filteredQuotations, setFilteredQuotations] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(6);
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [cart, setCart] = useState([]);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [successMessage, setSuccessMessage] = useState("");
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [quotationId, setQuotationId] = useState(null);
-  const [isQuotationCreated, setIsQuotationCreated] = useState(false);
-  const [modalIsOpen, setModalIsOpen] = useState(false);
-  const [modalMode, setModalMode] = useState(null);
-  const [modalCart, setModalCart] = useState([]);
-  const [modalSelectedProduct, setModalSelectedProduct] = useState(null);
-  const [modalSelectedCustomer, setModalSelectedCustomer] = useState(null);
-  const [orderId, setOrderId] = useState("");
-  const [additionalDiscount, setAdditionalDiscount] = useState(0);
-  const [modalAdditionalDiscount, setModalAdditionalDiscount] = useState(0);
-  const [modalChangeDiscount, setModalChangeDiscount] = useState(0);
-  const [newProductModalIsOpen, setNewProductModalIsOpen] = useState(false);
-  const [newProductData, setNewProductData] = useState({ productname: '', price: '', discount: 0, quantity: 1, per: '', product_type: 'custom' });
-  const [newProductIsForModal, setNewProductIsForModal] = useState(false);
-  const [lastAddedProduct, setLastAddedProduct] = useState(null);
-  const [modalLastAddedProduct, setModalLastAddedProduct] = useState(null);
-  const [changeDiscount, setChangeDiscount] = useState(0);
-  const [createLoading, setCreateLoading] = useState(false);
-  const [modalSubmitLoading, setModalSubmitLoading] = useState(false);
-  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
-  const [cancelLoading, setCancelLoading] = useState(false);
-  const [quotationToCancel, setQuotationToCancel] = useState(null);
-  const [pdfConfirmOpen, setPdfConfirmOpen] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState(null);
-  const [pdfFileName, setPdfFileName] = useState("");
-  const [exportLoading, setExportLoading] = useState(false);
-
-  const triggerPdfDownload = (url, fileName) => {
-    const link = document.createElement('a');
-    link.href = url; link.setAttribute('download', fileName);
-    document.body.appendChild(link); link.click();
-    document.body.removeChild(link); window.URL.revokeObjectURL(url);
-  };
-  const handlePdfYes = () => { if (pdfUrl && pdfFileName) triggerPdfDownload(pdfUrl, pdfFileName); setPdfConfirmOpen(false); setPdfUrl(null); setPdfFileName(""); };
-  const handlePdfNo = () => { if (pdfUrl) window.URL.revokeObjectURL(pdfUrl); setPdfConfirmOpen(false); setPdfUrl(null); setPdfFileName(""); };
-
-  const fetchQuotations = async () => {
-    try {
-      const quotationsResponse = await axios.get(`${API_BASE_URL}/api/direct/quotations`);
-      const data = Array.isArray(quotationsResponse.data) ? quotationsResponse.data : [];
-      const validQuotations = data.filter(q => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id));
-      setQuotations(validQuotations); setFilteredQuotations(validQuotations);
-    } catch (err) { console.error("Failed to fetch quotations:", err.message); setError(`Failed to fetch quotations: ${err.message}`); }
-  };
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [customersResponse, productsResponse, quotationsResponse] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/direct/customers`),
-          axios.get(`${API_BASE_URL}/api/direct/aproducts`),
-          axios.get(`${API_BASE_URL}/api/direct/quotations`),
-        ]);
-        const sortedCustomers = Array.isArray(customersResponse.data) ? customersResponse.data.sort((a, b) => (b.id || 0) - (a.id || 0)) : [];
-        const validProducts = Array.isArray(productsResponse.data) ? productsResponse.data.filter(p => p != null && typeof p === 'object' && typeof p.id !== 'undefined' && typeof p.product_type === 'string' && typeof p.productname === 'string') : [];
-        setCustomers(sortedCustomers); setProducts(validProducts);
-        const data = Array.isArray(quotationsResponse.data) ? quotationsResponse.data : [];
-        const validQuotations = data.filter(q => q.quotation_id && q.quotation_id !== "undefined" && /^[a-zA-Z0-9-_]+$/.test(q.quotation_id));
-        setQuotations(validQuotations); setFilteredQuotations(validQuotations);
-      } catch (err) { console.error('Fetch data error:', err); setError(`Failed to fetch data: ${err.message}`); setProducts([]); }
-      finally { setLoading(false); }
-    };
-    fetchData();
-    const intervalId = setInterval(fetchQuotations, 30000);
-    return () => clearInterval(intervalId);
-  }, []);
-
-  const handleSearch = useCallback(debounce((query) => {
-    const lowerQuery = query.toLowerCase();
-    const filtered = quotations.filter(q => q.quotation_id.toLowerCase().includes(lowerQuery) || (q.customer_name || '').toLowerCase().includes(lowerQuery) || q.status.toLowerCase().includes(lowerQuery));
-    setFilteredQuotations(filtered); setCurrentPage(1);
-  }, 300), [quotations]);
-
-  const handleSearchChange = (e) => { const query = e.target.value; setSearchQuery(query); handleSearch(query); };
-
-  const downloadCustomersExcel = () => {
-    try {
-      const workbook = XLSX.utils.book_new();
-      const customerGroups = { Customer: customers.filter(c => c.customer_type === 'Customer'), Agent: customers.filter(c => c.customer_type === 'Agent'), 'Customer of Agent': customers.filter(c => c.customer_type === 'Customer of Selected Agent') };
-      for (const [type, group] of Object.entries(customerGroups)) {
-        if (group.length === 0) continue;
-        const data = group.map(customer => ({ ID: customer.id || 'N/A', Name: customer.name || 'N/A', 'Customer Type': customer.customer_type || 'User', ...(type === 'Customer of Agent' ? { 'Agent Name': customer.agent_name || 'N/A' } : {}), 'Mobile Number': customer.mobile_number || 'N/A', Email: customer.email || 'N/A', Address: customer.address || 'N/A', District: customer.district || 'N/A', State: customer.state || 'N/A' }));
-        const worksheet = XLSX.utils.json_to_sheet(data);
-        XLSX.utils.book_append_sheet(workbook, worksheet, type);
-      }
-      XLSX.writeFile(workbook, 'customers_export.xlsx');
-    } catch (err) { console.error('Failed to download customers Excel:', err); setError(`Failed to download customers Excel: ${err.message}`); }
-  };
-
-  const exportToExcel = () => {
-    try {
-      const workbook = XLSX.utils.book_new();
-      const customerGroups = { Customer: customers.filter(c => c.customer_type === "Customer"), Agent: customers.filter(c => c.customer_type === "Agent"), "Customer of Agent": customers.filter(c => c.customer_type === "Customer of Selected Agent") };
-      let hasAnyData = false;
-      for (const [type, group] of Object.entries(customerGroups)) {
-        if (group.length === 0) continue; hasAnyData = true;
-        const data = group.map(customer => ({ ID: customer.id || "N/A", Name: customer.name || "N/A", "Customer Type": customer.customer_type || "User", ...(type === "Customer of Agent" ? { "Agent Name": customer.agent_name || "N/A" } : {}), "Mobile Number": customer.mobile_number || "N/A", Email: customer.email || "N/A", Address: customer.address || "N/A", District: customer.district || "N/A", State: customer.state || "N/A" }));
-        const worksheet = XLSX.utils.json_to_sheet(data);
-        XLSX.utils.book_append_sheet(workbook, worksheet, type);
-      }
-      if (!hasAnyData) { setError("No customer data available to export"); return; }
-      XLSX.writeFile(workbook, "customers_export.xlsx");
-      setSuccessMessage("Customers exported successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 4000);
-    } catch (err) { console.error("Failed to export customers:", err); setError(`Failed to export customers: ${err.message}`); }
-  };
-
-  const exportQuotationsToExcel = async () => {
-    setError(""); setSuccessMessage(""); setExportLoading(true);
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/direct/export-quotations-excel`, { responseType: "blob", timeout: 300000 });
-      const contentDisposition = response.headers["content-disposition"];
-      const filename = contentDisposition?.split("filename=")[1]?.replace(/["']/g, "") || `MadhunishaCrackers_Quotations_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement("a"); link.href = url; link.setAttribute("download", filename); document.body.appendChild(link); link.click(); document.body.removeChild(link); window.URL.revokeObjectURL(url);
-      setSuccessMessage("Quotations exported successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 4000);
-    } catch (err) {
-      console.error("Export quotations failed:", err);
-      let message = "Failed to export quotations. Please try again.";
-      if (err.code === "ECONNABORTED") message = "Export timed out. The file may be very large.";
-      else if (err.response?.status === 500) message = "Server error during export.";
-      setError(message);
-    } finally { setExportLoading(false); }
-  };
-
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentQuotations = filteredQuotations.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredQuotations.length / itemsPerPage);
-  const paginate = (pageNumber) => { if (pageNumber >= 1 && pageNumber <= totalPages) setCurrentPage(pageNumber); };
-
-  const addToCart = (isModal = false, customProduct = null, directProduct = null) => {
-    const setTargetCart = isModal ? setModalCart : setCart;
-    const targetSelectedProduct = isModal ? modalSelectedProduct : selectedProduct;
-    const setTargetSelectedProduct = isModal ? setModalSelectedProduct : setSelectedProduct;
-    const targetDiscount = isModal ? modalChangeDiscount : changeDiscount;
-    const setTargetLastAddedProduct = isModal ? setModalLastAddedProduct : setLastAddedProduct;
-    if (!customProduct && !targetSelectedProduct && !directProduct) { setError("Please select a product"); return; }
-    let product;
-    if (customProduct) {
-      product = { ...customProduct, id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, product_type: customProduct.product_type || 'custom', price: Math.round(Number(customProduct.price) || 0), quantity: parseInt(customProduct.quantity) || 1, discount: parseFloat(customProduct.discount) || targetDiscount, initialDiscount: parseFloat(customProduct.discount) || targetDiscount, per: customProduct.per || 'Unit' };
-    } else if (directProduct) {
-      product = { ...directProduct, id: directProduct.id, price: Math.round(Number(directProduct.price) || 0), quantity: 1, discount: parseFloat(directProduct.discount) || targetDiscount, initialDiscount: parseFloat(directProduct.discount) || 0, per: directProduct.per || 'Unit' };
-    } else {
-      const [id, type] = targetSelectedProduct.value.split("-");
-      product = products.find(p => p.id.toString() === id && p.product_type === type);
-      if (!product) { setError("Product not found"); return; }
-      product = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: 1, discount: parseFloat(product.discount) || targetDiscount, initialDiscount: parseFloat(product.discount) || 0, per: product.per || 'Unit' };
-    }
-    setTargetCart(prev => {
-      const exists = prev.find(item => item.id === product.id && item.product_type === product.product_type);
-      return exists ? prev.map(item => item.id === product.id && item.product_type === product.product_type ? { ...item, quantity: item.quantity + 1 } : item) : [...prev, product];
-    });
-    setTargetSelectedProduct(null);
-    setTargetLastAddedProduct({ id: product.id, product_type: product.product_type });
-    setError("");
-  };
-
-  const updateQuantity = (id, type, quantity, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, quantity: quantity < 0 ? 0 : quantity } : item)); };
-  const updateDiscount = (id, type, discount, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, discount: discount < 0 ? 0 : discount > 100 ? 100 : discount } : item)); };
-  const updatePrice = (id, type, price, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, price: price < 0 ? 0 : price } : item)); };
-  const removeFromCart = (id, type, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.filter(item => !(item.id === id && item.product_type === type))); };
-
-  const calculateNetRate = (targetCart = []) => targetCart.reduce((total, item) => total + getEffectivePrice(item) * item.quantity, 0).toFixed(2);
-  const calculateYouSave = (targetCart = []) => targetCart.reduce((total, item) => total + getEffectivePrice(item) * (item.discount / 100) * item.quantity, 0).toFixed(2);
-  const calculateProcessingFee = (targetCart = [], additionalDiscount = 0) => { const subtotal = targetCart.reduce((total, item) => total + getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity, 0); return (subtotal * (1 - additionalDiscount / 100) * 0.01).toFixed(2); };
-  const calculateTotal = (targetCart = [], additionalDiscount = 0) => { const subtotal = targetCart.reduce((total, item) => total + getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity, 0); const discountedSubtotal = subtotal * (1 - additionalDiscount / 100); return (discountedSubtotal + discountedSubtotal * 0.01).toFixed(2); };
-
-  const createQuotation = async () => {
-    if (!selectedCustomer || !cart.length) return setError("Customer and products are required");
-    if (cart.some(i => i.quantity === 0)) return setError("Please remove products with zero quantity");
-    setCreateLoading(true); setError("");
-    const customer = customers.find(c => c.id.toString() === selectedCustomer.value);
-    if (!customer) { setCreateLoading(false); return setError("Invalid customer"); }
-    const quotation_id = `QUO-${Date.now()}`;
-    try {
-      const subtotal = parseFloat(calculateNetRate(cart)) - parseFloat(calculateYouSave(cart));
-      const discountedSubtotal = subtotal * (1 - additionalDiscount / 100);
-      const processingFee = discountedSubtotal * 0.01;
-      const payload = { customer_id: Number(selectedCustomer.value), quotation_id, products: cart.map(item => ({ id: item.id, product_type: item.product_type, productname: item.productname, price: getEffectivePrice(item), discount: parseFloat(item.discount) || 0, quantity: parseInt(item.quantity) || 0, per: item.per || 'Unit', serial_number: item.serial_number || undefined })), net_rate: parseFloat(calculateNetRate(cart)), you_save: parseFloat(calculateYouSave(cart)), processing_fee: processingFee, total: parseFloat(calculateTotal(cart, additionalDiscount)), promo_discount: 0, additional_discount: parseFloat(additionalDiscount.toFixed(2)), customer_type: customer.customer_type || "User", customer_name: customer.name, address: customer.address, mobile_number: customer.mobile_number, email: customer.email, district: customer.district, state: customer.state, status: "pending" };
-      const response = await axios.post(`${API_BASE_URL}/api/direct/quotations`, payload);
-      const newQuotationId = response.data.quotation_id;
-      if (!newQuotationId || newQuotationId === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(newQuotationId)) throw new Error("Invalid quotation ID returned from server");
-      setQuotationId(newQuotationId); setIsQuotationCreated(true);
-      setSuccessMessage("Quotation created successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000);
-      setQuotations(prev => [{ ...payload, created_at: new Date().toISOString(), customer_name: customer.name, total: payload.total }, ...prev]);
-      setFilteredQuotations(prev => [{ ...payload, created_at: new Date().toISOString(), customer_name: customer.name, total: payload.total }, ...prev]);
-      const pdfRes = await axios.get(`${API_BASE_URL}/api/direct/quotation/${newQuotationId}`, { responseType: "blob" });
-      const blobUrl = window.URL.createObjectURL(new Blob([pdfRes.data]));
-      const safeName = (customer.name || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-      setPdfUrl(blobUrl); setPdfFileName(`${safeName}-${newQuotationId}-quotation.pdf`); setPdfConfirmOpen(true);
-      setCart([]); setSelectedCustomer(null); setSelectedProduct(null); setAdditionalDiscount(0); setChangeDiscount(0); setLastAddedProduct(null); setQuotationId(null); setIsQuotationCreated(false);
-    } catch (err) { console.error("Create quotation error:", err); setError(`Failed to create quotation: ${err.message}`); }
-    finally { setCreateLoading(false); }
-  };
-
-  const editQuotation = async (quotation = null) => {
-    if (quotation) {
-      if (!quotation.quotation_id || quotation.quotation_id === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotation.quotation_id)) { setError("Invalid or missing quotation ID"); return; }
-      setModalMode("edit");
-      setModalSelectedCustomer({ value: quotation.customer_id?.toString(), label: `${quotation.customer_name} (${quotation.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : quotation.customer_type || "User"} - ${quotation.district || "N/A"})` });
-      setQuotationId(quotation.quotation_id); setModalAdditionalDiscount(parseFloat(quotation.additional_discount) || 0); setModalChangeDiscount(0);
-      try {
-        const prods = typeof quotation.products === "string" ? JSON.parse(quotation.products) : quotation.products;
-        setModalCart(Array.isArray(prods) ? prods.map(p => ({ ...p, id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, price: parseFloat(p.price) || 0, discount: parseFloat(p.discount) || 0, initialDiscount: parseFloat(p.discount) || 0, quantity: parseInt(p.quantity) || 0, per: p.per || 'Unit', product_type: p.product_type || 'custom' })) : []);
-      } catch (e) { setModalCart([]); setError("Failed to parse quotation products"); return; }
-      setModalIsOpen(true); return;
-    }
-    if (!modalSelectedCustomer || !modalCart.length) return setError("Customer and products are required");
-    if (modalCart.some(item => item.quantity === 0)) return setError("Please remove products with zero quantity");
-    if (!quotationId || quotationId === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotationId)) { setError("Invalid or missing quotation ID"); return; }
-    setModalSubmitLoading(true);
-    try {
-      const customer = customers.find(c => c.id.toString() === modalSelectedCustomer.value);
-      if (!customer) throw new Error("Invalid customer");
-      const subtotal = parseFloat(calculateNetRate(modalCart)) - parseFloat(calculateYouSave(modalCart));
-      const discountedSubtotal = subtotal * (1 - modalAdditionalDiscount / 100);
-      const processingFee = discountedSubtotal * 0.01;
-      const payload = { customer_id: Number(modalSelectedCustomer.value), products: modalCart.map(item => ({ id: item.id, product_type: item.product_type, productname: item.productname, price: parseFloat(item.price) || 0, discount: parseFloat(item.discount) || 0, quantity: parseInt(item.quantity) || 0, per: item.per || 'Unit' })), net_rate: parseFloat(calculateNetRate(modalCart)) || 0, you_save: parseFloat(calculateYouSave(modalCart)) || 0, processing_fee: parseFloat(processingFee) || 0, total: parseFloat(calculateTotal(modalCart, modalAdditionalDiscount)) || 0, promo_discount: 0, additional_discount: parseFloat(modalAdditionalDiscount.toFixed(2)) || 0, status: "pending" };
-      const response = await axios.put(`${API_BASE_URL}/api/direct/quotations/${quotationId}`, payload);
-      const updatedId = response.data.quotation_id || quotationId;
-      if (!updatedId) throw new Error("Invalid quotation ID returned");
-      setSuccessMessage("Quotation updated successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000);
-      setQuotations(prev => prev.map(q => q.quotation_id === quotationId ? { ...q, ...payload, customer_name: customer.name, total: payload.total } : q));
-      setFilteredQuotations(prev => prev.map(q => q.quotation_id === quotationId ? { ...q, ...payload, customer_name: customer.name, total: payload.total } : q));
-      const pdfRes = await axios.get(`${API_BASE_URL}/api/direct/quotation/${updatedId}`, { responseType: "blob" });
-      const blobUrl = window.URL.createObjectURL(new Blob([pdfRes.data]));
-      const safeName = (customer.name || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-      setPdfUrl(blobUrl); setPdfFileName(`${safeName}-${updatedId}-quotation.pdf`); setPdfConfirmOpen(true);
-      closeModal();
-    } catch (err) { console.error("Edit quotation error:", err); setError(`Failed to update quotation: ${err.message}`); }
-    finally { setModalSubmitLoading(false); }
-  };
-
-  const convertToBooking = async (quotation = null) => {
-    if (quotation) {
-      if (!quotation.quotation_id || quotation.quotation_id === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotation.quotation_id)) { setError("Invalid or missing quotation ID"); return; }
-      setModalMode("book");
-      setModalSelectedCustomer({ value: quotation.customer_id?.toString(), label: `${quotation.customer_name} (${quotation.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : quotation.customer_type || "User"} - ${quotation.district || "N/A"})` });
-      setQuotationId(quotation.quotation_id); setOrderId(`ORD-${Date.now()}`); setModalAdditionalDiscount(parseFloat(quotation.additional_discount) || 0); setModalChangeDiscount(0);
-      try {
-        const prods = typeof quotation.products === "string" ? JSON.parse(quotation.products) : quotation.products;
-        setModalCart(Array.isArray(prods) ? prods.map(p => ({ ...p, id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, price: parseFloat(p.price) || 0, discount: parseFloat(p.discount) || 0, initialDiscount: parseFloat(p.discount) || 0, quantity: parseInt(p.quantity) || 0, per: p.per || 'Unit', product_type: p.product_type || 'custom' })) : []);
-      } catch (e) { setModalCart([]); setError("Failed to parse quotation products"); return; }
-      setModalIsOpen(true); return;
-    }
-    if (!modalSelectedCustomer || !modalCart.length || !orderId) return setError("Customer, products, and order ID are required");
-    if (modalCart.some(item => item.quantity === 0)) return setError("Please remove products with zero quantity");
-    if (!quotationId || quotationId === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(quotationId)) { setError("Invalid or missing quotation ID"); return; }
-    setModalSubmitLoading(true);
-    try {
-      const customer = customers.find(c => c.id.toString() === modalSelectedCustomer.value);
-      if (!customer) throw new Error("Invalid customer");
-      const subtotal = parseFloat(calculateNetRate(modalCart)) - parseFloat(calculateYouSave(modalCart));
-      const discountedSubtotal = subtotal * (1 - modalAdditionalDiscount / 100);
-      const processingFee = discountedSubtotal * 0.01;
-      const payload = { customer_id: Number(modalSelectedCustomer.value), order_id: orderId, quotation_id: quotationId, products: modalCart.map(item => ({ id: item.id, product_type: item.product_type, productname: item.productname, price: getEffectivePrice(item), discount: parseFloat(item.discount) || 0, quantity: parseInt(item.quantity) || 0, per: item.per || 'Unit', serial_number: item.serial_number || undefined })), net_rate: parseFloat(calculateNetRate(modalCart)), you_save: parseFloat(calculateYouSave(modalCart)), processing_fee: processingFee, total: parseFloat(calculateTotal(modalCart, modalAdditionalDiscount)), promo_discount: 0, additional_discount: parseFloat(modalAdditionalDiscount.toFixed(2)), customer_type: customer.customer_type || "User", customer_name: customer.name, address: customer.address, mobile_number: customer.mobile_number, email: customer.email, district: customer.district, state: customer.state };
-      const response = await axios.post(`${API_BASE_URL}/api/direct/bookings`, payload);
-      setSuccessMessage("Booking created successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000);
-      setQuotations(prev => prev.map(q => q.quotation_id === quotationId ? { ...q, status: "booked" } : q));
-      setFilteredQuotations(prev => prev.map(q => q.quotation_id === quotationId ? { ...q, status: "booked" } : q));
-      const pdfRes = await axios.get(`${API_BASE_URL}/api/direct/invoice/${response.data.order_id}`, { responseType: "blob" });
-      const blobUrl = window.URL.createObjectURL(new Blob([pdfRes.data]));
-      const safeName = (customer.name || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-      setPdfUrl(blobUrl); setPdfFileName(`${safeName}-${response.data.order_id}-invoice.pdf`); setPdfConfirmOpen(true);
-      closeModal();
-    } catch (err) { console.error("Convert to booking error:", err); setError(`Failed to create booking: ${err.message}`); }
-    finally { setModalSubmitLoading(false); }
-  };
-
-  const cancelQuotation = async () => {
-    const target = quotationToCancel;
-    if (!target || target === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(target)) { setError("Invalid quotation ID"); setCancelConfirmOpen(false); return; }
-    setCancelLoading(true);
-    try {
-      await axios.put(`${API_BASE_URL}/api/direct/quotations/cancel/${target}`);
-      setSuccessMessage("Quotation cancelled successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000);
-      setQuotations(prev => prev.map(q => q.quotation_id === target ? { ...q, status: "cancelled" } : q));
-      setFilteredQuotations(prev => prev.map(q => q.quotation_id === target ? { ...q, status: "cancelled" } : q));
-    } catch (err) { setError(`Failed to cancel: ${err.response?.data?.message || err.message}`); }
-    finally { setCancelLoading(false); setCancelConfirmOpen(false); setQuotationToCancel(null); }
-  };
-
-  const openCancelConfirm = (id) => { setQuotationToCancel(id); setCancelConfirmOpen(true); };
-  const openNewProductModal = (isModal = false) => { setNewProductIsForModal(isModal); setNewProductModalIsOpen(true); setNewProductData({ productname: '', price: '', discount: isModal ? modalChangeDiscount : changeDiscount, quantity: 1, per: '', product_type: 'custom' }); };
-  const closeNewProductModal = () => { setNewProductModalIsOpen(false); setNewProductData({ productname: '', price: '', discount: 0, quantity: 1, per: '', product_type: 'custom' }); setError(""); };
-  const handleAddNewProduct = (productData) => {
-    if (!productData.productname) return setError("Product name is required");
-    if (productData.price === '' || productData.price < 0) return setError("Price must be a non-negative number");
-    if (productData.quantity === '' || productData.quantity < 1) return setError("Quantity must be at least 1");
-    if (productData.discount < 0 || productData.discount > 100) return setError("Discount must be between 0 and 100");
-    if (!productData.product_type) return setError("Product type is required");
-    addToCart(newProductIsForModal, productData); closeNewProductModal();
-  };
-  const closeModal = () => { setModalIsOpen(false); setModalMode(null); setModalCart([]); setModalSelectedCustomer(null); setModalSelectedProduct(null); setOrderId(""); setModalAdditionalDiscount(0); setModalChangeDiscount(0); setModalLastAddedProduct(null); setError(""); setSuccessMessage(""); };
-
-  return (
-    <DirectErrorBoundary>
-      <div className="min-h-screen bg-slate-50">
-        <Sidebar />
-        <Logout />
-        <div className="hundred:ml-64 mobile:ml-0 mobile:px-3 w-auto hundred:max-w-screen">
-          <div className="mx-auto px-6 py-8 w-full">
-
-            <div className="mb-8 text-center">
-              <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Direct Booking</h1>
-              <p className="text-slate-400 mt-1.5 text-sm">Create quotations and convert them to bookings</p>
-            </div>
-
-            {loading && (
-              <div className="text-center py-5 text-indigo-500 font-semibold text-sm flex items-center justify-center gap-2">
-                <Spinner />
-                Loading...
-              </div>
-            )}
-            {error && (
-              <div className="bg-red-50 border border-red-200 border-l-4 border-l-red-500 text-red-700 px-4 py-3.5 rounded-xl mb-5 text-sm font-medium">
-                ⚠️ {error}
-              </div>
-            )}
-            {showSuccess && (
-              <div className="bg-emerald-50 border border-emerald-200 border-l-4 border-l-emerald-500 text-emerald-800 px-4 py-3.5 rounded-xl mb-5 text-sm font-medium">
-                ✓ {successMessage}
-              </div>
-            )}
-
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-8 py-7 mb-8 mobile:p-4 w-full">
-              <div className="mb-6">
-                <label className="block text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2">
-                  Select Customer
-                </label>
-                <Select
-                  value={selectedCustomer}
-                  onChange={setSelectedCustomer}
-                  options={customers.map(c => ({ value: c.id.toString(), label: `${c.name} (${c.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : c.customer_type || "User"} - ${c.district || "N/A"})` }))}
-                  placeholder="Search customer"
-                  isClearable
-                  styles={selectStyles}
-                />
-              </div>
-
-              <div className="h-px bg-slate-100 -mx-8 mobile:-mx-4 mb-6" />
-
-              <QuotationTableErrorBoundary>
-                <QuotationTable
-                  cart={cart} setCart={setCart} setModalCart={setModalCart}
-                  products={products} selectedProduct={selectedProduct} setSelectedProduct={setSelectedProduct}
-                  addToCart={addToCart} updateQuantity={updateQuantity} updateDiscount={updateDiscount}
-                  updatePrice={updatePrice} removeFromCart={removeFromCart}
-                  calculateNetRate={calculateNetRate} calculateYouSave={calculateYouSave}
-                  calculateProcessingFee={calculateProcessingFee} calculateTotal={calculateTotal}
-                  styles={styles} additionalDiscount={additionalDiscount} setAdditionalDiscount={setAdditionalDiscount}
-                  changeDiscount={changeDiscount} setChangeDiscount={setChangeDiscount}
-                  openNewProductModal={openNewProductModal}
-                  lastAddedProduct={lastAddedProduct} setLastAddedProduct={setLastAddedProduct}
-                />
-              </QuotationTableErrorBoundary>
-
-              <div className="flex justify-center mt-7">
-                <button
-                  onClick={createQuotation}
-                  disabled={!selectedCustomer || !cart.length || createLoading}
-                  className={`flex items-center gap-2.5 px-10 py-3.5 rounded-xl font-extrabold text-sm tracking-wide transition-all duration-200
-                    ${!selectedCustomer || !cart.length || createLoading
-                      ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                      : "bg-gradient-to-br from-indigo-500 to-indigo-400 text-white shadow-xl shadow-indigo-200 hover:from-indigo-600 hover:to-indigo-500"
-                    }`}
-                >
-                  {createLoading ? (
-                    <><Spinner white />Creating...</>
-                  ) : (
-                    <>
-                      <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4" /><path d="M3 12a9 9 0 1018 0A9 9 0 003 12z" /></svg>
-                      Create Quotation
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-                <h2 className="text-xl font-extrabold text-slate-800">All Quotations</h2>
-                <div className="relative min-w-[280px]">
-                  <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
-                  <input
-                    type="text" value={searchQuery} onChange={handleSearchChange}
-                    placeholder="Search quotations..."
-                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white outline-none focus:border-indigo-400 transition-colors box-border"
-                  />
-                </div>
-              </div>
-
-              {currentQuotations.length ? (
-                <>
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
-                    {currentQuotations.map((quotation) => (
-                      <div
-                        key={quotation.quotation_id}
-                        className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
-                      >
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <div className="text-xs font-extrabold text-indigo-500 tracking-wide">{quotation.quotation_id}</div>
-                            <div className="text-base font-bold text-slate-800 mt-0.5">{quotation.customer_name || "N/A"}</div>
-                          </div>
-                          <StatusBadge status={quotation.status} />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 mb-3.5">
-                          {[
-                            ["📍 Location", quotation.district || "N/A"],
-                            ["💰 Total", `₹${parseFloat(quotation.total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`],
-                            ["📅 Created", new Date(quotation.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })],
-                          ].map(([label, value]) => (
-                            <div key={label} className="bg-slate-50 rounded-lg px-2.5 py-2">
-                              <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">{label}</div>
-                              <div className="text-xs font-semibold text-slate-700 mt-0.5">{value}</div>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex gap-2">
-                          <QuotActionBtn label="Edit" onClick={() => editQuotation(quotation)} disabled={quotation.status !== "pending"} color="#f59e0b" />
-                          <QuotActionBtn label="Book" onClick={() => convertToBooking(quotation)} disabled={quotation.status !== "pending"} color="#10b981" />
-                          <QuotActionBtn label="Cancel" onClick={() => openCancelConfirm(quotation.quotation_id)} disabled={quotation.status !== "pending"} color="#ef4444" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex justify-center gap-1.5 mt-6 flex-wrap">
-                    <PaginBtn key="prev" label="← Prev" onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} />
-                    {Array.from({ length: Math.min(4, totalPages) }, (_, i) => {
-                      const maxPagesToShow = 4;
-                      let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-                      let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
-                      if (endPage === totalPages) startPage = Math.max(1, totalPages - maxPagesToShow + 1);
-                      const page = startPage + i;
-                      if (page > endPage) return null;
-                      return <PaginBtn key={page} label={page} onClick={() => paginate(page)} active={currentPage === page} />;
-                    }).filter(Boolean)}
-                    <PaginBtn key="next" label="Next →" onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages} />
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-12 text-slate-400 font-medium bg-white border border-slate-200 rounded-2xl">
-                  {searchQuery ? "No quotations match your search" : "No quotations yet — create your first one above"}
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3 justify-center flex-wrap mb-4">
-              {[
-                { label: "Export Customers", onClick: exportToExcel, cls: "bg-emerald-500 shadow-emerald-200", icon: "📊", loadingState: false },
-                { label: "Export Quotations", onClick: exportQuotationsToExcel, cls: "bg-violet-500 shadow-violet-200", icon: "📋", loadingState: exportLoading },
-                { label: "Download Customers Excel", onClick: downloadCustomersExcel, cls: "bg-blue-500 shadow-blue-200", icon: "⬇️", loadingState: false },
-              ].map(({ label, onClick, cls, icon, loadingState }) => (
-                <button
-                  key={label} onClick={onClick} disabled={loadingState}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border-none font-bold text-sm text-white cursor-pointer shadow-lg hover:opacity-85 transition-opacity disabled:opacity-60 ${cls}`}
-                >
-                  {loadingState ? <><Spinner white />{label}...</> : <>{icon} {label}</>}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <Modal isOpen={modalIsOpen} onRequestClose={closeModal} className="fixed inset-0 flex items-center justify-center p-4" overlayClassName="fixed inset-0 bg-black/60" key="quotation-modal">
-          <div className="bg-white rounded-2xl px-8 py-7 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-extrabold text-slate-800">
-                {modalMode === "edit" ? "✏️ Edit Quotation" : "🚀 Convert to Booking"}
-              </h2>
-              <button
-                onClick={closeModal} disabled={modalSubmitLoading}
-                className="bg-slate-100 border-none rounded-lg px-3 py-1.5 cursor-pointer font-bold text-slate-500 text-xs hover:bg-slate-200 transition-colors disabled:opacity-50"
-              >
-                ✕ Close
-              </button>
-            </div>
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-xs">⚠️ {error}</div>
-            )}
-            {modalMode === "book" && (
-              <div className="mb-5">
-                <label className="block text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2">Order ID</label>
-                <input
-                  type="text" value={orderId} onChange={e => setOrderId(e.target.value)} placeholder="Enter Order ID"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
-                />
-              </div>
-            )}
-            <FormFields
-              isEdit={modalMode === "edit"} customers={customers}
-              modalSelectedCustomer={modalSelectedCustomer} setModalSelectedCustomer={setModalSelectedCustomer}
-              modalCart={modalCart} setModalCart={setModalCart} products={products}
-              modalSelectedProduct={modalSelectedProduct} setModalSelectedProduct={setModalSelectedProduct}
-              addToCart={addToCart} updateQuantity={updateQuantity} updateDiscount={updateDiscount}
-              updatePrice={updatePrice} removeFromCart={removeFromCart}
-              calculateNetRate={calculateNetRate} calculateYouSave={calculateYouSave}
-              calculateProcessingFee={calculateProcessingFee} calculateTotal={calculateTotal}
-              handleSubmit={modalMode === "edit" ? () => editQuotation() : () => convertToBooking()}
-              closeModal={closeModal} styles={styles}
-              modalAdditionalDiscount={modalAdditionalDiscount} setModalAdditionalDiscount={setModalAdditionalDiscount}
-              modalChangeDiscount={modalChangeDiscount} setModalChangeDiscount={setModalChangeDiscount}
-              openNewProductModal={openNewProductModal}
-              modalLastAddedProduct={modalLastAddedProduct} setModalLastAddedProduct={setModalLastAddedProduct}
-              submitLoading={modalSubmitLoading}
-            />
-          </div>
-        </Modal>
-
-        <CancelConfirmModal isOpen={cancelConfirmOpen} onClose={() => { if (!cancelLoading) setCancelConfirmOpen(false); }} onConfirm={cancelQuotation} quotationId={quotationToCancel} loading={cancelLoading} />
-        <PDFDownloadConfirmModal isOpen={pdfConfirmOpen} onClose={handlePdfNo} onYes={handlePdfYes} fileName={pdfFileName} />
-        <NewProductModal isOpen={newProductModalIsOpen} onClose={closeNewProductModal} onSubmit={handleAddNewProduct} newProductData={newProductData} setNewProductData={setNewProductData} />
-
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    </DirectErrorBoundary>
-  );
-}
+export default Pricelist;
