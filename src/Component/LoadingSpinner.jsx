@@ -1,0 +1,56 @@
+import { motion } from "framer-motion";
+import { Sparkles } from 'lucide-react';
+import { useState, useEffect } from 'react';
+
+const LoadingSpinner = () => {
+  const [showSlowNetworkMessage, setShowSlowNetworkMessage] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSlowNetworkMessage(true);
+    }, 5000); // Show message after 5 seconds
+
+    return () => clearTimeout(timer); // Clean up timer on component unmount
+  }, []);
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-[100] bg-black">
+      <div className="text-center">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+          className="w-20 h-20 mx-auto mb-6"
+        >
+          <div className="w-full h-full border-4 border-orange-200 border-t-orange-600 rounded-full"></div>
+        </motion.div>
+        
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4"
+        >
+          <h2 className="text-2xl font-bold text-orange-600 mb-2">Loading Products</h2>
+          {showSlowNetworkMessage ? (
+            <p className="text-orange-500 max-w-xs">
+              Your network speed is low, and it takes more time to fetch products. Please check your network connection and try again.
+            </p>
+          ) : (
+            <p className="text-orange-500">Please wait while we fetch the latest fireworks...</p>
+          )}
+        </motion.div>
+
+        <motion.div
+          animate={{ scale: [1, 1.2, 1] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+          className="flex items-center justify-center gap-2 text-orange-400"
+        >
+          <Sparkles className="w-5 h-5" />
+          <span className="text-sm font-medium">MN Crackers</span>
+          <Sparkles className="w-5 h-5" />
+        </motion.div>
+      </div>
+    </div>
+  );
+};
+
+export default LoadingSpinner;
