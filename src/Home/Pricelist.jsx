@@ -86,6 +86,10 @@ const Pricelist = () => {
     const pageWidth = doc.internal.pageSize.getWidth();
     let yOffset = 20;
 
+    // Dynamic year — reflects the current calendar year in both the title
+    // text printed on the PDF and the downloaded file name.
+    const year = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric' });
+
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text('MADHU NISHA CRACKERS', pageWidth / 2, yOffset, { align: 'center' });
@@ -94,7 +98,7 @@ const Pricelist = () => {
     doc.setFont('helvetica', 'normal');
     doc.text('Website - www.madhunishacrackers.com', pageWidth / 2, yOffset, { align: 'center' });
     yOffset += 10;
-    doc.text('Retail Pricelist - 2025', pageWidth / 2, yOffset, { align: 'center' });
+    doc.text(`Retail Pricelist - ${year}`, pageWidth / 2, yOffset, { align: 'center' });
     yOffset += 10;
     doc.text('Contact Number - 9487524689', pageWidth / 2, yOffset, { align: 'center' });
     yOffset += 20;
@@ -244,7 +248,8 @@ const Pricelist = () => {
       yOffset += 6;
     }
 
-    doc.save('MNC_Pricelist_2025.pdf');
+    // Filename reflects the current year dynamically (e.g. MNC_Pricelist_2026.pdf)
+    doc.save(`MNC_Pricelist_${year}.pdf`);
   };
 
   useEffect(() => {
@@ -572,7 +577,9 @@ const Pricelist = () => {
 
   const handleFinalCheckout = async () => {
     setIsBookingLoading(true);
-    const order_id = `ORD-${Date.now()}`;
+    // Note: order_id is no longer generated on the client. The server
+    // assigns a sequential, year-prefixed ID (e.g. 2026ORD1) and returns
+    // it in the response — used below for the invoice download filename.
     const selectedProducts = Object.entries(cart).map(([serial, qty]) => {
       const product = products.find(p => p.serial_number === serial);
       return {
@@ -609,7 +616,6 @@ const Pricelist = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          order_id,
           products: selectedProducts,
           net_rate: Number.parseFloat(totals.net),
           you_save: Number.parseFloat(totals.save),

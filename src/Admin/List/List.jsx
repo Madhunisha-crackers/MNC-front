@@ -248,6 +248,10 @@ export default function List() {
     const pageWidth = doc.internal.pageSize.getWidth();
     let yOffset = 20;
 
+    // Dynamic year — always reflects the current calendar year, in both the
+    // printed pricelist title and the downloaded file name below.
+    const year = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric' });
+
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text('MADHU NISHA CRACKERS', pageWidth / 2, yOffset, { align: 'center' });
@@ -256,7 +260,6 @@ export default function List() {
     doc.setFont('helvetica', 'normal');
     doc.text('www.madhunishacrackers.com   |   +91 94875 94689', pageWidth / 2, yOffset, { align: 'center' });
     yOffset += 10;
-    const year = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric' });
     doc.text(`PRICELIST - ${year}`, pageWidth / 2, yOffset, { align: 'center' });
     yOffset += 10;
 
@@ -415,7 +418,9 @@ export default function List() {
       yOffset += 6; // gap between sections
     }
 
-    doc.save('MNC_Pricelist_2025.pdf');
+    // Filename now reflects the current year dynamically instead of a
+    // hardcoded year.
+    doc.save(`MNC_Pricelist_${year}.pdf`);
   };
 
   const renderMedia = (media, idx, sizeClass) => {
@@ -462,7 +467,7 @@ export default function List() {
               <input type="text" name="productname" value={formData.productname} onChange={handleInputChange} placeholder="e.g. Ground Chakkar" className={inputCls} required />
             </Field>
             <Field label="Serial Number" required>
-              <input type="text" name="serial_number" value={formData.serial_number} onChange={handleInputChange} placeholder="e.g. SN-001" className={inputCls} required />
+              <input type="text" name="serial_number" value={formData.serial_number} onChange={handleInputChange} placeholder="e.g. SN-001 or AB102" className={inputCls} required />
             </Field>
             <Field label="Price (₹)" required>
               <input type="number" name="price" value={formData.price} onChange={handleInputChange} step="0.01" placeholder="0.00" className={inputCls} required />
