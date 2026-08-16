@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { FaBox, FaList, FaChartBar, FaUsers, FaMapMarkerAlt, FaBars, FaTimes, FaLocationArrow, FaShoppingCart, FaTruck, FaImage, FaTag, FaAddressBook } from 'react-icons/fa';
+import { FaBox, FaList, FaChartBar, FaUsers, FaMapMarkerAlt, FaBars, FaTimes, FaLocationArrow, FaShoppingCart, FaTruck, FaImage, FaTag, FaAddressBook, FaStar } from 'react-icons/fa';
 import axios from 'axios';
 import { API_BASE_URL } from '../../../Config';
 
@@ -67,6 +67,7 @@ export default function Sidebar() {
     },
     { name: 'Report', path: '/report', icon: <FaChartBar className="mr-2" /> },
     { name: 'Sales Analysis', path: '/sales-analysis', icon: <FaAddressBook className="mr-2" /> },
+    { name: 'Reviews', path: '/reviews', icon: <FaStar className="mr-2" /> },
   ];
 
   const toggleSidebar = () => {

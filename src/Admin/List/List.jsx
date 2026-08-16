@@ -80,6 +80,7 @@ export default function List() {
           ...product,
           images: product.image ? (typeof product.image === "string" ? JSON.parse(product.image) : product.image) : [],
           box_count: product.box_count || 1,
+          is_free: product.is_free === true,
         }))
         .sort((a, b) => a.serial_number.localeCompare(b.serial_number))
       setProducts(normalizedData)
@@ -88,6 +89,7 @@ export default function List() {
         ...acc,
         [`${p.product_type}-${p.id}`]: p.status === "on",
         [`fast-${p.product_type}-${p.id}`]: p.fast_running === true,
+        [`free-${p.product_type}-${p.id}`]: p.is_free === true,
       }), {}))
     })
 
@@ -605,6 +607,9 @@ export default function List() {
                         <div className="text-sm font-bold text-slate-800 mt-0.5 truncate">{product.productname}</div>
                         <div className="text-xs text-slate-400">{capitalize(product.product_type)}</div>
                       </div>
+                      {toggleStates[`free-${productKey}`] && (
+                        <span className="ml-2 flex-shrink-0 bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full border border-purple-200">🎁 Free</span>
+                      )}
                     </div>
 
                     {product.images.length > 0 && (
@@ -636,6 +641,15 @@ export default function List() {
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-slate-500">Fast</span>
                         <Toggle checked={toggleStates[`fast-${productKey}`]} onChange={() => handleToggle(product, "toggle-fast-running", "fast-")} color="blue" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-slate-500">Free 🎁</span>
+                        <label className="inline-flex items-center cursor-pointer">
+                          <input type="checkbox" className="sr-only" checked={!!toggleStates[`free-${productKey}`]} onChange={() => handleToggle(product, "toggle-free-gift", "free-")} />
+                          <div className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${toggleStates[`free-${productKey}`] ? "bg-purple-500" : "bg-slate-300"}`}>
+                            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200 ${toggleStates[`free-${productKey}`] ? "translate-x-4" : "translate-x-0.5"}`} />
+                          </div>
+                        </label>
                       </div>
                     </div>
 

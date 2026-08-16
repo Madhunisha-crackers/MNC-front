@@ -14,10 +14,10 @@ import Banner from './Admin/Banner/Banner';
 import Safety from './Home/Safety';
 import About from './Home/About';
 import Contact from './Home/Contact';
-import Booking from './Home/Booking';
 import Pricelist from './Home/Pricelist';
 import Promocode from './Admin/Promo/Promocode'
 import SalesAnalysis from './Admin/SalesAnalysis';
+import Reviews from './Admin/Reviews/Reviews';
 import Status from './Home/Status';
 // import Homey from './Home/Homey';
 
@@ -27,7 +27,6 @@ const AllRoutes = () => {
       <Route path="/" element={<Home />} />
       <Route path="/mnp" element={<Login />} />
       <Route path="/safety-tips" element={<Safety />} />
-      <Route path="/booking" element={<Booking />} />
       <Route path="/about-us" element={<About />} />
       <Route path="/contact-us" element={<Contact />} />
       <Route path="/price-list" element={<Pricelist />} />
@@ -45,6 +44,7 @@ const AllRoutes = () => {
         <Route path="/banner" element={<Banner />} />
         <Route path="/promo-code" element={<Promocode />} />
         <Route path="/sales-analysis" element={<SalesAnalysis />} />
+        <Route path="/reviews" element={<Reviews />} />
       </Route>
     </Routes>
   );

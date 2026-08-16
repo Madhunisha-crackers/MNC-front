@@ -547,7 +547,7 @@ export default function Safety() {
                     <div>
                       <p className="text-black font-semibold">Office Address :</p>
                       <p className="text-gray-700">
-                        Sivagamipuram Colony, Viswanatham panchayat.,
+                        Sivagamipuram Colony,
                         <br />
                         Sivakasi
                       </p>

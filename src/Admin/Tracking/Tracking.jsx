@@ -8,10 +8,10 @@ import { toast } from 'react-toastify';
 
 const StatusBadge = ({ status }) => {
   const map = {
-    booked:     "text-sky-600 bg-sky-50 border-sky-200",
-    paid:       "text-amber-600 bg-amber-50 border-amber-200",
+    booked: "text-sky-600 bg-sky-50 border-sky-200",
+    paid: "text-amber-600 bg-amber-50 border-amber-200",
     dispatched: "text-emerald-600 bg-emerald-50 border-emerald-200",
-    delivered:  "text-emerald-700 bg-emerald-100 border-emerald-300",
+    delivered: "text-emerald-700 bg-emerald-100 border-emerald-300",
   };
   const icons = {
     booked: "⏳ Booked",
@@ -32,9 +32,9 @@ const PaginBtn = ({ label, onClick, disabled, active }) => (
     onClick={onClick}
     disabled={disabled}
     className={`px-4 py-2 rounded-lg border text-sm font-bold transition-all duration-150
-      ${active    ? "bg-indigo-600 border-indigo-600 text-white"
-      : disabled  ? "bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed"
-                  : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:text-indigo-600"}`}
+      ${active ? "bg-indigo-600 border-indigo-600 text-white"
+        : disabled ? "bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed"
+          : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:text-indigo-600"}`}
   >
     {label}
   </button>

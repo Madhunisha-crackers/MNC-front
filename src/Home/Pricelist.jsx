@@ -12,7 +12,255 @@ import LoadingSpinner from "../Component/LoadingSpinner";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import "../App.css";
-import need from '../default.jpg'
+import need from '../default.jpg';
+
+// ── Archery Game + Review Modal for Pricelist.jsx Checkout ─────────────────────
+const ArcheryGameModal = ({ isOpen, onClose, freeProducts, onClaimGift }) => {
+  const [step, setStep] = useState(1);
+  const [wonProduct, setWonProduct] = useState(null);
+  const [rating, setRating] = useState(5);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [name, setName] = useState("");
+  const [gameError, setGameError] = useState("");
+  const [isFiring, setIsFiring] = useState(false);
+  const [showMuzzleFlash, setShowMuzzleFlash] = useState(false);
+  const trackRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setStep(1); setWonProduct(null); setRating(5); setHoverRating(0);
+      setComment(""); setName(""); setGameError(""); setIsFiring(false); setShowMuzzleFlash(false);
+    }
+  }, [isOpen]);
+
+  const shoot = () => {
+    if (isFiring) return;
+    if (!freeProducts || freeProducts.length === 0) {
+      setGameError("No free gift products configured right now.");
+      return;
+    }
+
+    setGameError("");
+    setIsFiring(true);
+    setShowMuzzleFlash(true);
+
+    // Real "aim" logic: whichever product tile is currently sitting under
+    // the crosshair line at the moment the trigger is pulled is the winner —
+    // not a pure random pick.
+    let hit = null;
+    if (trackRef.current) {
+      const trackRect = trackRef.current.getBoundingClientRect();
+      const centerX = trackRect.left + trackRect.width / 2;
+      const items = trackRef.current.querySelectorAll("[data-product-item]");
+      let closestDist = Infinity;
+      let closestSerial = null;
+      items.forEach((item) => {
+        const rect = item.getBoundingClientRect();
+        const itemCenter = rect.left + rect.width / 2;
+        const dist = Math.abs(itemCenter - centerX);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestSerial = item.getAttribute("data-serial");
+        }
+      });
+      if (closestSerial) {
+        hit = freeProducts.find((p) => p.serial_number === closestSerial) || null;
+      }
+    }
+    if (!hit) hit = freeProducts[Math.floor(Math.random() * freeProducts.length)];
+
+    // Hold on the recoil/flash for a beat before revealing the result —
+    // gives the shot some weight instead of an instant swap.
+    setTimeout(() => {
+      setShowMuzzleFlash(false);
+      setWonProduct(hit);
+      setStep(2);
+      setIsFiring(false);
+    }, 380);
+  };
+
+  const handleClaim = () => {
+    if (rating === 0) { setGameError("Please select a star rating!"); return; }
+    onClaimGift({ wonProduct, rating, comment, name });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/75 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
+        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+          className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-orange-100">
+          <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-purple-600 px-6 py-5 flex items-center justify-between text-white">
+            <div>
+              <h3 className="font-extrabold text-xl flex items-center gap-2">
+                {step === 1 ? "🔫 Shoot to Win a Free Gift!" : "⭐ Review & Claim Free Gift"}
+              </h3>
+              <p className="text-orange-100 text-xs mt-0.5">
+                {step === 1 ? "Line up your shot and pull the trigger to win a free gift added to your order!" : "Leave feedback for our store admin & get your gift!"}
+              </p>
+            </div>
+            <button onClick={onClose} className="text-white/80 hover:text-white text-xl font-bold transition-colors">✕</button>
+          </div>
+
+          <div className="p-6">
+            {step === 1 ? (
+              <div>
+                {gameError && <div className="bg-red-50 text-red-600 border border-red-200 text-xs rounded-xl p-3 mb-4">{gameError}</div>}
+                {(!freeProducts || freeProducts.length === 0) ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <div className="text-5xl mb-2">🎁</div>
+                    <p className="font-bold text-gray-700">No free gifts configured currently</p>
+                    <button onClick={() => onClaimGift({ wonProduct: null, rating: 0, comment: "", name: "" })}
+                      className="mt-4 px-6 py-2.5 bg-orange-500 text-white font-bold rounded-xl text-sm">
+                      Continue to Checkout →
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-600 mb-4 text-center">Watch the targets drift past, line them up in your sights, and pull the <strong className="text-orange-600">trigger</strong> to win a free gift!</p>
+
+                    <div
+                      className={`relative overflow-hidden rounded-2xl border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-purple-50 h-32 mb-6 shadow-inner ${isFiring ? "screen-shake" : ""}`}
+                    >
+                      {/* Crosshair / scope reticle */}
+                      <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-red-500/70 z-10 -translate-x-1/2" />
+                      <div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                        <div className="relative w-9 h-9">
+                          <div className="absolute top-1/2 left-0 w-full h-0.5 bg-red-500/80 -translate-y-1/2" />
+                          <div className="absolute left-1/2 top-0 h-full w-0.5 bg-red-500/80 -translate-x-1/2" />
+                          <div className="absolute inset-0 border-2 border-red-500 rounded-full" />
+                          <div className="absolute top-1/2 left-1/2 w-1.5 h-1.5 bg-red-500 rounded-full -translate-x-1/2 -translate-y-1/2" />
+                        </div>
+                      </div>
+
+                      {/* Muzzle flash */}
+                      <AnimatePresence>
+                        {showMuzzleFlash && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.3 }}
+                            animate={{ opacity: 1, scale: 1.3 }}
+                            exit={{ opacity: 0, scale: 0.5 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute left-1/2 bottom-9 -translate-x-1/2 z-20 pointer-events-none"
+                          >
+                            <span className="text-3xl drop-shadow-[0_0_8px_rgba(255,180,0,0.9)]">💥</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Product belt */}
+                      <div
+                        ref={trackRef}
+                        className="archery-track flex gap-4 items-center h-full"
+                        style={{
+                          width: "max-content",
+                          animation: `archerySlide 9s linear infinite`,
+                          animationPlayState: isFiring ? "paused" : "running",
+                          paddingLeft: 24,
+                        }}
+                      >
+                        {[...freeProducts, ...freeProducts, ...freeProducts].map((p, i) => (
+                          <div
+                            key={i}
+                            data-product-item
+                            data-serial={p.serial_number}
+                            className="flex-shrink-0 bg-white rounded-xl shadow-md px-3.5 py-2.5 text-center border border-orange-100 min-w-[90px]"
+                          >
+                            <div className="text-2xl mb-1">🧨</div>
+                            <div className="text-xs font-bold text-gray-800 line-clamp-1">{p.productname}</div>
+                            <div className="text-[10px] text-orange-600 font-bold">FREE 🎁</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Gun silhouette, bottom center, recoils on fire */}
+                      <div
+                        className={`absolute left-1/2 -bottom-2 -translate-x-1/2 z-10 pointer-events-none gun-icon ${isFiring ? "gun-recoil" : ""}`}
+                      >
+                        <svg width="46" height="30" viewBox="0 0 46 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="20" y="2" width="6" height="16" rx="1" fill="#3f3f46" />
+                          <rect x="8" y="14" width="24" height="6" rx="1.5" fill="#27272a" />
+                          <path d="M10 20 L10 28 L16 28 L18 20 Z" fill="#18181b" />
+                          <rect x="30" y="16" width="8" height="3" rx="1" fill="#52525b" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={shoot}
+                      disabled={isFiring}
+                      className={`w-full font-extrabold py-3.5 rounded-2xl text-lg shadow-xl shadow-orange-500/30 transition-all active:scale-95 text-white ${
+                        isFiring
+                          ? "bg-gradient-to-r from-gray-400 to-gray-500 cursor-not-allowed"
+                          : "bg-gradient-to-r from-red-500 via-orange-500 to-amber-500 hover:from-red-600 hover:to-amber-600"
+                      }`}
+                    >
+                      {isFiring ? "🔫 Firing…" : "🔫 PULL TRIGGER"}
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div>
+                {gameError && <div className="bg-red-50 text-red-600 border border-red-200 text-xs rounded-xl p-3 mb-4">{gameError}</div>}
+                {wonProduct && (
+                  <div className="flex items-center gap-3 bg-purple-50 border border-purple-200 rounded-2xl p-3.5 mb-4">
+                    <span className="text-3xl">🎁</span>
+                    <div>
+                      <div className="text-[10px] text-purple-600 font-bold uppercase tracking-widest">You Won!</div>
+                      <div className="text-sm font-extrabold text-gray-800">{wonProduct.productname}</div>
+                      <div className="text-xs text-purple-500 font-semibold">Complimentary Gift — ₹0.00</div>
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Your Name</label>
+                    <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Enter your name"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-medium bg-gray-50 focus:ring-2 focus:ring-orange-500 outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">Rating (Admin Feedback)</label>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <button key={star} type="button"
+                          onMouseEnter={() => setHoverRating(star)}
+                          onMouseLeave={() => setHoverRating(0)}
+                          onClick={() => setRating(star)}
+                          className="text-3xl transition-transform hover:scale-125"
+                          style={{ color: star <= (hoverRating || rating) ? "#f59e0b" : "#e2e8f0" }}>
+                          ★
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Review Comment (Sent to Admin)</label>
+                    <textarea value={comment} onChange={e => setComment(e.target.value)} rows={3} placeholder="How was your purchase experience?"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-medium bg-gray-50 focus:ring-2 focus:ring-orange-500 outline-none resize-none" />
+                  </div>
+                  <div className="flex gap-2.5 pt-2">
+                    <button onClick={onClose}
+                      className="flex-1 py-3 rounded-2xl border border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors">
+                      Skip
+                    </button>
+                    <button onClick={handleClaim}
+                      className="flex-1 bg-gradient-to-r from-orange-500 to-purple-600 text-white font-bold py-3 rounded-2xl text-sm shadow-lg transition-all">
+                      ✓ Claim Gift &amp; Checkout →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
 
 const Pricelist = () => {
   const [products, setProducts] = useState([]);
@@ -61,6 +309,24 @@ const Pricelist = () => {
     kidsnight: false,
   });
   const [suggestedCart, setSuggestedCart] = useState({});
+
+  // ── Review & Archery state for Pricelist.jsx Checkout ─────────────────────
+  const [freeGiftProducts, setFreeGiftProducts] = useState([]);
+  const [showArcheryModal, setShowArcheryModal] = useState(false);
+  const [wonGiftProduct, setWonGiftProduct] = useState(null);
+  const [userReviewData, setUserReviewData] = useState({ rating: 0, comment: "", name: "" });
+  const [hasPlayedArchery, setHasPlayedArchery] = useState(false);
+
+  const fetchFreeGiftProducts = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/products/free`);
+      if (res.ok) setFreeGiftProducts(await res.json());
+    } catch (e) { console.error("Failed to fetch free gift products", e); }
+  }, []);
+
+  useEffect(() => {
+    fetchFreeGiftProducts();
+  }, [fetchFreeGiftProducts]);
 
   const formatPercentage = (value) => Math.round(Number.parseFloat(value)).toString();
   const formatPrice = (price) => {
@@ -592,8 +858,22 @@ const Pricelist = () => {
         serial_number: product.serial_number,
         productname: product.productname,
         status: product.status,
+        is_gift: false,
       };
     });
+
+    if (wonGiftProduct) {
+      selectedProducts.push({
+        id: wonGiftProduct.id,
+        product_type: wonGiftProduct.product_type,
+        quantity: 1,
+        per: wonGiftProduct.per || "pcs",
+        price: 0,
+        discount: 0,
+        productname: wonGiftProduct.productname,
+        is_gift: true,
+      });
+    }
 
     if (!selectedProducts.length) { showError("Your cart is empty."); setIsBookingLoading(false); return; }
     if (!customerDetails.customer_name || !customerDetails.address || !customerDetails.district || !customerDetails.state || !customerDetails.mobile_number) {
@@ -635,6 +915,27 @@ const Pricelist = () => {
 
       if (response.ok) {
         const data = await response.json();
+
+        // Send review data to admin if rating was given
+        if (userReviewData && userReviewData.rating > 0) {
+          try {
+            await fetch(`${API_BASE_URL}/api/reviews`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                order_id: data.order_id,
+                customer_name: customerDetails.customer_name || userReviewData.name || "Customer",
+                rating: userReviewData.rating,
+                comment: userReviewData.comment,
+                gift_product_id: wonGiftProduct?.id || null,
+                gift_product_type: wonGiftProduct?.product_type || null,
+                gift_product_name: wonGiftProduct?.productname || null,
+                gift_product_per: wonGiftProduct?.per || null,
+              }),
+            });
+          } catch (revErr) { console.error("Failed to save review for admin", revErr); }
+        }
+
         const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: "blob" });
         const blob = await pdfResponse.blob();
         const url = window.URL.createObjectURL(blob);
@@ -671,11 +972,20 @@ const Pricelist = () => {
     setPromocode("");
     setOriginalTotal(0);
     setTotalDiscount(0);
+    setWonGiftProduct(null);
+    setHasPlayedArchery(false);
+    setUserReviewData({ rating: 0, comment: "", name: "" });
     setTimeout(() => setShowToaster(true), 500);
   };
 
   const handleCheckoutClick = () => {
-    Object.keys(cart).length ? (setShowModal(true), setIsCartOpen(false)) : showError("Your cart is empty.");
+    if (!Object.keys(cart).length) return showError("Your cart is empty.");
+    setIsCartOpen(false);
+    if (!hasPlayedArchery && freeGiftProducts && freeGiftProducts.length > 0) {
+      setShowArcheryModal(true);
+    } else {
+      setShowModal(true);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -1286,119 +1596,119 @@ const Pricelist = () => {
           </div>
         </motion.div>
 
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-center gap-4 mb-10">
-        <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
-          onClick={downloadPDF}
-          className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-6 py-3 rounded-2xl shadow-lg shadow-orange-500/30 flex items-center gap-2.5 text-sm transition-all">
-          <Download className="w-4 h-4" />
-          Download Pricelist
-        </motion.button>
-
-        <div className="relative">
-          <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.95 }}
-            onClick={() => setShowAiModal(true)}
-            className="relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-2xl shadow-lg shadow-orange-500/30 w-14 h-14 flex items-center justify-center transition-all">
-            <span className="text-2xl">🤖</span>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-center gap-4 mb-10">
+          <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+            onClick={downloadPDF}
+            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-6 py-3 rounded-2xl shadow-lg shadow-orange-500/30 flex items-center gap-2.5 text-sm transition-all">
+            <Download className="w-4 h-4" />
+            Download Pricelist
           </motion.button>
-          <motion.span initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-            className="absolute -top-2 -right-12 px-2.5 py-1 bg-red-500 text-white text-xs font-bold rounded-full shadow-md whitespace-nowrap">
-            Need Help?
-          </motion.span>
-        </div>
-      </motion.div>
 
-      {Object.entries(grouped).map(([type, items], groupIndex) => (
-        <motion.section key={type}
-          initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: groupIndex * 0.05 }}
-          className="mb-16">
-          <div className="flex items-center gap-4 mb-7">
-            <div className="w-1 h-8 bg-gradient-to-b from-orange-500 to-orange-300 rounded-full flex-shrink-0" />
-            <h2 className="text-2xl font-bold text-black capitalize">{type.replace(/_/g, " ")}</h2>
-            <div className="flex-1 h-px bg-gradient-to-r from-orange-500/30 to-transparent" />
-            <span className="text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-full">
-              {items.length} items
-            </span>
+          <div className="relative">
+            <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.95 }}
+              onClick={() => setShowAiModal(true)}
+              className="relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-2xl shadow-lg shadow-orange-500/30 w-14 h-14 flex items-center justify-center transition-all">
+              <span className="text-2xl">🤖</span>
+            </motion.button>
+            <motion.span initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+              className="absolute -top-2 -right-12 px-2.5 py-1 bg-red-500 text-white text-xs font-bold rounded-full shadow-md whitespace-nowrap">
+              Need Help?
+            </motion.span>
           </div>
+        </motion.div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {items.map((product, idx) => {
-              if (!product) return null;
-              const originalPrice = Number.parseFloat(product.price);
-              const discount = originalPrice * (product.discount / 100);
-              const finalPrice = product.discount > 0 ? formatPrice(originalPrice - discount) : formatPrice(originalPrice);
-              const count = cart[product.serial_number] || 0;
-              return (
-                <motion.div key={product.serial_number}
-                  initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.03 }}
-                  whileHover={{ y: -6, scale: 1.015 }}
-                  className="group bg-white rounded-3xl shadow-sm hover:shadow-2xl hover:shadow-orange-500/10 border border-orange-100 hover:border-orange-300 transition-all duration-300 overflow-hidden">
-                  <div className="relative">
-                    <ModernCarousel media={product.images} onImageClick={handleImageClick} />
-                    {product.discount > 0 && (
-                      <div className="absolute top-3 left-3 bg-gradient-to-r from-red-500 to-rose-500 text-white text-xs font-bold px-2.5 py-1 rounded-xl shadow-lg">
-                        {formatPercentage(product.discount)}% OFF
-                      </div>
-                    )}
-                    <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                      onClick={() => handleShowDetails(product)}
-                      className="absolute top-3 right-3 w-8 h-8 bg-white/80 hover:bg-white backdrop-blur-sm rounded-xl flex items-center justify-center shadow-md transition-colors border border-orange-100">
-                      <FaInfoCircle className="text-orange-500 w-3.5 h-3.5" />
-                    </motion.button>
-                  </div>
+        {Object.entries(grouped).map(([type, items], groupIndex) => (
+          <motion.section key={type}
+            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: groupIndex * 0.05 }}
+            className="mb-16">
+            <div className="flex items-center gap-4 mb-7">
+              <div className="w-1 h-8 bg-gradient-to-b from-orange-500 to-orange-300 rounded-full flex-shrink-0" />
+              <h2 className="text-2xl font-bold text-black capitalize">{type.replace(/_/g, " ")}</h2>
+              <div className="flex-1 h-px bg-gradient-to-r from-orange-500/30 to-transparent" />
+              <span className="text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-full">
+                {items.length} items
+              </span>
+            </div>
 
-                  <div className="p-4">
-                    <p className="text-xs text-gray-600 font-mono mb-1">{product.serial_number}</p>
-                    <h3 className="text-sm font-bold text-orange-600 line-clamp-2 leading-snug mb-2 group-hover:text-orange-700 transition-colors">
-                      {product.productname}
-                    </h3>
-                    <div className="flex items-baseline gap-2 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {items.map((product, idx) => {
+                if (!product) return null;
+                const originalPrice = Number.parseFloat(product.price);
+                const discount = originalPrice * (product.discount / 100);
+                const finalPrice = product.discount > 0 ? formatPrice(originalPrice - discount) : formatPrice(originalPrice);
+                const count = cart[product.serial_number] || 0;
+                return (
+                  <motion.div key={product.serial_number}
+                    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.03 }}
+                    whileHover={{ y: -6, scale: 1.015 }}
+                    className="group bg-white rounded-3xl shadow-sm hover:shadow-2xl hover:shadow-orange-500/10 border border-orange-100 hover:border-orange-300 transition-all duration-300 overflow-hidden">
+                    <div className="relative">
+                      <ModernCarousel media={product.images} onImageClick={handleImageClick} />
                       {product.discount > 0 && (
-                        <span className="text-xs text-gray-500 line-through">₹{formatPrice(originalPrice)}</span>
+                        <div className="absolute top-3 left-3 bg-gradient-to-r from-red-500 to-rose-500 text-white text-xs font-bold px-2.5 py-1 rounded-xl shadow-lg">
+                          {formatPercentage(product.discount)}% OFF
+                        </div>
                       )}
-                      <span className="text-base font-bold text-orange-600">₹{finalPrice}</span>
-                      <span className="text-xs text-gray-600">/ {product.per}</span>
+                      <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                        onClick={() => handleShowDetails(product)}
+                        className="absolute top-3 right-3 w-8 h-8 bg-white/80 hover:bg-white backdrop-blur-sm rounded-xl flex items-center justify-center shadow-md transition-colors border border-orange-100">
+                        <FaInfoCircle className="text-orange-500 w-3.5 h-3.5" />
+                      </motion.button>
                     </div>
 
-                    <AnimatePresence mode="wait">
-                      {count > 0 ? (
-                        <motion.div key="qty"
-                          initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0.85, opacity: 0 }}
-                          className="flex items-center justify-between bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-1.5 shadow-md shadow-orange-500/30">
-                          <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
-                            onClick={() => removeFromCart(product)}
-                            className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center text-white transition-colors">
-                            <FaMinus className="w-2.5 h-2.5" />
-                          </motion.button>
-                          <span className="text-white font-bold text-sm px-2 min-w-[2rem] text-center">{count}</span>
-                          <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
+                    <div className="p-4">
+                      <p className="text-xs text-gray-600 font-mono mb-1">{product.serial_number}</p>
+                      <h3 className="text-sm font-bold text-orange-600 line-clamp-2 leading-snug mb-2 group-hover:text-orange-700 transition-colors">
+                        {product.productname}
+                      </h3>
+                      <div className="flex items-baseline gap-2 mb-3">
+                        {product.discount > 0 && (
+                          <span className="text-xs text-gray-500 line-through">₹{formatPrice(originalPrice)}</span>
+                        )}
+                        <span className="text-base font-bold text-orange-600">₹{finalPrice}</span>
+                        <span className="text-xs text-gray-600">/ {product.per}</span>
+                      </div>
+
+                      <AnimatePresence mode="wait">
+                        {count > 0 ? (
+                          <motion.div key="qty"
+                            initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.85, opacity: 0 }}
+                            className="flex items-center justify-between bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-1.5 shadow-md shadow-orange-500/30">
+                            <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
+                              onClick={() => removeFromCart(product)}
+                              className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center text-white transition-colors">
+                              <FaMinus className="w-2.5 h-2.5" />
+                            </motion.button>
+                            <span className="text-white font-bold text-sm px-2 min-w-[2rem] text-center">{count}</span>
+                            <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
+                              onClick={() => addToCart(product)}
+                              className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center text-white transition-colors">
+                              <FaPlus className="w-2.5 h-2.5" />
+                            </motion.button>
+                          </motion.div>
+                        ) : (
+                          <motion.button key="add"
+                            initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.85, opacity: 0 }}
+                            whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                             onClick={() => addToCart(product)}
-                            className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center text-white transition-colors">
+                            className="w-full bg-orange-50 hover:bg-gradient-to-r hover:from-orange-500 hover:to-orange-600 text-orange-600 hover:text-white border border-orange-100 hover:border-transparent font-semibold py-2.5 rounded-xl transition-all duration-300 text-sm flex items-center justify-center gap-1.5">
                             <FaPlus className="w-2.5 h-2.5" />
+                            Add
                           </motion.button>
-                        </motion.div>
-                      ) : (
-                        <motion.button key="add"
-                          initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0.85, opacity: 0 }}
-                          whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
-                          onClick={() => addToCart(product)}
-                          className="w-full bg-orange-50 hover:bg-gradient-to-r hover:from-orange-500 hover:to-orange-600 text-orange-600 hover:text-white border border-orange-100 hover:border-transparent font-semibold py-2.5 rounded-xl transition-all duration-300 text-sm flex items-center justify-center gap-1.5">
-                          <FaPlus className="w-2.5 h-2.5" />
-                          Add
-                        </motion.button>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </motion.section>
-      ))}
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.section>
+        ))}
       </main>
 
       <div className="fixed hundred:bottom-6 mobile:bottom-22 right-6 z-20">
@@ -1468,6 +1778,24 @@ const Pricelist = () => {
                     </div>
                   )}
 
+                  {wonGiftProduct ? (
+                    <div className="bg-purple-50 border border-purple-200 rounded-2xl p-3.5 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-2xl">🎁</span>
+                        <div>
+                          <p className="text-[10px] text-purple-600 font-bold uppercase tracking-wider">Free Gift Included</p>
+                          <p className="text-sm font-extrabold text-gray-800">{wonGiftProduct.productname}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-purple-700 bg-purple-100 px-2.5 py-1 rounded-full border border-purple-200">₹0.00 (FREE)</span>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => { setShowModal(false); setShowArcheryModal(true); }}
+                      className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold py-3 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-md hover:from-purple-700 hover:to-indigo-700 transition-all">
+                      <span>🎯</span> Play Archery Target Game to Win a Free Gift!
+                    </button>
+                  )}
+
                   <PromoSelector />
 
                   <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 text-black">
@@ -1504,10 +1832,56 @@ const Pricelist = () => {
         )}
       </AnimatePresence>
 
+      <ArcheryGameModal
+        isOpen={showArcheryModal}
+        onClose={() => {
+          setShowArcheryModal(false);
+          setShowModal(true);
+        }}
+        freeProducts={freeGiftProducts}
+        onClaimGift={({ wonProduct, rating, comment, name }) => {
+          if (wonProduct) {
+            setWonGiftProduct({
+              id: wonProduct.id,
+              product_type: wonProduct.product_type,
+              productname: wonProduct.productname,
+              price: 0,
+              discount: 0,
+              per: wonProduct.per || 'pcs',
+              is_gift: true,
+            });
+          }
+          setUserReviewData({ rating, comment, name });
+          setHasPlayedArchery(true);
+          setShowArcheryModal(false);
+          setShowModal(true);
+        }}
+      />
+
       <style>{`
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .animate-marquee { display: inline-block; white-space: nowrap; animation: marquee 15s linear infinite; }
         @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+        @keyframes archerySlide {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .gun-icon { transition: transform 0.08s ease-out; }
+        .gun-recoil { animation: gunRecoil 0.38s ease-out; }
+        @keyframes gunRecoil {
+          0%   { transform: translate(-50%, 0) rotate(0deg); }
+          15%  { transform: translate(-50%, 4px) rotate(-6deg); }
+          40%  { transform: translate(-50%, -2px) rotate(3deg); }
+          100% { transform: translate(-50%, 0) rotate(0deg); }
+        }
+        .screen-shake { animation: screenShake 0.38s ease-out; }
+        @keyframes screenShake {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-3px); }
+          40% { transform: translateX(3px); }
+          60% { transform: translateX(-2px); }
+          80% { transform: translateX(2px); }
+        }
       `}</style>
     </>
   );

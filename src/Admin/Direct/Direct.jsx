@@ -74,6 +74,10 @@ class QuotationTableErrorBoundary extends React.Component {
 
 const getEffectivePrice = (item) => Math.round(Number(item.price) || 0);
 
+const isExemptProductType = (productType) => productType === 'net_rate' || productType === 'multishot';
+
+const isDiscountLocked = (item) => item.product_type === 'net_rate' || item.product_type === 'multishot' || item.initialDiscount === 0;
+
 const styles = { input: {}, button: {}, card: {} };
 
 const SummaryChip = ({ label, value, color, large }) => {
@@ -141,8 +145,8 @@ const PaginBtn = ({ label, onClick, disabled, active }) => (
     disabled={disabled}
     className={`px-4 py-2 rounded-lg border text-sm font-bold transition-all duration-150
       ${active ? "bg-indigo-600 border-indigo-600 text-white"
-      : disabled ? "bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed"
-        : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:text-indigo-600"}`}
+        : disabled ? "bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed"
+          : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:text-indigo-600"}`}
   >
     {label}
   </button>
@@ -262,7 +266,7 @@ const QuotationTable = ({
   const handleChangeDiscount = (value) => {
     const newDiscount = Math.max(0, Math.min(100, parseFloat(value) || 0));
     setChangeDiscount(newDiscount);
-    const updatedCart = cart.map(item => ({ ...item, discount: item.initialDiscount === 0 ? 0 : newDiscount }));
+    const updatedCart = cart.map(item => (isDiscountLocked(item) ? item : { ...item, discount: newDiscount }));
     if (isModal) setModalCart(updatedCart); else setCart(updatedCart);
   };
 
@@ -275,11 +279,13 @@ const QuotationTable = ({
 
     setTargetCart(prev => {
       const exists = prev.find(item => item.id.toString() === id && item.product_type === type);
+      const presetDiscount = parseFloat(product.discount) || 0;
+      const appliedDiscount = isExemptProductType(product.product_type) ? presetDiscount : (presetDiscount || currentDiscount);
       if (action === "plus") {
         if (exists) {
           return prev.map(item => item.id.toString() === id && item.product_type === type ? { ...item, quantity: item.quantity + 1 } : item);
         } else {
-          const newItem = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: 1, discount: parseFloat(product.discount) || currentDiscount, initialDiscount: parseFloat(product.discount) || 0, per: product.per || 'Unit' };
+          const newItem = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: 1, discount: appliedDiscount, initialDiscount: presetDiscount, per: product.per || 'Unit' };
           return [...prev, newItem];
         }
       } else if (action === "minus") {
@@ -289,7 +295,7 @@ const QuotationTable = ({
       } else if (action === "set") {
         const qty = parseInt(setValue) || 0;
         if (!exists && qty > 0) {
-          const newItem = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: qty, discount: parseFloat(product.discount) || currentDiscount, initialDiscount: parseFloat(product.discount) || 0, per: product.per || 'Unit' };
+          const newItem = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: qty, discount: appliedDiscount, initialDiscount: presetDiscount, per: product.per || 'Unit' };
           return [...prev, newItem];
         }
         if (qty <= 0) return prev.filter(item => !(item.id.toString() === id && item.product_type === type));
@@ -386,7 +392,8 @@ const QuotationTable = ({
                           <input
                             type="number" value={item.discount} min="0" max="100" step="0.01"
                             onChange={(e) => updateDiscount(item.id, item.product_type, parseFloat(e.target.value) || 0, isModal)}
-                            className={`${cartInputCls} pr-6 focus:border-amber-400`}
+                            disabled={item.product_type === 'multishot'}
+                            className={`${cartInputCls} pr-6 focus:border-amber-400 ${item.product_type === 'multishot' ? 'opacity-50 cursor-not-allowed' : ''}`}
                           />
                           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">%</span>
                         </div>
@@ -448,13 +455,14 @@ const QuotationTable = ({
                 const setTargetCart = isModal ? setModalCart : setCart;
                 const setTargetLastAddedProduct = isModal ? null : setLastAddedProduct;
                 const currentDiscount = changeDiscount;
+                const presetDiscount = parseFloat(product.discount) || 0;
                 const newItem = {
                   ...product,
                   id: product.id,
                   price: Math.round(Number(product.price) || 0),
                   quantity: 1,
-                  discount: parseFloat(product.discount) || currentDiscount,
-                  initialDiscount: parseFloat(product.discount) || 0,
+                  discount: isExemptProductType(product.product_type) ? presetDiscount : (presetDiscount || currentDiscount),
+                  initialDiscount: presetDiscount,
                   per: product.per || 'Unit',
                 };
                 setTargetCart(prev => {
@@ -690,6 +698,202 @@ const PDFDownloadConfirmModal = ({ isOpen, onClose, onYes, fileName }) => (
   </Modal>
 );
 
+// ── Archery Game + Review Modal ─────────────────────────────────────────────
+const ArcheryGameModal = ({ isOpen, onClose, freeProducts, quotation, apiBase }) => {
+  const [step, setStep] = useState(1); // 1 = game, 2 = review
+  const [wonProduct, setWonProduct] = useState(null);
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [customerName, setCustomerName] = useState(quotation?.customer_name || '');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [gameError, setGameError] = useState('');
+  const trackRef = useRef(null);
+  const animRef = useRef(null);
+
+  // Reset on open
+  useEffect(() => {
+    if (isOpen) {
+      setStep(1); setWonProduct(null); setRating(0); setHoverRating(0);
+      setComment(''); setCustomerName(quotation?.customer_name || '');
+      setSubmitting(false); setSubmitted(false); setGameError('');
+    }
+  }, [isOpen, quotation]);
+
+  const shoot = () => {
+    if (!trackRef.current || freeProducts.length === 0) {
+      setGameError('No free gift products available. Enable some products as Free 🎁 in the Listing page.');
+      return;
+    }
+    // Pick a random product (the "hit" one)
+    const hit = freeProducts[Math.floor(Math.random() * freeProducts.length)];
+    setWonProduct(hit);
+    setStep(2);
+  };
+
+  const submitReview = async () => {
+    if (rating === 0) { setGameError('Please give a star rating!'); return; }
+    setSubmitting(true); setGameError('');
+    try {
+      await fetch(`${apiBase}/api/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quotation_id: quotation?.quotation_id || null,
+          customer_name: customerName,
+          rating,
+          comment,
+          gift_product_id: wonProduct?.id || null,
+          gift_product_type: wonProduct?.product_type || null,
+          gift_product_name: wonProduct?.productname || null,
+          gift_product_per: wonProduct?.per || null,
+        }),
+      });
+      setSubmitted(true);
+    } catch (e) { setGameError('Failed to submit review. Please try again.'); }
+    finally { setSubmitting(false); }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <Modal isOpen={isOpen} onRequestClose={onClose} className="fixed inset-0 flex items-center justify-center p-4" overlayClassName="fixed inset-0 bg-black/70">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden">
+        {/* Header */}
+        <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)' }} className="px-8 py-5 flex items-center justify-between">
+          <div>
+            <div className="text-white font-extrabold text-xl">
+              {submitted ? '🎉 Thank You!' : step === 1 ? '🎯 Shoot to Win a Gift!' : '⭐ Leave a Review'}
+            </div>
+            <div className="text-purple-200 text-xs mt-0.5">
+              {submitted ? 'Your review and gift have been saved.' : step === 1 ? 'Click SHOOT at the right moment to win a product!' : 'How was your experience?'}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-xl font-bold transition-colors">✕</button>
+        </div>
+
+        <div className="px-8 py-7">
+          {/* SUBMITTED */}
+          {submitted ? (
+            <div className="text-center py-6">
+              <div className="text-7xl mb-4">🎁</div>
+              <div className="text-2xl font-extrabold text-slate-800 mb-2">You got <span className="text-purple-600">{wonProduct?.productname}</span>!</div>
+              <p className="text-slate-500 text-sm mb-6">The gift has been added to the invoice PDF as a complimentary item at ₹0.</p>
+              <button onClick={onClose} className="px-8 py-3 rounded-xl font-bold text-white text-sm" style={{ background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)' }}>Close</button>
+            </div>
+          ) : step === 1 ? (
+            /* GAME STEP */
+            <div>
+              {gameError && <div className="bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg px-3 py-2 mb-4">{gameError}</div>}
+              {freeProducts.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <div className="text-5xl mb-3">🎁</div>
+                  <p className="font-semibold">No free gift products configured.</p>
+                  <p className="text-xs mt-1">Go to Listing → toggle "Free 🎁" on some products first.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-slate-500 mb-5 text-center">Watch the products slide by and press <strong>SHOOT!</strong> to win one as a free gift.</p>
+                  {/* Track */}
+                  <div ref={trackRef} className="relative overflow-hidden rounded-2xl border-2 border-purple-200 bg-purple-50 h-28 mb-6" style={{ boxShadow: 'inset 0 2px 8px rgba(99,102,241,0.08)' }}>
+                    {/* Crosshair line */}
+                    <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-red-400/60 z-10" style={{ transform: 'translateX(-50%)' }} />
+                    <div className="absolute left-1/2 top-1/2 z-10" style={{ transform: 'translate(-50%,-50%)', width: 24, height: 24, border: '2px solid rgba(239,68,68,0.7)', borderRadius: '50%' }} />
+                    {/* Animated products */}
+                    <div className="archery-track flex gap-5 items-center h-full" style={{ width: 'max-content', animation: 'archerySlide 5s linear infinite', paddingLeft: 32 }}>
+                      {[...freeProducts, ...freeProducts, ...freeProducts].map((p, i) => (
+                        <div key={i} className="flex-shrink-0 bg-white rounded-xl shadow-md px-4 py-3 text-center border border-purple-100" style={{ minWidth: 100 }}>
+                          <div className="text-2xl mb-1">🧨</div>
+                          <div className="text-xs font-bold text-slate-700 leading-tight" style={{ maxWidth: 90 }}>{p.productname}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Shoot button */}
+                  <div className="flex justify-center">
+                    <button
+                      onClick={shoot}
+                      className="px-12 py-4 rounded-2xl font-extrabold text-white text-lg tracking-wide transition-all duration-150 hover:scale-105 active:scale-95 shadow-xl"
+                      style={{ background: 'linear-gradient(135deg, #ef4444 0%, #f97316 100%)', boxShadow: '0 8px 32px rgba(239,68,68,0.35)' }}
+                    >
+                      🎯 SHOOT!
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            /* REVIEW STEP */
+            <div>
+              {gameError && <div className="bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg px-3 py-2 mb-4">{gameError}</div>}
+              {wonProduct && (
+                <div className="flex items-center gap-3 bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 mb-5">
+                  <div className="text-3xl">🎁</div>
+                  <div>
+                    <div className="text-xs text-purple-500 font-bold uppercase tracking-widest">You Won!</div>
+                    <div className="text-sm font-extrabold text-slate-800">{wonProduct.productname}</div>
+                    <div className="text-xs text-purple-400">{wonProduct.product_type} — FREE</div>
+                  </div>
+                </div>
+              )}
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Your Name</label>
+                <input
+                  type="text" value={customerName} onChange={e => setCustomerName(e.target.value)}
+                  placeholder="Customer name"
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-purple-400 transition-colors"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Rating</label>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button
+                      key={star}
+                      type="button"
+                      onMouseEnter={() => setHoverRating(star)}
+                      onMouseLeave={() => setHoverRating(0)}
+                      onClick={() => setRating(star)}
+                      className="text-3xl transition-transform duration-100 hover:scale-125"
+                      style={{ color: star <= (hoverRating || rating) ? '#f59e0b' : '#e2e8f0' }}
+                    >★</button>
+                  ))}
+                </div>
+                {rating > 0 && (
+                  <p className="text-xs text-amber-500 font-semibold mt-1">
+                    {['', 'Poor 😞', 'Fair 😐', 'Good 😊', 'Great 😄', 'Excellent! 🌟'][rating]}
+                  </p>
+                )}
+              </div>
+              <div className="mb-5">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Comment (optional)</label>
+                <textarea
+                  value={comment} onChange={e => setComment(e.target.value)}
+                  rows={3} placeholder="Tell us about your experience..."
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-purple-400 transition-colors resize-none"
+                />
+              </div>
+              <div className="flex gap-2.5">
+                <button onClick={onClose} disabled={submitting} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors disabled:opacity-50">
+                  Skip
+                </button>
+                <button
+                  onClick={submitReview} disabled={submitting}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-sm text-white transition-all duration-200 disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)' }}
+                >
+                  {submitting ? 'Submitting...' : '✓ Submit Review & Claim Gift'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
 export default function Direct() {
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -731,6 +935,20 @@ export default function Direct() {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [pdfFileName, setPdfFileName] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
+
+  // ── Gift Game state ──────────────────────────────────────────────────────
+  const [giftGameOpen, setGiftGameOpen] = useState(false);
+  const [giftGameQuotation, setGiftGameQuotation] = useState(null);
+  const [freeProducts, setFreeProducts] = useState([]);
+
+  const openGiftGame = async (quotation) => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/products/free`);
+      setFreeProducts(Array.isArray(res.data) ? res.data : []);
+    } catch (e) { setFreeProducts([]); }
+    setGiftGameQuotation(quotation);
+    setGiftGameOpen(true);
+  };
 
   const triggerPdfDownload = (url, fileName) => {
     const link = document.createElement('a');
@@ -845,14 +1063,18 @@ export default function Direct() {
     if (!customProduct && !targetSelectedProduct && !directProduct) { setError("Please select a product"); return; }
     let product;
     if (customProduct) {
-      product = { ...customProduct, id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, product_type: customProduct.product_type || 'custom', price: Math.round(Number(customProduct.price) || 0), quantity: parseInt(customProduct.quantity) || 1, discount: parseFloat(customProduct.discount) || targetDiscount, initialDiscount: parseFloat(customProduct.discount) || targetDiscount, per: customProduct.per || 'Unit' };
+      const customType = customProduct.product_type || 'custom';
+      const presetDiscount = parseFloat(customProduct.discount) || 0;
+      product = { ...customProduct, id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, product_type: customType, price: Math.round(Number(customProduct.price) || 0), quantity: parseInt(customProduct.quantity) || 1, discount: isExemptProductType(customType) ? presetDiscount : (presetDiscount || targetDiscount), initialDiscount: presetDiscount, per: customProduct.per || 'Unit' };
     } else if (directProduct) {
-      product = { ...directProduct, id: directProduct.id, price: Math.round(Number(directProduct.price) || 0), quantity: 1, discount: parseFloat(directProduct.discount) || targetDiscount, initialDiscount: parseFloat(directProduct.discount) || 0, per: directProduct.per || 'Unit' };
+      const presetDiscount = parseFloat(directProduct.discount) || 0;
+      product = { ...directProduct, id: directProduct.id, price: Math.round(Number(directProduct.price) || 0), quantity: 1, discount: isExemptProductType(directProduct.product_type) ? presetDiscount : (presetDiscount || targetDiscount), initialDiscount: presetDiscount, per: directProduct.per || 'Unit' };
     } else {
       const [id, type] = targetSelectedProduct.value.split("-");
       product = products.find(p => p.id.toString() === id && p.product_type === type);
       if (!product) { setError("Product not found"); return; }
-      product = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: 1, discount: parseFloat(product.discount) || targetDiscount, initialDiscount: parseFloat(product.discount) || 0, per: product.per || 'Unit' };
+      const presetDiscount = parseFloat(product.discount) || 0;
+      product = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: 1, discount: isExemptProductType(product.product_type) ? presetDiscount : (presetDiscount || targetDiscount), initialDiscount: presetDiscount, per: product.per || 'Unit' };
     }
     setTargetCart(prev => {
       const exists = prev.find(item => item.id === product.id && item.product_type === product.product_type);
@@ -864,7 +1086,7 @@ export default function Direct() {
   };
 
   const updateQuantity = (id, type, quantity, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, quantity: quantity < 0 ? 0 : quantity } : item)); };
-  const updateDiscount = (id, type, discount, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, discount: discount < 0 ? 0 : discount > 100 ? 100 : discount } : item)); };
+  const updateDiscount = (id, type, discount, isModal = false) => { if (type === 'multishot') return; const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, discount: discount < 0 ? 0 : discount > 100 ? 100 : discount } : item)); };
   const updatePrice = (id, type, price, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, price: price < 0 ? 0 : price } : item)); };
   const removeFromCart = (id, type, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.filter(item => !(item.id === id && item.product_type === type))); };
 
@@ -1130,6 +1352,12 @@ export default function Direct() {
                           <QuotActionBtn label="Book" onClick={() => convertToBooking(quotation)} disabled={quotation.status !== "pending"} color="#10b981" />
                           <QuotActionBtn label="Cancel" onClick={() => openCancelConfirm(quotation.quotation_id)} disabled={quotation.status !== "pending"} color="#ef4444" />
                         </div>
+                        <button
+                          onClick={() => openGiftGame(quotation)}
+                          className="mt-2 w-full py-2 rounded-xl text-xs font-bold text-purple-600 bg-purple-50 border border-purple-200 hover:bg-purple-500 hover:text-white hover:border-purple-500 transition-all duration-200 flex items-center justify-center gap-1.5"
+                        >
+                          🎯 Award Gift &amp; Review
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -1220,8 +1448,15 @@ export default function Direct() {
         <CancelConfirmModal isOpen={cancelConfirmOpen} onClose={() => { if (!cancelLoading) setCancelConfirmOpen(false); }} onConfirm={cancelQuotation} quotationId={quotationToCancel} loading={cancelLoading} />
         <PDFDownloadConfirmModal isOpen={pdfConfirmOpen} onClose={handlePdfNo} onYes={handlePdfYes} fileName={pdfFileName} />
         <NewProductModal isOpen={newProductModalIsOpen} onClose={closeNewProductModal} onSubmit={handleAddNewProduct} newProductData={newProductData} setNewProductData={setNewProductData} />
+        <ArcheryGameModal isOpen={giftGameOpen} onClose={() => setGiftGameOpen(false)} freeProducts={freeProducts} quotation={giftGameQuotation} apiBase={API_BASE_URL} />
 
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <style>{`
+          @keyframes spin { to { transform: rotate(360deg); } }
+          @keyframes archerySlide {
+            0%   { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+          }
+        `}</style>
       </div>
     </DirectErrorBoundary>
   );

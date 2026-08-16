@@ -652,8 +652,7 @@ const contactCards = [
                     <MapPin className="w-5 h-5 text-orange-600 mt-1 flex-shrink-0" />
                     <div>
                       <p className="text-black font-medium">Office Address :</p>
-                      <p className="text-gray-700">
-                        Sivagamipuram Colony, Viswanatham panchayat.,
+                      <p className="text-gray-700"> Colony, Viswanatham panchayat.,
                         <br />
                         Sivakasi
                       </p>

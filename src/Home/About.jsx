@@ -351,7 +351,7 @@ export default function About() {
                     <div>
                       <p className="text-black font-medium">Office Address :</p>
                       <p className="text-gray-700">
-                        Sivagamipuram Colony, Viswanatham panchayat.,
+                        Sivagamipuram Colony
                         <br />
                         Sivakasi
                       </p>

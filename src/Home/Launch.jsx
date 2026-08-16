@@ -553,7 +553,7 @@ export default function Launch({ onComplete }) {
             animation:"fadeUp .7s .08s ease both",
             opacity:0, animationFillMode:"forwards",
           }}>
-            Sivakasi's Finest &nbsp;·&nbsp; Est. 2009
+            Sivakasi's Finest &nbsp;·&nbsp; Est. 2024
           </p>
 
           {/* Title */}
@@ -595,7 +595,7 @@ export default function Launch({ onComplete }) {
             opacity:0, animationFillMode:"forwards",
           }}>
             Premium quality fireworks crafted in the heart of Sivakasi —<br/>
-            lighting up every celebration since 2009.
+            lighting up every celebration since 2024.
           </p>
 
           {/* CTA pill */}
