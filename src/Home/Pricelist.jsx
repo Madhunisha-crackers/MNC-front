@@ -14,7 +14,6 @@ import autoTable from 'jspdf-autotable';
 import "../App.css";
 import need from '../default.jpg';
 
-// ── Archery Game + Review Modal for Pricelist.jsx Checkout ─────────────────────
 const ArcheryGameModal = ({ isOpen, onClose, freeProducts, onClaimGift }) => {
   const [step, setStep] = useState(1);
   const [wonProduct, setWonProduct] = useState(null);
@@ -25,12 +24,20 @@ const ArcheryGameModal = ({ isOpen, onClose, freeProducts, onClaimGift }) => {
   const [gameError, setGameError] = useState("");
   const [isFiring, setIsFiring] = useState(false);
   const [showMuzzleFlash, setShowMuzzleFlash] = useState(false);
+  const containerRef = useRef(null);
   const trackRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
-      setStep(1); setWonProduct(null); setRating(5); setHoverRating(0);
-      setComment(""); setName(""); setGameError(""); setIsFiring(false); setShowMuzzleFlash(false);
+      setStep(1);
+      setWonProduct(null);
+      setRating(5);
+      setHoverRating(0);
+      setComment("");
+      setName("");
+      setGameError("");
+      setIsFiring(false);
+      setShowMuzzleFlash(false);
     }
   }, [isOpen]);
 
@@ -45,16 +52,15 @@ const ArcheryGameModal = ({ isOpen, onClose, freeProducts, onClaimGift }) => {
     setIsFiring(true);
     setShowMuzzleFlash(true);
 
-    // Real "aim" logic: whichever product tile is currently sitting under
-    // the crosshair line at the moment the trigger is pulled is the winner —
-    // not a pure random pick.
     let hit = null;
-    if (trackRef.current) {
-      const trackRect = trackRef.current.getBoundingClientRect();
-      const centerX = trackRect.left + trackRect.width / 2;
+
+    if (containerRef.current && trackRef.current) {
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const centerX = containerRect.left + containerRect.width / 2;
       const items = trackRef.current.querySelectorAll("[data-product-item]");
       let closestDist = Infinity;
       let closestSerial = null;
+
       items.forEach((item) => {
         const rect = item.getBoundingClientRect();
         const itemCenter = rect.left + rect.width / 2;
@@ -64,24 +70,29 @@ const ArcheryGameModal = ({ isOpen, onClose, freeProducts, onClaimGift }) => {
           closestSerial = item.getAttribute("data-serial");
         }
       });
-      if (closestSerial) {
-        hit = freeProducts.find((p) => p.serial_number === closestSerial) || null;
+
+      if (closestSerial != null) {
+        hit = freeProducts.find((p) => String(p.serial_number) === String(closestSerial)) || null;
       }
     }
-    if (!hit) hit = freeProducts[Math.floor(Math.random() * freeProducts.length)];
 
-    // Hold on the recoil/flash for a beat before revealing the result —
-    // gives the shot some weight instead of an instant swap.
+    if (!hit) {
+      hit = freeProducts[0] || null;
+    }
+
     setTimeout(() => {
       setShowMuzzleFlash(false);
       setWonProduct(hit);
       setStep(2);
       setIsFiring(false);
-    }, 380);
+    }, 400);
   };
 
   const handleClaim = () => {
-    if (rating === 0) { setGameError("Please select a star rating!"); return; }
+    if (rating === 0) {
+      setGameError("Please select a star rating!");
+      return;
+    }
     onClaimGift({ wonProduct, rating, comment, name });
   };
 
@@ -123,9 +134,9 @@ const ArcheryGameModal = ({ isOpen, onClose, freeProducts, onClaimGift }) => {
                     <p className="text-sm text-gray-600 mb-4 text-center">Watch the targets drift past, line them up in your sights, and pull the <strong className="text-orange-600">trigger</strong> to win a free gift!</p>
 
                     <div
+                      ref={containerRef}
                       className={`relative overflow-hidden rounded-2xl border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-purple-50 h-32 mb-6 shadow-inner ${isFiring ? "screen-shake" : ""}`}
                     >
-                      {/* Crosshair / scope reticle */}
                       <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-red-500/70 z-10 -translate-x-1/2" />
                       <div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
                         <div className="relative w-9 h-9">
@@ -136,7 +147,6 @@ const ArcheryGameModal = ({ isOpen, onClose, freeProducts, onClaimGift }) => {
                         </div>
                       </div>
 
-                      {/* Muzzle flash */}
                       <AnimatePresence>
                         {showMuzzleFlash && (
                           <motion.div
@@ -151,7 +161,6 @@ const ArcheryGameModal = ({ isOpen, onClose, freeProducts, onClaimGift }) => {
                         )}
                       </AnimatePresence>
 
-                      {/* Product belt */}
                       <div
                         ref={trackRef}
                         className="archery-track flex gap-4 items-center h-full"
@@ -162,7 +171,7 @@ const ArcheryGameModal = ({ isOpen, onClose, freeProducts, onClaimGift }) => {
                           paddingLeft: 24,
                         }}
                       >
-                        {[...freeProducts, ...freeProducts, ...freeProducts].map((p, i) => (
+                        {[...freeProducts, ...freeProducts, ...freeProducts, ...freeProducts].map((p, i) => (
                           <div
                             key={i}
                             data-product-item
@@ -176,7 +185,6 @@ const ArcheryGameModal = ({ isOpen, onClose, freeProducts, onClaimGift }) => {
                         ))}
                       </div>
 
-                      {/* Gun silhouette, bottom center, recoils on fire */}
                       <div
                         className={`absolute left-1/2 -bottom-2 -translate-x-1/2 z-10 pointer-events-none gun-icon ${isFiring ? "gun-recoil" : ""}`}
                       >
@@ -310,7 +318,6 @@ const Pricelist = () => {
   });
   const [suggestedCart, setSuggestedCart] = useState({});
 
-  // ── Review & Archery state for Pricelist.jsx Checkout ─────────────────────
   const [freeGiftProducts, setFreeGiftProducts] = useState([]);
   const [showArcheryModal, setShowArcheryModal] = useState(false);
   const [wonGiftProduct, setWonGiftProduct] = useState(null);
@@ -321,7 +328,9 @@ const Pricelist = () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/products/free`);
       if (res.ok) setFreeGiftProducts(await res.json());
-    } catch (e) { console.error("Failed to fetch free gift products", e); }
+    } catch (e) {
+      console.error("Failed to fetch free gift products", e);
+    }
   }, []);
 
   useEffect(() => {
@@ -352,8 +361,6 @@ const Pricelist = () => {
     const pageWidth = doc.internal.pageSize.getWidth();
     let yOffset = 20;
 
-    // Dynamic year — reflects the current calendar year in both the title
-    // text printed on the PDF and the downloaded file name.
     const year = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric' });
 
     doc.setFontSize(16);
@@ -514,7 +521,6 @@ const Pricelist = () => {
       yOffset += 6;
     }
 
-    // Filename reflects the current year dynamically (e.g. MNC_Pricelist_2026.pdf)
     doc.save(`MNC_Pricelist_${year}.pdf`);
   };
 
@@ -843,9 +849,6 @@ const Pricelist = () => {
 
   const handleFinalCheckout = async () => {
     setIsBookingLoading(true);
-    // Note: order_id is no longer generated on the client. The server
-    // assigns a sequential, year-prefixed ID (e.g. 2026ORD1) and returns
-    // it in the response — used below for the invoice download filename.
     const selectedProducts = Object.entries(cart).map(([serial, qty]) => {
       const product = products.find(p => p.serial_number === serial);
       return {
@@ -916,7 +919,6 @@ const Pricelist = () => {
       if (response.ok) {
         const data = await response.json();
 
-        // Send review data to admin if rating was given
         if (userReviewData && userReviewData.rating > 0) {
           try {
             await fetch(`${API_BASE_URL}/api/reviews`, {
