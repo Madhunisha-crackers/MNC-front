@@ -6,7 +6,8 @@ import { useInView } from "react-intersection-observer"
 import { FaInfoCircle, FaArrowLeft, FaArrowRight } from "react-icons/fa"
 import Navbar from "../Component/Navbar"
 import "../App.css"
-import { API_BASE_URL } from "../../Config"
+import { API_BASE_URL, GOOGLE_REVIEW_URL } from "../../Config"
+import GoogleReviewsMarquee from "../Component/GoogleReviewsMarquee"
 import about from "../cont.jpg"
 import need from "../default.jpg"
 import Launch from './Launch';
@@ -1100,6 +1101,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Google Reviews Auto-Moving Cards Marquee */}
+      <GoogleReviewsMarquee />
 
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-white to-orange-50 border border-orange-100 mx-4 rounded-3xl relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('/placeholder.svg?height=600&width=1200')] bg-cover bg-center opacity-5" />
