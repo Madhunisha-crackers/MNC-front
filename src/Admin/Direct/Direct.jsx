@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import Modal from 'react-modal';
 import { debounce } from 'lodash';
@@ -28,6 +28,28 @@ const selectStyles = {
   }),
   menu: (base) => ({ ...base, zIndex: 50, borderRadius: "10px", boxShadow: "0 10px 40px rgba(0,0,0,0.12)", border: "1px solid #e2e8f0", overflow: "hidden" }),
   singleValue: (base) => ({ ...base, color: "#1e293b", fontWeight: 500 }),
+  multiValue: (base) => ({
+    ...base,
+    backgroundColor: "#fff1f2",
+    borderRadius: "6px",
+    border: "1px solid #fecdd3",
+  }),
+  multiValueLabel: (base) => ({
+    ...base,
+    color: "#e11d48",
+    fontWeight: 600,
+    fontSize: "0.75rem",
+    padding: "2px 6px",
+  }),
+  multiValueRemove: (base) => ({
+    ...base,
+    color: "#e11d48",
+    cursor: "pointer",
+    "&:hover": {
+      backgroundColor: "#e11d48",
+      color: "#fff",
+    },
+  }),
   option: (base, { isFocused, isSelected }) => ({
     ...base,
     background: isSelected ? "#6366f1" : isFocused ? "#f0f0ff" : "#fff",
@@ -74,22 +96,37 @@ class QuotationTableErrorBoundary extends React.Component {
 
 const getEffectivePrice = (item) => Math.round(Number(item.price) || 0);
 
-const isZeroDiscountProductType = (productType) => {
-  if (!productType) return false;
-  const normalized = productType.toString().toLowerCase().replace(/[\s_-]+/g, '');
-  return (
-    normalized.includes('comet') ||
-    normalized.includes('skyshot') ||
-    normalized.includes('repeatingshot') ||
-    normalized.includes('repeating')
-  );
+const formatTypeLabel = (type) => {
+  if (!type) return '';
+  return type
+    .replace(/[_-]+/g, ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 };
 
-const isExemptProductType = (productType) =>
-  productType === 'net_rate' || productType === 'multishot' || isZeroDiscountProductType(productType);
+const isExemptFromAdditionalDiscount = (itemOrType, exemptTypes = []) => {
+  if (!itemOrType) return false;
+  const pt = (typeof itemOrType === 'string' ? itemOrType : (itemOrType.product_type || '')).toString().toLowerCase();
+  if (pt === 'net_rate' || pt === 'multishot') return true;
+  if (typeof itemOrType === 'object' && parseFloat(itemOrType.discount || 0) === 0) return true;
+  return Array.isArray(exemptTypes) && exemptTypes.some(t => t.toLowerCase() === pt);
+};
 
-const isDiscountLocked = (item) =>
-  item.product_type === 'net_rate' || item.product_type === 'multishot' || isZeroDiscountProductType(item.product_type) || item.initialDiscount === 0;
+const isZeroDiscountType = (productType, zeroTypes = []) =>
+  isExemptFromAdditionalDiscount(productType, zeroTypes);
+
+const isZeroDiscountProductType = (productType, zeroTypes = []) =>
+  isExemptFromAdditionalDiscount(productType, zeroTypes);
+
+const isExemptProductType = (productType, zeroTypes = []) =>
+  isExemptFromAdditionalDiscount(productType, zeroTypes);
+
+const isDiscountLocked = (item) => {
+  if (!item) return false;
+  const pt = (item.product_type || '').toString().toLowerCase();
+  return pt === 'net_rate' || pt === 'multishot' || (item.initialDiscount !== undefined && parseFloat(item.initialDiscount || 0) === 0);
+};
 
 const styles = { input: {}, button: {}, card: {} };
 
@@ -260,7 +297,14 @@ const QuotationTable = ({
   isModal = false, additionalDiscount, setAdditionalDiscount,
   changeDiscount, setChangeDiscount, openNewProductModal,
   lastAddedProduct, setLastAddedProduct, setCart, setModalCart,
+  noAdditionalDiscountTypes = [], onNoAdditionalDiscountTypesChange,
+  zeroDiscountTypes = [], onZeroDiscountTypesChange, productTypeOptions = [],
 }) => {
+  const activeExemptTypes = noAdditionalDiscountTypes && noAdditionalDiscountTypes.length > 0
+    ? noAdditionalDiscountTypes
+    : (zeroDiscountTypes || []);
+  const handleExemptChange = onNoAdditionalDiscountTypesChange || onZeroDiscountTypesChange;
+  const [isExemptMinimized, setIsExemptMinimized] = useState(false);
   const quantityInputRefs = useRef({});
   const productSelectRef = useRef(null);
 
@@ -292,9 +336,8 @@ const QuotationTable = ({
 
     setTargetCart(prev => {
       const exists = prev.find(item => item.id.toString() === id && item.product_type === type);
-      const isZeroDisc = isZeroDiscountProductType(product.product_type);
-      const presetDiscount = isZeroDisc ? 0 : (parseFloat(product.discount) || 0);
-      const appliedDiscount = isZeroDisc ? 0 : (isExemptProductType(product.product_type) ? presetDiscount : (presetDiscount || currentDiscount));
+      const presetDiscount = parseFloat(product.discount) || 0;
+      const appliedDiscount = presetDiscount || currentDiscount;
       if (action === "plus") {
         if (exists) {
           return prev.map(item => item.id.toString() === id && item.product_type === type ? { ...item, quantity: item.quantity + 1 } : item);
@@ -317,45 +360,158 @@ const QuotationTable = ({
       }
       return prev;
     });
-  }, [cart, products, isModal, setCart, setModalCart, changeDiscount]);
+  }, [products, isModal, setCart, setModalCart, changeDiscount]);
 
   const total = parseFloat(calculateTotal(cart, additionalDiscount));
   const cartInputCls = "w-20 px-2 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 text-center bg-slate-50 outline-none focus:border-indigo-400 transition-colors";
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <label className="block text-xs font-semibold text-amber-500 uppercase tracking-widest mb-2">
-            Additional Discount (%)
-          </label>
-          <div className="relative">
-            <input
-              type="number"
-              value={additionalDiscount || ''}
-              onChange={(e) => setAdditionalDiscount(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
-              placeholder="0"
-              min="0" max="100" step="1"
-              className="w-full pl-3 pr-8 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 bg-slate-50 outline-none focus:border-amber-400 transition-colors box-border"
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">%</span>
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold text-amber-500 uppercase tracking-wider">
+                Additional Discount (%)
+              </label>
+              <span className="text-[10px] text-slate-400 font-medium">Excludes selected bubble categories & 0% items</span>
+            </div>
+            <div className="relative">
+              <input
+                type="number"
+                value={additionalDiscount || ''}
+                onChange={(e) => setAdditionalDiscount(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                placeholder="0"
+                min="0" max="100" step="1"
+                className="w-full pl-3 pr-8 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 bg-slate-50 outline-none focus:border-amber-400 transition-colors box-border"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">%</span>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold text-indigo-500 uppercase tracking-wider">
+                Bulk Change Discount (%)
+              </label>
+              <span className="text-[10px] text-slate-400 font-medium">Leaves Net Rate & fixed 0% items untouched</span>
+            </div>
+            <div className="relative">
+              <input
+                type="number"
+                value={changeDiscount || ''}
+                onChange={(e) => handleChangeDiscount(e.target.value)}
+                placeholder="0"
+                min="0" max="100" step="1"
+                className="w-full pl-3 pr-8 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">%</span>
+            </div>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <label className="block text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-2">
-            Bulk Change Discount (%)
-          </label>
-          <div className="relative">
-            <input
-              type="number"
-              value={changeDiscount || ''}
-              onChange={(e) => handleChangeDiscount(e.target.value)}
-              placeholder="0"
-              min="0" max="100" step="1"
-              className="w-full pl-3 pr-8 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">%</span>
+
+        {/* Category Exemption from Additional Discount (Bubbles with Checkboxes) */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs transition-all">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div
+              className="flex items-center gap-2 cursor-pointer select-none"
+              onClick={() => setIsExemptMinimized(!isExemptMinimized)}
+            >
+              <button
+                type="button"
+                className="w-6 h-6 rounded-md bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-xs text-slate-600 font-bold transition-colors cursor-pointer"
+                title={isExemptMinimized ? "Expand" : "Minimize"}
+              >
+                {isExemptMinimized ? "▼" : "▲"}
+              </button>
+              <div>
+                <div className="text-xs font-bold text-amber-600 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🛡️</span> Exclude Categories from Additional Discount (%)
+                  {activeExemptTypes.length > 0 && (
+                    <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full lowercase">
+                      {activeExemptTypes.length} exempt
+                    </span>
+                  )}
+                </div>
+                {isExemptMinimized ? (
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {activeExemptTypes.length > 0
+                      ? `${activeExemptTypes.length} categories excluded from extra discount. Click to expand.`
+                      : 'No categories excluded. Click to expand.'}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Select categories in the bubbles below to exclude them from the Additional Discount (they keep their regular discount).
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {!isExemptMinimized && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleExemptChange && handleExemptChange(productTypeOptions.map(o => o.value))}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer hover:underline"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => handleExemptChange && handleExemptChange([])}
+                    className="text-xs text-slate-400 hover:text-slate-600 font-medium cursor-pointer hover:underline"
+                  >
+                    Clear All
+                  </button>
+                  <span className="text-slate-300">|</span>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsExemptMinimized(!isExemptMinimized)}
+                className="text-xs text-slate-500 hover:text-slate-700 font-semibold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 cursor-pointer transition-colors"
+              >
+                {isExemptMinimized ? "▼ Expand" : "▲ Minimize"}
+              </button>
+            </div>
           </div>
+
+          {!isExemptMinimized && (
+            <div className="flex flex-wrap gap-2 pt-3 mt-3 border-t border-slate-100">
+              {productTypeOptions.length > 0 ? (
+                productTypeOptions.map(opt => {
+                  const isChecked = activeExemptTypes.includes(opt.value);
+                  return (
+                    <label
+                      key={opt.value}
+                      className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold border cursor-pointer select-none transition-all duration-150 ${
+                        isChecked
+                          ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {
+                          const next = isChecked
+                            ? activeExemptTypes.filter(t => t !== opt.value)
+                            : [...activeExemptTypes, opt.value];
+                          handleExemptChange && handleExemptChange(next);
+                        }}
+                        className="w-3.5 h-3.5 rounded accent-amber-600 cursor-pointer"
+                      />
+                      <span>{opt.label}</span>
+                    </label>
+                  );
+                })
+              ) : (
+                <span className="text-xs text-slate-400 italic">No categories loaded yet</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -383,7 +539,9 @@ const QuotationTable = ({
               </thead>
               <tbody>
                 {cart.map((item, index) => {
-                  const lineTotal = Math.round(getEffectivePrice(item) * (1 - item.discount / 100) * item.quantity);
+                  const itemDisc = parseFloat(item.discount || 0);
+                  const effectivePrice = getEffectivePrice(item);
+                  const lineTotal = Math.round(effectivePrice * (1 - itemDisc / 100) * item.quantity);
                   return (
                     <tr
                       key={`${item.id}-${item.product_type}`}
@@ -396,20 +554,27 @@ const QuotationTable = ({
                       </td>
                       <td className="px-3.5 py-2.5">
                         <input
-                          type="number" value={getEffectivePrice(item)} min="0" step="1"
+                          type="number" value={effectivePrice} min="0" step="1"
                           onChange={(e) => updatePrice(item.id, item.product_type, parseFloat(e.target.value) || 0, isModal)}
                           className={`${cartInputCls} focus:border-emerald-400`}
                         />
                       </td>
                       <td className="px-3.5 py-2.5">
                         <div className="relative inline-block">
-                          <input
-                            type="number" value={isZeroDiscountProductType(item.product_type) ? 0 : item.discount} min="0" max="100" step="0.01"
-                            onChange={(e) => updateDiscount(item.id, item.product_type, parseFloat(e.target.value) || 0, isModal)}
-                            disabled={item.product_type === 'multishot' || isZeroDiscountProductType(item.product_type)}
-                            className={`${cartInputCls} pr-6 focus:border-amber-400 ${(item.product_type === 'multishot' || isZeroDiscountProductType(item.product_type)) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">%</span>
+                          {item.product_type === 'net_rate' || item.product_type === 'multishot' ? (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-600 border border-rose-200">
+                              0% (Net)
+                            </span>
+                          ) : (
+                            <>
+                              <input
+                                type="number" value={item.discount} min="0" max="100" step="0.01"
+                                onChange={(e) => updateDiscount(item.id, item.product_type, parseFloat(e.target.value) || 0, isModal)}
+                                className={`${cartInputCls} pr-6 focus:border-amber-400`}
+                              />
+                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">%</span>
+                            </>
+                          )}
                         </div>
                       </td>
                       <td className="px-3.5 py-2.5">
@@ -468,16 +633,15 @@ const QuotationTable = ({
                 if (!product) return;
                 const setTargetCart = isModal ? setModalCart : setCart;
                 const setTargetLastAddedProduct = isModal ? null : setLastAddedProduct;
-                const currentDiscount = changeDiscount;
-                const isZeroDisc = isZeroDiscountProductType(product.product_type);
-                const presetDiscount = isZeroDisc ? 0 : (parseFloat(product.discount) || 0);
+                const presetDiscount = parseFloat(product.discount) || 0;
+                const appliedDiscount = presetDiscount || currentDiscount;
                 const newItem = {
                   ...product,
                   id: product.id,
                   price: Math.round(Number(product.price) || 0),
                   quantity: 1,
-                  discount: isZeroDisc ? 0 : (isExemptProductType(product.product_type) ? presetDiscount : (presetDiscount || currentDiscount)),
-                  initialDiscount: presetDiscount,
+                  discount: appliedDiscount,
+                  initialDiscount: parseFloat(product.discount) || 0,
                   per: product.per || 'Unit',
                 };
                 setTargetCart(prev => {
@@ -528,6 +692,8 @@ const FormFields = ({
   handleSubmit, closeModal, modalAdditionalDiscount, setModalAdditionalDiscount,
   modalChangeDiscount, setModalChangeDiscount, openNewProductModal,
   modalLastAddedProduct, setModalLastAddedProduct, submitLoading,
+  noAdditionalDiscountTypes, onNoAdditionalDiscountTypesChange,
+  zeroDiscountTypes, onZeroDiscountTypesChange, productTypeOptions,
 }) => (
   <div className="space-y-5">
     <div>
@@ -560,6 +726,11 @@ const FormFields = ({
         changeDiscount={modalChangeDiscount} setChangeDiscount={setModalChangeDiscount}
         openNewProductModal={openNewProductModal}
         lastAddedProduct={modalLastAddedProduct} setLastAddedProduct={setModalLastAddedProduct}
+        noAdditionalDiscountTypes={noAdditionalDiscountTypes}
+        onNoAdditionalDiscountTypesChange={onNoAdditionalDiscountTypesChange}
+        zeroDiscountTypes={zeroDiscountTypes}
+        onZeroDiscountTypesChange={onZeroDiscountTypesChange}
+        productTypeOptions={productTypeOptions}
       />
     </QuotationTableErrorBoundary>
     <div className="flex justify-end gap-2.5 pt-2">
@@ -950,6 +1121,40 @@ export default function Direct() {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [pdfFileName, setPdfFileName] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
+  const [noAdditionalDiscountTypes, setNoAdditionalDiscountTypes] = useState([]);
+  const zeroDiscountTypes = noAdditionalDiscountTypes;
+
+  const availableProductTypes = useMemo(() => {
+    const defaultTypes = [
+      "one_sound_crackers", "ground_chakkar", "flower_pots", "twinkling_star",
+      "rockets", "bombs", "repeating_shots", "comets_sky_shots",
+      "fancy_pencil_varieties", "fountain_and_fancy_novelties", "matches",
+      "guns_and_caps", "sparklers", "premium_sparklers", "gift_boxes", "kids_special"
+    ];
+    const fromProducts = Array.isArray(products) ? products.map(p => p.product_type).filter(Boolean) : [];
+    const combined = [...new Set([...defaultTypes, ...fromProducts])];
+    combined.sort((a, b) => {
+      const idxA = defaultTypes.indexOf(a.toLowerCase());
+      const idxB = defaultTypes.indexOf(b.toLowerCase());
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+    return combined;
+  }, [products]);
+
+  const productTypeOptions = useMemo(() => {
+    return availableProductTypes.map(t => ({
+      value: t,
+      label: formatTypeLabel(t)
+    }));
+  }, [availableProductTypes]);
+
+  const handleNoAdditionalDiscountTypesChange = (newSelectedTypes) => {
+    setNoAdditionalDiscountTypes(newSelectedTypes);
+  };
+  const handleZeroDiscountTypesChange = handleNoAdditionalDiscountTypesChange;
 
   // ── Gift Game state ──────────────────────────────────────────────────────
   const [giftGameOpen, setGiftGameOpen] = useState(false);
@@ -998,7 +1203,8 @@ export default function Direct() {
               .filter(p => p != null && typeof p === 'object' && typeof p.id !== 'undefined' && typeof p.product_type === 'string' && typeof p.productname === 'string')
               .map(p => ({
                 ...p,
-                discount: isZeroDiscountProductType(p.product_type) ? 0 : (parseFloat(p.discount) || 0),
+                discount: parseFloat(p.discount) || 0,
+                initialDiscount: parseFloat(p.discount) || 0,
               }))
           : [];
         setCustomers(sortedCustomers); setProducts(validProducts);
@@ -1048,8 +1254,7 @@ export default function Direct() {
       }
       if (!hasAnyData) { setError("No customer data available to export"); return; }
       XLSX.writeFile(workbook, "customers_export.xlsx");
-      setSuccessMessage("Customers exported successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 4000);
-    } catch (err) { console.error("Failed to export customers:", err); setError(`Failed to export customers: ${err.message}`); }
+    } catch (err) { console.error("Export error:", err); setError(`Failed to export data: ${err.message}`); }
   };
 
   const exportQuotationsToExcel = async () => {
@@ -1086,20 +1291,42 @@ export default function Direct() {
     let product;
     if (customProduct) {
       const customType = customProduct.product_type || 'custom';
-      const isZeroDisc = isZeroDiscountProductType(customType);
-      const presetDiscount = isZeroDisc ? 0 : (parseFloat(customProduct.discount) || 0);
-      product = { ...customProduct, id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, product_type: customType, price: Math.round(Number(customProduct.price) || 0), quantity: parseInt(customProduct.quantity) || 1, discount: isZeroDisc ? 0 : (isExemptProductType(customType) ? presetDiscount : (presetDiscount || targetDiscount)), initialDiscount: presetDiscount, per: customProduct.per || 'Unit' };
+      const presetDiscount = parseFloat(customProduct.discount) || 0;
+      product = {
+        ...customProduct,
+        id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        product_type: customType,
+        price: Math.round(Number(customProduct.price) || 0),
+        quantity: parseInt(customProduct.quantity) || 1,
+        discount: presetDiscount !== undefined && customProduct.discount !== '' ? presetDiscount : targetDiscount,
+        initialDiscount: presetDiscount,
+        per: customProduct.per || 'Unit'
+      };
     } else if (directProduct) {
-      const isZeroDisc = isZeroDiscountProductType(directProduct.product_type);
-      const presetDiscount = isZeroDisc ? 0 : (parseFloat(directProduct.discount) || 0);
-      product = { ...directProduct, id: directProduct.id, price: Math.round(Number(directProduct.price) || 0), quantity: 1, discount: isZeroDisc ? 0 : (isExemptProductType(directProduct.product_type) ? presetDiscount : (presetDiscount || targetDiscount)), initialDiscount: presetDiscount, per: directProduct.per || 'Unit' };
+      const presetDiscount = parseFloat(directProduct.discount) || 0;
+      product = {
+        ...directProduct,
+        id: directProduct.id,
+        price: Math.round(Number(directProduct.price) || 0),
+        quantity: 1,
+        discount: presetDiscount || targetDiscount,
+        initialDiscount: presetDiscount,
+        per: directProduct.per || 'Unit'
+      };
     } else {
       const [id, type] = targetSelectedProduct.value.split("-");
       product = products.find(p => p.id.toString() === id && p.product_type === type);
       if (!product) { setError("Product not found"); return; }
-      const isZeroDisc = isZeroDiscountProductType(product.product_type);
-      const presetDiscount = isZeroDisc ? 0 : (parseFloat(product.discount) || 0);
-      product = { ...product, id: product.id, price: Math.round(Number(product.price) || 0), quantity: 1, discount: isZeroDisc ? 0 : (isExemptProductType(product.product_type) ? presetDiscount : (presetDiscount || targetDiscount)), initialDiscount: presetDiscount, per: product.per || 'Unit' };
+      const presetDiscount = parseFloat(product.discount) || 0;
+      product = {
+        ...product,
+        id: product.id,
+        price: Math.round(Number(product.price) || 0),
+        quantity: 1,
+        discount: presetDiscount || targetDiscount,
+        initialDiscount: presetDiscount,
+        per: product.per || 'Unit'
+      };
     }
     setTargetCart(prev => {
       const exists = prev.find(item => item.id === product.id && item.product_type === product.product_type);
@@ -1111,17 +1338,16 @@ export default function Direct() {
   };
 
   const updateQuantity = (id, type, quantity, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, quantity: quantity < 0 ? 0 : quantity } : item)); };
-  const updateDiscount = (id, type, discount, isModal = false) => { if (type === 'multishot' || isZeroDiscountProductType(type)) return; const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, discount: discount < 0 ? 0 : discount > 100 ? 100 : discount } : item)); };
+  const updateDiscount = (id, type, discount, isModal = false) => { if (type === 'net_rate' || type === 'multishot') return; const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, discount: discount < 0 ? 0 : discount > 100 ? 100 : discount } : item)); };
   const updatePrice = (id, type, price, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.map(item => item.id === id && item.product_type === type ? { ...item, price: price < 0 ? 0 : price } : item)); };
   const removeFromCart = (id, type, isModal = false) => { const s = isModal ? setModalCart : setCart; s(prev => prev.filter(item => !(item.id === id && item.product_type === type))); };
 
   const calculateDiscountedSubtotal = (targetCart = [], additionalDiscount = 0) => {
     return targetCart.reduce((total, item) => {
       const linePrice = getEffectivePrice(item);
-      const isZeroDisc = isZeroDiscountProductType(item.product_type);
-      const itemDisc = isZeroDisc ? 0 : (parseFloat(item.discount) || 0);
+      const itemDisc = parseFloat(item.discount || 0);
       const lineAfterDisc = linePrice * (1 - itemDisc / 100) * item.quantity;
-      if (isZeroDisc) {
+      if (isExemptFromAdditionalDiscount(item, noAdditionalDiscountTypes)) {
         return total + lineAfterDisc;
       }
       return total + lineAfterDisc * (1 - (parseFloat(additionalDiscount) || 0) / 100);
@@ -1130,7 +1356,7 @@ export default function Direct() {
 
   const calculateNetRate = (targetCart = []) => targetCart.reduce((total, item) => total + getEffectivePrice(item) * item.quantity, 0).toFixed(2);
   const calculateYouSave = (targetCart = []) => targetCart.reduce((total, item) => {
-    const disc = isZeroDiscountProductType(item.product_type) ? 0 : (parseFloat(item.discount) || 0);
+    const disc = parseFloat(item.discount || 0);
     return total + getEffectivePrice(item) * (disc / 100) * item.quantity;
   }, 0).toFixed(2);
   const calculateProcessingFee = (targetCart = [], additionalDiscount = 0) => {
@@ -1152,7 +1378,35 @@ export default function Direct() {
     try {
       const discountedSubtotal = calculateDiscountedSubtotal(cart, additionalDiscount);
       const processingFee = discountedSubtotal * 0.01;
-      const payload = { customer_id: Number(selectedCustomer.value), quotation_id, products: cart.map(item => ({ id: item.id, product_type: item.product_type, productname: item.productname, price: getEffectivePrice(item), discount: isZeroDiscountProductType(item.product_type) ? 0 : (parseFloat(item.discount) || 0), quantity: parseInt(item.quantity) || 0, per: item.per || 'Unit', serial_number: item.serial_number || undefined })), net_rate: parseFloat(calculateNetRate(cart)), you_save: parseFloat(calculateYouSave(cart)), processing_fee: processingFee, total: parseFloat(calculateTotal(cart, additionalDiscount)), promo_discount: 0, additional_discount: parseFloat(additionalDiscount.toFixed(2)), customer_type: customer.customer_type || "User", customer_name: customer.name, address: customer.address, mobile_number: customer.mobile_number, email: customer.email, district: customer.district, state: customer.state, status: "pending" };
+      const payload = {
+        customer_id: Number(selectedCustomer.value),
+        quotation_id,
+        products: cart.map(item => ({
+          id: item.id,
+          product_type: item.product_type,
+          productname: item.productname,
+          price: getEffectivePrice(item),
+          discount: parseFloat(item.discount) || 0,
+          quantity: parseInt(item.quantity) || 0,
+          per: item.per || 'Unit',
+          serial_number: item.serial_number || undefined,
+          exempt_additional_discount: isExemptFromAdditionalDiscount(item, noAdditionalDiscountTypes)
+        })),
+        net_rate: parseFloat(calculateNetRate(cart)),
+        you_save: parseFloat(calculateYouSave(cart)),
+        processing_fee: processingFee,
+        total: parseFloat(calculateTotal(cart, additionalDiscount)),
+        promo_discount: 0,
+        additional_discount: parseFloat(additionalDiscount.toFixed(2)),
+        customer_type: customer.customer_type || "User",
+        customer_name: customer.name,
+        address: customer.address,
+        mobile_number: customer.mobile_number,
+        email: customer.email,
+        district: customer.district,
+        state: customer.state,
+        status: "pending"
+      };
       const response = await axios.post(`${API_BASE_URL}/api/direct/quotations`, payload);
       const newQuotationId = response.data.quotation_id;
       if (!newQuotationId || newQuotationId === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(newQuotationId)) throw new Error("Invalid quotation ID returned from server");
@@ -1177,7 +1431,17 @@ export default function Direct() {
       setQuotationId(quotation.quotation_id); setModalAdditionalDiscount(parseFloat(quotation.additional_discount) || 0); setModalChangeDiscount(0);
       try {
         const prods = typeof quotation.products === "string" ? JSON.parse(quotation.products) : quotation.products;
-        setModalCart(Array.isArray(prods) ? prods.map(p => ({ ...p, id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, price: parseFloat(p.price) || 0, discount: isZeroDiscountProductType(p.product_type) ? 0 : (parseFloat(p.discount) || 0), initialDiscount: isZeroDiscountProductType(p.product_type) ? 0 : (parseFloat(p.discount) || 0), quantity: parseInt(p.quantity) || 0, per: p.per || 'Unit', product_type: p.product_type || 'custom' })) : []);
+        setModalCart(Array.isArray(prods) ? prods.map(p => ({
+          ...p,
+          id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          price: parseFloat(p.price) || 0,
+          discount: parseFloat(p.discount) || 0,
+          initialDiscount: parseFloat(p.discount) || 0,
+          quantity: parseInt(p.quantity) || 0,
+          per: p.per || 'Unit',
+          product_type: p.product_type || 'custom',
+          exempt_additional_discount: p.exempt_additional_discount ?? isExemptFromAdditionalDiscount(p, noAdditionalDiscountTypes)
+        })) : []);
       } catch (e) { setModalCart([]); setError("Failed to parse quotation products"); return; }
       setModalIsOpen(true); return;
     }
@@ -1190,7 +1454,27 @@ export default function Direct() {
       if (!customer) throw new Error("Invalid customer");
       const discountedSubtotal = calculateDiscountedSubtotal(modalCart, modalAdditionalDiscount);
       const processingFee = discountedSubtotal * 0.01;
-      const payload = { customer_id: Number(modalSelectedCustomer.value), products: modalCart.map(item => ({ id: item.id, product_type: item.product_type, productname: item.productname, price: parseFloat(item.price) || 0, discount: isZeroDiscountProductType(item.product_type) ? 0 : (parseFloat(item.discount) || 0), quantity: parseInt(item.quantity) || 0, per: item.per || 'Unit' })), net_rate: parseFloat(calculateNetRate(modalCart)) || 0, you_save: parseFloat(calculateYouSave(modalCart)) || 0, processing_fee: parseFloat(processingFee) || 0, total: parseFloat(calculateTotal(modalCart, modalAdditionalDiscount)) || 0, promo_discount: 0, additional_discount: parseFloat(modalAdditionalDiscount.toFixed(2)) || 0, status: "pending" };
+      const payload = {
+        customer_id: Number(modalSelectedCustomer.value),
+        products: modalCart.map(item => ({
+          id: item.id,
+          product_type: item.product_type,
+          productname: item.productname,
+          price: parseFloat(item.price) || 0,
+          discount: parseFloat(item.discount) || 0,
+          quantity: parseInt(item.quantity) || 0,
+          per: item.per || 'Unit',
+          serial_number: item.serial_number || undefined,
+          exempt_additional_discount: isExemptFromAdditionalDiscount(item, noAdditionalDiscountTypes)
+        })),
+        net_rate: parseFloat(calculateNetRate(modalCart)) || 0,
+        you_save: parseFloat(calculateYouSave(modalCart)) || 0,
+        processing_fee: parseFloat(processingFee) || 0,
+        total: parseFloat(calculateTotal(modalCart, modalAdditionalDiscount)) || 0,
+        promo_discount: 0,
+        additional_discount: parseFloat(modalAdditionalDiscount.toFixed(2)) || 0,
+        status: "pending"
+      };
       const response = await axios.put(`${API_BASE_URL}/api/direct/quotations/${quotationId}`, payload);
       const updatedId = response.data.quotation_id || quotationId;
       if (!updatedId) throw new Error("Invalid quotation ID returned");
@@ -1214,7 +1498,17 @@ export default function Direct() {
       setQuotationId(quotation.quotation_id); setOrderId(`ORD-${Date.now()}`); setModalAdditionalDiscount(parseFloat(quotation.additional_discount) || 0); setModalChangeDiscount(0);
       try {
         const prods = typeof quotation.products === "string" ? JSON.parse(quotation.products) : quotation.products;
-        setModalCart(Array.isArray(prods) ? prods.map(p => ({ ...p, id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, price: parseFloat(p.price) || 0, discount: isZeroDiscountProductType(p.product_type) ? 0 : (parseFloat(p.discount) || 0), initialDiscount: isZeroDiscountProductType(p.product_type) ? 0 : (parseFloat(p.discount) || 0), quantity: parseInt(p.quantity) || 0, per: p.per || 'Unit', product_type: p.product_type || 'custom' })) : []);
+        setModalCart(Array.isArray(prods) ? prods.map(p => ({
+          ...p,
+          id: p.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          price: parseFloat(p.price) || 0,
+          discount: parseFloat(p.discount) || 0,
+          initialDiscount: parseFloat(p.discount) || 0,
+          quantity: parseInt(p.quantity) || 0,
+          per: p.per || 'Unit',
+          product_type: p.product_type || 'custom',
+          exempt_additional_discount: p.exempt_additional_discount ?? isExemptFromAdditionalDiscount(p, noAdditionalDiscountTypes)
+        })) : []);
       } catch (e) { setModalCart([]); setError("Failed to parse quotation products"); return; }
       setModalIsOpen(true); return;
     }
@@ -1227,7 +1521,35 @@ export default function Direct() {
       if (!customer) throw new Error("Invalid customer");
       const discountedSubtotal = calculateDiscountedSubtotal(modalCart, modalAdditionalDiscount);
       const processingFee = discountedSubtotal * 0.01;
-      const payload = { customer_id: Number(modalSelectedCustomer.value), order_id: orderId, quotation_id: quotationId, products: modalCart.map(item => ({ id: item.id, product_type: item.product_type, productname: item.productname, price: getEffectivePrice(item), discount: isZeroDiscountProductType(item.product_type) ? 0 : (parseFloat(item.discount) || 0), quantity: parseInt(item.quantity) || 0, per: item.per || 'Unit', serial_number: item.serial_number || undefined })), net_rate: parseFloat(calculateNetRate(modalCart)), you_save: parseFloat(calculateYouSave(modalCart)), processing_fee: processingFee, total: parseFloat(calculateTotal(modalCart, modalAdditionalDiscount)), promo_discount: 0, additional_discount: parseFloat(modalAdditionalDiscount.toFixed(2)), customer_type: customer.customer_type || "User", customer_name: customer.name, address: customer.address, mobile_number: customer.mobile_number, email: customer.email, district: customer.district, state: customer.state };
+      const payload = {
+        customer_id: Number(modalSelectedCustomer.value),
+        order_id: orderId,
+        quotation_id: quotationId,
+        products: modalCart.map(item => ({
+          id: item.id,
+          product_type: item.product_type,
+          productname: item.productname,
+          price: getEffectivePrice(item),
+          discount: parseFloat(item.discount) || 0,
+          quantity: parseInt(item.quantity) || 0,
+          per: item.per || 'Unit',
+          serial_number: item.serial_number || undefined,
+          exempt_additional_discount: isExemptFromAdditionalDiscount(item, noAdditionalDiscountTypes)
+        })),
+        net_rate: parseFloat(calculateNetRate(modalCart)),
+        you_save: parseFloat(calculateYouSave(modalCart)),
+        processing_fee: processingFee,
+        total: parseFloat(calculateTotal(modalCart, modalAdditionalDiscount)),
+        promo_discount: 0,
+        additional_discount: parseFloat(modalAdditionalDiscount.toFixed(2)),
+        customer_type: customer.customer_type || "User",
+        customer_name: customer.name,
+        address: customer.address,
+        mobile_number: customer.mobile_number,
+        email: customer.email,
+        district: customer.district,
+        state: customer.state
+      };
       const response = await axios.post(`${API_BASE_URL}/api/direct/bookings`, payload);
       setSuccessMessage("Booking created successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000);
       setQuotations(prev => prev.map(q => q.quotation_id === quotationId ? { ...q, status: "booked" } : q));
@@ -1265,7 +1587,7 @@ export default function Direct() {
     if (!productData.product_type) return setError("Product type is required");
     const sanitizedData = {
       ...productData,
-      discount: isZeroDiscountProductType(productData.product_type) ? 0 : (parseFloat(productData.discount) || 0),
+      discount: parseFloat(productData.discount) || 0,
     };
     addToCart(newProductIsForModal, sanitizedData); closeNewProductModal();
   };
@@ -1330,6 +1652,11 @@ export default function Direct() {
                   changeDiscount={changeDiscount} setChangeDiscount={setChangeDiscount}
                   openNewProductModal={openNewProductModal}
                   lastAddedProduct={lastAddedProduct} setLastAddedProduct={setLastAddedProduct}
+                  noAdditionalDiscountTypes={noAdditionalDiscountTypes}
+                  onNoAdditionalDiscountTypesChange={handleNoAdditionalDiscountTypesChange}
+                  zeroDiscountTypes={zeroDiscountTypes}
+                  onZeroDiscountTypesChange={handleZeroDiscountTypesChange}
+                  productTypeOptions={productTypeOptions}
                 />
               </QuotationTableErrorBoundary>
 
@@ -1489,6 +1816,11 @@ export default function Direct() {
               openNewProductModal={openNewProductModal}
               modalLastAddedProduct={modalLastAddedProduct} setModalLastAddedProduct={setModalLastAddedProduct}
               submitLoading={modalSubmitLoading}
+              noAdditionalDiscountTypes={noAdditionalDiscountTypes}
+              onNoAdditionalDiscountTypesChange={handleNoAdditionalDiscountTypesChange}
+              zeroDiscountTypes={zeroDiscountTypes}
+              onZeroDiscountTypesChange={handleZeroDiscountTypesChange}
+              productTypeOptions={productTypeOptions}
             />
           </div>
         </Modal>

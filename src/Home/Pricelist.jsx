@@ -280,13 +280,7 @@ const ArcheryGameModal = ({ isOpen, onClose, freeProducts, onClaimGift }) => {
 
 const isZeroDiscountProductType = (productType) => {
   if (!productType) return false;
-  const normalized = productType.toString().toLowerCase().replace(/[\s_-]+/g, '');
-  return (
-    normalized.includes('comet') ||
-    normalized.includes('skyshot') ||
-    normalized.includes('repeatingshot') ||
-    normalized.includes('repeating')
-  );
+  return productType.toString().toLowerCase() === 'net_rate';
 };
 
 const Pricelist = () => {
