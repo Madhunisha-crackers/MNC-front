@@ -107,9 +107,14 @@ const formatTypeLabel = (type) => {
 
 const isExemptFromAdditionalDiscount = (itemOrType, exemptTypes = []) => {
   if (!itemOrType) return false;
+  if (typeof itemOrType === 'object') {
+    if (itemOrType.isCustom || itemOrType.isDirect || String(itemOrType.id || '').startsWith('custom-') || (itemOrType.product_type || '').toLowerCase() === 'custom') {
+      return true;
+    }
+    if (parseFloat(itemOrType.discount || 0) === 0) return true;
+  }
   const pt = (typeof itemOrType === 'string' ? itemOrType : (itemOrType.product_type || '')).toString().toLowerCase();
-  if (pt === 'net_rate' || pt === 'multishot') return true;
-  if (typeof itemOrType === 'object' && parseFloat(itemOrType.discount || 0) === 0) return true;
+  if (pt === 'net_rate' || pt === 'multishot' || pt === 'custom') return true;
   return Array.isArray(exemptTypes) && exemptTypes.some(t => t.toLowerCase() === pt);
 };
 
@@ -125,7 +130,7 @@ const isExemptProductType = (productType, zeroTypes = []) =>
 const isDiscountLocked = (item) => {
   if (!item) return false;
   const pt = (item.product_type || '').toString().toLowerCase();
-  return pt === 'net_rate' || pt === 'multishot' || (item.initialDiscount !== undefined && parseFloat(item.initialDiscount || 0) === 0);
+  return pt === 'net_rate' || pt === 'multishot' || item.isCustom || String(item.id || '').startsWith('custom-') || (item.initialDiscount !== undefined && parseFloat(item.initialDiscount || 0) === 0);
 };
 
 const styles = { input: {}, button: {}, card: {} };
@@ -212,18 +217,26 @@ const CustomOption = (props) => {
     <div
       ref={innerRef}
       {...innerProps}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (onAddToCart) onAddToCart(data.value, "plus");
+      }}
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "8px 12px",
-        background: isSelected ? "#6366f1" : isFocused ? "#f0f0ff" : "#fff",
-        color: isSelected ? "#fff" : "#1e293b",
+        padding: "9px 12px",
+        background: isSelected ? "#eef2ff" : isFocused ? "#f8fafc" : qty > 0 ? "#f0fdf4" : "#fff",
+        color: "#1e293b",
         cursor: "pointer",
         gap: "8px",
+        borderBottom: "1px solid #f1f5f9",
+        transition: "background-color 0.15s ease",
       }}
+      title="Click anywhere on product to add to cart"
     >
-      <span style={{ flex: 1, fontSize: "0.9rem", fontWeight: isFocused || isSelected ? 500 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <span style={{ flex: 1, fontSize: "0.88rem", fontWeight: isFocused || isSelected || qty > 0 ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {data.label}
       </span>
       <div
@@ -234,12 +247,11 @@ const CustomOption = (props) => {
         {qty > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
             <button
+              type="button"
               onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddToCart && onAddToCart(data.value, "minus"); }}
               style={{
-                width: "22px", height: "22px", borderRadius: "50%", border: "1.5px solid",
-                borderColor: isSelected ? "rgba(255,255,255,0.6)" : "#e2e8f0",
-                background: isSelected ? "rgba(255,255,255,0.15)" : "#fff",
-                color: isSelected ? "#fff" : "#64748b",
+                width: "22px", height: "22px", borderRadius: "50%", border: "1.5px solid #e2e8f0",
+                background: "#fff", color: "#64748b",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: "14px", fontWeight: "bold", cursor: "pointer", lineHeight: 1, flexShrink: 0,
               }}
@@ -251,21 +263,18 @@ const CustomOption = (props) => {
               onMouseDown={(e) => e.stopPropagation()}
               onChange={(e) => { e.stopPropagation(); onAddToCart && onAddToCart(data.value, "set", parseInt(e.target.value) || 0); }}
               style={{
-                width: "38px", height: "24px", borderRadius: "6px", border: "1.5px solid",
-                borderColor: isSelected ? "rgba(255,255,255,0.5)" : "#c7d2fe",
-                background: isSelected ? "rgba(255,255,255,0.2)" : "#eef2ff",
-                color: isSelected ? "#fff" : "#4338ca",
+                width: "38px", height: "24px", borderRadius: "6px", border: "1.5px solid #c7d2fe",
+                background: "#eef2ff", color: "#4338ca",
                 textAlign: "center", fontSize: "0.78rem", fontWeight: "700",
                 outline: "none", padding: "0 2px",
               }}
             />
             <button
+              type="button"
               onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddToCart && onAddToCart(data.value, "plus"); }}
               style={{
-                width: "22px", height: "22px", borderRadius: "50%", border: "1.5px solid",
-                borderColor: isSelected ? "rgba(255,255,255,0.6)" : "#6366f1",
-                background: isSelected ? "rgba(255,255,255,0.2)" : "#6366f1",
-                color: "#fff",
+                width: "22px", height: "22px", borderRadius: "50%", border: "1.5px solid #6366f1",
+                background: "#6366f1", color: "#fff",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: "14px", fontWeight: "bold", cursor: "pointer", lineHeight: 1, flexShrink: 0,
               }}
@@ -274,12 +283,12 @@ const CustomOption = (props) => {
         )}
         {qty === 0 && (
           <button
+            type="button"
             onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddToCart && onAddToCart(data.value, "plus"); }}
+            title="Add to cart"
             style={{
-              width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid",
-              borderColor: isSelected ? "rgba(255,255,255,0.7)" : "#6366f1",
-              background: isSelected ? "rgba(255,255,255,0.2)" : "#6366f1",
-              color: "#fff",
+              width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid #6366f1",
+              background: "#6366f1", color: "#fff",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: "16px", fontWeight: "bold", cursor: "pointer", lineHeight: 1, flexShrink: 0,
             }}
@@ -323,7 +332,7 @@ const QuotationTable = ({
   const handleChangeDiscount = (value) => {
     const newDiscount = Math.max(0, Math.min(100, parseFloat(value) || 0));
     setChangeDiscount(newDiscount);
-    const updatedCart = cart.map(item => (isDiscountLocked(item) ? item : { ...item, discount: newDiscount }));
+    const updatedCart = cart.map(item => (isDiscountLocked(item) || item.isCustom ? item : { ...item, discount: newDiscount }));
     if (isModal) setModalCart(updatedCart); else setCart(updatedCart);
   };
 
@@ -549,8 +558,20 @@ const QuotationTable = ({
                     >
                       <td className="px-3.5 py-2.5 text-center text-xs font-bold text-slate-400">{index + 1}</td>
                       <td className="px-3.5 py-2.5">
-                        <div className="font-semibold text-slate-800">{item.productname}</div>
-                        <div className="text-xs text-slate-400 mt-0.5">{item.product_type}{item.serial_number ? ` · ${item.serial_number}` : ""}</div>
+                        <div className="font-semibold text-slate-800 flex items-center gap-2 flex-wrap">
+                          <span>{item.productname}</span>
+                          {(item.isCustom || String(item.id).startsWith('custom-')) && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+                              Custom
+                            </span>
+                          )}
+                          {isExemptFromAdditionalDiscount(item, activeExemptTypes) && additionalDiscount > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-medium">
+                              Exempt Extra %
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-400 mt-0.5">{formatTypeLabel(item.product_type)}{item.serial_number ? ` · ${item.serial_number}` : ""}{item.per ? ` · ${item.per}` : ""}</div>
                       </td>
                       <td className="px-3.5 py-2.5">
                         <input
@@ -625,44 +646,44 @@ const QuotationTable = ({
             <Select
               ref={productSelectRef}
               value={selectedProduct}
+              closeMenuOnSelect={false}
               onChange={(option) => {
                 if (!option) return setSelectedProduct(null);
-                setSelectedProduct(option);
                 const [id, type] = option.value.split("-");
                 const product = products.find(p => p.id.toString() === id && p.product_type === type);
                 if (!product) return;
                 const setTargetCart = isModal ? setModalCart : setCart;
                 const setTargetLastAddedProduct = isModal ? null : setLastAddedProduct;
                 const presetDiscount = parseFloat(product.discount) || 0;
-                const appliedDiscount = presetDiscount || currentDiscount;
+                const appliedDiscount = presetDiscount || changeDiscount || 0;
                 const newItem = {
                   ...product,
                   id: product.id,
                   price: Math.round(Number(product.price) || 0),
                   quantity: 1,
                   discount: appliedDiscount,
-                  initialDiscount: parseFloat(product.discount) || 0,
+                  initialDiscount: presetDiscount,
                   per: product.per || 'Unit',
                 };
                 setTargetCart(prev => {
-                  const exists = prev.find(item => item.id === product.id && item.product_type === product.product_type);
+                  const exists = prev.find(item => item.id.toString() === id && item.product_type === type);
                   return exists
-                    ? prev.map(item => item.id === product.id && item.product_type === product.product_type
+                    ? prev.map(item => item.id.toString() === id && item.product_type === type
                       ? { ...item, quantity: item.quantity + 1 } : item)
                     : [...prev, newItem];
                 });
                 if (setTargetLastAddedProduct) {
                   setTargetLastAddedProduct({ id: product.id, product_type: product.product_type });
-                } else {
+                } else if (setLastAddedProduct) {
                   setLastAddedProduct({ id: product.id, product_type: product.product_type });
                 }
                 setSelectedProduct(null);
               }}
               options={products.map((p) => ({
                 value: `${p.id}-${p.product_type}`,
-                label: `${p.serial_number ? `[${p.serial_number}] ` : ''}${p.productname} · ${p.product_type} · ₹${getEffectivePrice(p)}`,
+                label: `${p.serial_number ? `[${p.serial_number}] ` : ''}${p.productname} · ${formatTypeLabel(p.product_type)} · ₹${getEffectivePrice(p)}`,
               }))}
-              placeholder="Type to search products..."
+              placeholder="Type to search products (or click to add)..."
               isClearable
               isSearchable
               styles={selectStyles}
@@ -673,10 +694,11 @@ const QuotationTable = ({
           </div>
           <button
             onClick={() => openNewProductModal(isModal)}
-            className="h-11 px-5 rounded-xl font-bold text-sm flex items-center gap-2 whitespace-nowrap bg-gradient-to-br from-emerald-500 to-emerald-400 text-white shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-500 transition-all duration-200"
+            className="h-11 px-5 rounded-xl font-bold text-sm flex items-center gap-2 whitespace-nowrap bg-gradient-to-br from-emerald-500 to-emerald-400 text-white shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-500 transition-all duration-200 cursor-pointer"
+            title="Add a custom product directly to cart"
           >
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
-            Custom Product
+            + Add Product
           </button>
         </div>
       </div>
@@ -705,7 +727,7 @@ const FormFields = ({
         onChange={setModalSelectedCustomer}
         options={customers.map((c) => ({
           value: c.id.toString(),
-          label: `${c.name} (${c.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : c.customer_type || "User"} - ${c.district || "N/A"})`,
+          label: `${c.name || c.customer_name || 'Customer'} (${c.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : c.customer_type || "User"} - ${c.district || "N/A"})`,
         }))}
         placeholder="Search for a customer..."
         isClearable
@@ -758,7 +780,7 @@ const FormFields = ({
   </div>
 );
 
-const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProductData }) => {
+const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProductData, productTypeOptions = [] }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localProductData, setLocalProductData] = useState(newProductData);
 
@@ -781,46 +803,158 @@ const NewProductModal = ({ isOpen, onClose, onSubmit, newProductData, setNewProd
     finally { setIsSubmitting(false); }
   };
 
-  const fields = [
-    { name: "productname", label: "Product Name", type: "text", placeholder: "e.g. Ground Chakkar", required: true, full: true },
-    { name: "price", label: "Price (₹)", type: "number", placeholder: "0", min: 0, step: 1, required: true },
-    { name: "discount", label: "Discount (%)", type: "number", placeholder: "0", min: 0, max: 100, step: 0.01 },
-    { name: "quantity", label: "Quantity", type: "number", placeholder: "1", min: 1, step: 1, required: true },
-    { name: "per", label: "Unit", type: "text", placeholder: "Box / Piece" },
-    { name: "product_type", label: "Product Type", type: "text", placeholder: "custom", required: true },
-  ];
-
-  const isValid = localProductData.productname && localProductData.price !== '' && localProductData.quantity !== '' && localProductData.product_type;
+  const isValid = Boolean(localProductData.productname && localProductData.price !== '' && localProductData.quantity !== '');
 
   return (
-    <Modal isOpen={isOpen} onRequestClose={onClose} className="fixed inset-0 flex items-center justify-center p-4" overlayClassName="fixed inset-0 bg-black/50">
-      <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl">
-        <h2 className="text-xl font-extrabold text-slate-800 mb-6 text-center">✦ Add Custom Product</h2>
-        <div className="grid grid-cols-2 gap-3.5">
-          {fields.map(({ name, label, type, placeholder, min, max, step, required, full }) => (
-            <div key={name} className={full ? "col-span-2" : "col-span-1"}>
+    <Modal isOpen={isOpen} onRequestClose={onClose} className="fixed inset-0 flex items-center justify-center p-4 z-50" overlayClassName="fixed inset-0 bg-black/50 z-50">
+      <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl">
+        <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-3">
+          <div>
+            <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+              <span className="text-emerald-500">✦</span> Add Custom Product
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">Directly added to cart — exempt from additional discount</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 font-bold text-lg p-1">✕</button>
+        </div>
+
+        <div className="space-y-3.5">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+              Product Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              name="productname"
+              type="text"
+              value={localProductData.productname || ''}
+              onChange={handleInputChange}
+              placeholder="e.g. Special Fancy Pencil Box"
+              className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
-                {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+                Price (₹) <span className="text-red-500">*</span>
               </label>
               <input
-                name={name} type={type} value={localProductData[name] || ''} onChange={handleInputChange}
-                placeholder={placeholder}
+                name="price"
+                type="number"
+                min="0"
+                step="1"
+                value={localProductData.price ?? ''}
+                onChange={handleInputChange}
+                placeholder="0"
                 className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
-                {...(min !== undefined ? { min } : {})} {...(max !== undefined ? { max } : {})} {...(step !== undefined ? { step } : {})}
               />
             </div>
-          ))}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                Discount (%)
+              </label>
+              <input
+                name="discount"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={localProductData.discount ?? ''}
+                onChange={handleInputChange}
+                placeholder="0"
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                Quantity <span className="text-red-500">*</span>
+              </label>
+              <input
+                name="quantity"
+                type="number"
+                min="1"
+                step="1"
+                value={localProductData.quantity ?? '1'}
+                onChange={handleInputChange}
+                placeholder="1"
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                Unit / Per
+              </label>
+              <input
+                name="per"
+                type="text"
+                list="units-list"
+                value={localProductData.per || 'Box'}
+                onChange={handleInputChange}
+                placeholder="Box / Piece / Pkt"
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+              />
+              <datalist id="units-list">
+                <option value="Box" />
+                <option value="Piece" />
+                <option value="Pkt" />
+                <option value="Bundle" />
+                <option value="Unit" />
+              </datalist>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                Category
+              </label>
+              <select
+                name="product_type"
+                value={localProductData.product_type || 'custom'}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+              >
+                <option value="custom">Custom Product</option>
+                {productTypeOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                Details / Notes
+              </label>
+              <input
+                name="description"
+                type="text"
+                value={localProductData.description || ''}
+                onChange={handleInputChange}
+                placeholder="Optional description"
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
+              />
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2.5 mt-6 justify-end">
+
+        <div className="flex gap-2.5 mt-6 justify-end pt-3 border-t border-slate-100">
           <button
-            onClick={onClose} disabled={isSubmitting}
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
             className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm cursor-pointer hover:bg-slate-50 transition-colors"
           >
             Cancel
           </button>
           <button
-            onClick={handleSubmit} disabled={isSubmitting || !isValid}
-            className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all duration-200 flex items-center gap-2
+            type="button"
+            onClick={handleSubmit}
+            disabled={isSubmitting || !isValid}
+            className={`px-6 py-2.5 rounded-xl font-bold text-sm text-white transition-all duration-200 flex items-center gap-2 cursor-pointer
               ${isSubmitting || !isValid
                 ? "bg-slate-200 text-slate-400 cursor-not-allowed"
                 : "bg-gradient-to-br from-emerald-500 to-emerald-400 shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-500"
@@ -1300,7 +1434,9 @@ export default function Direct() {
         quantity: parseInt(customProduct.quantity) || 1,
         discount: presetDiscount !== undefined && customProduct.discount !== '' ? presetDiscount : targetDiscount,
         initialDiscount: presetDiscount,
-        per: customProduct.per || 'Unit'
+        per: customProduct.per || 'Unit',
+        isCustom: true,
+        isDirect: true
       };
     } else if (directProduct) {
       const presetDiscount = parseFloat(directProduct.discount) || 0;
@@ -1378,48 +1514,58 @@ export default function Direct() {
     try {
       const discountedSubtotal = calculateDiscountedSubtotal(cart, additionalDiscount);
       const processingFee = discountedSubtotal * 0.01;
+      const customerName = customer.name || customer.customer_name || "Valued Customer";
       const payload = {
         customer_id: Number(selectedCustomer.value),
         quotation_id,
         products: cart.map(item => ({
           id: item.id,
-          product_type: item.product_type,
+          product_type: item.product_type || 'custom',
           productname: item.productname,
           price: getEffectivePrice(item),
           discount: parseFloat(item.discount) || 0,
           quantity: parseInt(item.quantity) || 0,
           per: item.per || 'Unit',
           serial_number: item.serial_number || undefined,
+          isCustom: Boolean(item.isCustom || String(item.id).startsWith('custom-') || item.product_type === 'custom'),
           exempt_additional_discount: isExemptFromAdditionalDiscount(item, noAdditionalDiscountTypes)
         })),
-        net_rate: parseFloat(calculateNetRate(cart)),
-        you_save: parseFloat(calculateYouSave(cart)),
-        processing_fee: processingFee,
-        total: parseFloat(calculateTotal(cart, additionalDiscount)),
+        net_rate: parseFloat(calculateNetRate(cart)) || 0,
+        you_save: parseFloat(calculateYouSave(cart)) || 0,
+        processing_fee: parseFloat(processingFee.toFixed(2)) || 0,
+        total: parseFloat(calculateTotal(cart, additionalDiscount)) || 0,
         promo_discount: 0,
-        additional_discount: parseFloat(additionalDiscount.toFixed(2)),
+        additional_discount: parseFloat(Number(additionalDiscount || 0).toFixed(2)),
         customer_type: customer.customer_type || "User",
-        customer_name: customer.name,
-        address: customer.address,
-        mobile_number: customer.mobile_number,
-        email: customer.email,
-        district: customer.district,
-        state: customer.state,
+        customer_name: customerName,
+        address: customer.address || "",
+        mobile_number: customer.mobile_number || "",
+        email: customer.email || "",
+        district: customer.district || "",
+        state: customer.state || "",
         status: "pending"
       };
       const response = await axios.post(`${API_BASE_URL}/api/direct/quotations`, payload);
-      const newQuotationId = response.data.quotation_id;
-      if (!newQuotationId || newQuotationId === "undefined" || !/^[a-zA-Z0-9-_]+$/.test(newQuotationId)) throw new Error("Invalid quotation ID returned from server");
+      const newQuotationId = response.data?.quotation_id || quotation_id;
       setQuotationId(newQuotationId); setIsQuotationCreated(true);
       setSuccessMessage("Quotation created successfully!"); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000);
-      setQuotations(prev => [{ ...payload, created_at: new Date().toISOString(), customer_name: customer.name, total: payload.total }, ...prev]);
-      setFilteredQuotations(prev => [{ ...payload, created_at: new Date().toISOString(), customer_name: customer.name, total: payload.total }, ...prev]);
-      const pdfRes = await axios.get(`${API_BASE_URL}/api/direct/quotation/${newQuotationId}`, { responseType: "blob" });
-      const blobUrl = window.URL.createObjectURL(new Blob([pdfRes.data]));
-      const safeName = (customer.name || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-      setPdfUrl(blobUrl); setPdfFileName(`${safeName}-${newQuotationId}-quotation.pdf`); setPdfConfirmOpen(true);
+      setQuotations(prev => [{ ...payload, quotation_id: newQuotationId, created_at: new Date().toISOString(), customer_name: customerName, total: payload.total }, ...prev]);
+      setFilteredQuotations(prev => [{ ...payload, quotation_id: newQuotationId, created_at: new Date().toISOString(), customer_name: customerName, total: payload.total }, ...prev]);
+      
+      try {
+        const pdfRes = await axios.get(`${API_BASE_URL}/api/direct/quotation/${newQuotationId}`, { responseType: "blob" });
+        const blobUrl = window.URL.createObjectURL(new Blob([pdfRes.data]));
+        const safeName = customerName.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+        setPdfUrl(blobUrl); setPdfFileName(`${safeName}-${newQuotationId}-quotation.pdf`); setPdfConfirmOpen(true);
+      } catch (pdfErr) {
+        console.warn("Could not download generated PDF:", pdfErr);
+      }
+
       setCart([]); setSelectedCustomer(null); setSelectedProduct(null); setAdditionalDiscount(0); setChangeDiscount(0); setLastAddedProduct(null); setQuotationId(null); setIsQuotationCreated(false);
-    } catch (err) { console.error("Create quotation error:", err); setError(`Failed to create quotation: ${err.message}`); }
+    } catch (err) {
+      console.error("Create quotation error:", err);
+      setError(`Failed to create quotation: ${err.response?.data?.message || err.message}`);
+    }
     finally { setCreateLoading(false); }
   };
 
@@ -1577,19 +1723,52 @@ export default function Direct() {
   };
 
   const openCancelConfirm = (id) => { setQuotationToCancel(id); setCancelConfirmOpen(true); };
-  const openNewProductModal = (isModal = false) => { setNewProductIsForModal(isModal); setNewProductModalIsOpen(true); setNewProductData({ productname: '', price: '', discount: isModal ? modalChangeDiscount : changeDiscount, quantity: 1, per: '', product_type: 'custom' }); };
-  const closeNewProductModal = () => { setNewProductModalIsOpen(false); setNewProductData({ productname: '', price: '', discount: 0, quantity: 1, per: '', product_type: 'custom' }); setError(""); };
+  const openNewProductModal = (isModal = false) => {
+    setNewProductIsForModal(isModal);
+    setNewProductModalIsOpen(true);
+    setNewProductData({
+      productname: '',
+      price: '',
+      discount: 0,
+      quantity: 1,
+      per: 'Box',
+      product_type: 'custom',
+      description: ''
+    });
+  };
+  const closeNewProductModal = () => {
+    setNewProductModalIsOpen(false);
+    setNewProductData({
+      productname: '',
+      price: '',
+      discount: 0,
+      quantity: 1,
+      per: 'Box',
+      product_type: 'custom',
+      description: ''
+    });
+    setError("");
+  };
   const handleAddNewProduct = (productData) => {
     if (!productData.productname) return setError("Product name is required");
     if (productData.price === '' || productData.price < 0) return setError("Price must be a non-negative number");
     if (productData.quantity === '' || productData.quantity < 1) return setError("Quantity must be at least 1");
     if (productData.discount < 0 || productData.discount > 100) return setError("Discount must be between 0 and 100");
-    if (!productData.product_type) return setError("Product type is required");
     const sanitizedData = {
       ...productData,
+      id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      product_type: productData.product_type || 'custom',
       discount: parseFloat(productData.discount) || 0,
+      initialDiscount: parseFloat(productData.discount) || 0,
+      price: Math.round(Number(productData.price) || 0),
+      quantity: parseInt(productData.quantity) || 1,
+      per: productData.per || 'Unit',
+      isCustom: true,
+      isDirect: true,
+      exempt_additional_discount: true
     };
-    addToCart(newProductIsForModal, sanitizedData); closeNewProductModal();
+    addToCart(newProductIsForModal, sanitizedData);
+    closeNewProductModal();
   };
   const closeModal = () => { setModalIsOpen(false); setModalMode(null); setModalCart([]); setModalSelectedCustomer(null); setModalSelectedProduct(null); setOrderId(""); setModalAdditionalDiscount(0); setModalChangeDiscount(0); setModalLastAddedProduct(null); setError(""); setSuccessMessage(""); };
 
@@ -1631,7 +1810,7 @@ export default function Direct() {
                 <Select
                   value={selectedCustomer}
                   onChange={setSelectedCustomer}
-                  options={customers.map(c => ({ value: c.id.toString(), label: `${c.name} (${c.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : c.customer_type || "User"} - ${c.district || "N/A"})` }))}
+                  options={customers.map(c => ({ value: c.id.toString(), label: `${c.name || c.customer_name || 'Customer'} (${c.customer_type === "Customer of Selected Agent" ? "Customer - Agent" : c.customer_type || "User"} - ${c.district || "N/A"})` }))}
                   placeholder="Search customer"
                   isClearable
                   styles={selectStyles}
@@ -1827,7 +2006,14 @@ export default function Direct() {
 
         <CancelConfirmModal isOpen={cancelConfirmOpen} onClose={() => { if (!cancelLoading) setCancelConfirmOpen(false); }} onConfirm={cancelQuotation} quotationId={quotationToCancel} loading={cancelLoading} />
         <PDFDownloadConfirmModal isOpen={pdfConfirmOpen} onClose={handlePdfNo} onYes={handlePdfYes} fileName={pdfFileName} />
-        <NewProductModal isOpen={newProductModalIsOpen} onClose={closeNewProductModal} onSubmit={handleAddNewProduct} newProductData={newProductData} setNewProductData={setNewProductData} />
+        <NewProductModal
+          isOpen={newProductModalIsOpen}
+          onClose={closeNewProductModal}
+          onSubmit={handleAddNewProduct}
+          newProductData={newProductData}
+          setNewProductData={setNewProductData}
+          productTypeOptions={productTypeOptions}
+        />
         <ArcheryGameModal isOpen={giftGameOpen} onClose={() => setGiftGameOpen(false)} freeProducts={freeProducts} quotation={giftGameQuotation} apiBase={API_BASE_URL} />
 
         <style>{`
