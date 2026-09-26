@@ -1611,6 +1611,7 @@ export default function Direct() {
           quantity: parseInt(item.quantity) || 0,
           per: item.per || 'Unit',
           serial_number: item.serial_number || undefined,
+          isCustom: Boolean(item.isCustom || String(item.id).startsWith('custom-') || item.product_type === 'custom'),
           exempt_additional_discount: isExemptFromAdditionalDiscount(item, noAdditionalDiscountTypes)
         })),
         net_rate: parseFloat(calculateNetRate(modalCart)) || 0,

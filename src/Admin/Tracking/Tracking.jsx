@@ -42,6 +42,39 @@ const PaginBtn = ({ label, onClick, disabled, active }) => (
 
 const selectStyles = "w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border";
 
+const ModalWrapper = ({ children, onClose }) => (
+  <div
+    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+    onClick={(e) => { if (e.target === e.currentTarget && onClose) onClose(); }}
+  >
+    <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl">
+      {children}
+    </div>
+  </div>
+);
+
+const formatBillAmount = (booking) => {
+  if (booking?.total != null && !isNaN(parseFloat(booking.total)) && parseFloat(booking.total) > 0) {
+    return parseFloat(booking.total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  try {
+    const prods = typeof booking?.products === 'string'
+      ? JSON.parse(booking.products)
+      : (booking?.products || []);
+    if (Array.isArray(prods) && prods.length > 0) {
+      const sum = prods.reduce((acc, p) => acc + ((parseFloat(p.price || p.rate || p.disc_price) || 0) * (p.quantity || 1)), 0);
+      if (sum > 0) {
+        return sum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return booking?.total != null && !isNaN(parseFloat(booking.total))
+    ? parseFloat(booking.total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '0.00';
+};
+
 export default function Tracking() {
   const [bookings, setBookings] = useState([]);
   const [filterCustomerType, setFilterCustomerType] = useState('');
@@ -81,9 +114,22 @@ export default function Tracking() {
     return () => clearInterval(interval);
   }, [filterStatus, filterCustomerType]);
 
+  const closeModals = () => {
+    setShowPaidModal(false);
+    setShowDetailsModal(false);
+    setSelectedBookingId(null);
+    setPaymentMethod('cash');
+    setTransactionId('');
+    setAmountPaid('');
+  };
+
   const handleStatusChange = (id, newStatus) => {
     if (newStatus === 'paid') {
       setSelectedBookingId(id);
+      const b = bookings.find((item) => item.id === id);
+      setPaymentMethod(b?.payment_method || 'cash');
+      setTransactionId(b?.transaction_id || '');
+      setAmountPaid(b?.amount_paid ? String(b.amount_paid) : '');
       setShowPaidModal(true);
     } else {
       updateStatus(id, newStatus);
@@ -107,11 +153,7 @@ export default function Tracking() {
         ).sort((a, b) => b.id - a.id)
       );
       setError('');
-      setShowPaidModal(false);
-      setShowDetailsModal(false);
-      setPaymentMethod('cash');
-      setTransactionId('');
-      setAmountPaid('');
+      closeModals();
       toast.success("Status updated successfully", { position: "top-center", autoClose: 5000, hideProgressBar: false, closeOnClick: true, pauseOnHover: true, draggable: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update status');
@@ -134,9 +176,17 @@ export default function Tracking() {
   const handleFillDetails = () => { setShowPaidModal(false); setShowDetailsModal(true); };
 
   const handleDetailsSubmit = () => {
-    if (!amountPaid.trim() || isNaN(amountPaid) || Number(amountPaid) <= 0) { setError('Please enter a valid amount paid'); return; }
-    if (paymentMethod === 'bank' && !transactionId.trim()) { setError('Transaction ID is required for bank transactions'); return; }
-    updateStatus(selectedBookingId, 'paid', { paymentMethod, transactionId: paymentMethod === 'bank' ? transactionId : null, amountPaid: Number(amountPaid) });
+    if (!amountPaid || !amountPaid.trim() || isNaN(amountPaid) || Number(amountPaid) <= 0) {
+      toast.error('Please enter a valid amount paid', { position: "top-center", autoClose: 4000 });
+      setError('Please enter a valid amount paid');
+      return;
+    }
+    if (paymentMethod === 'bank' && !transactionId.trim()) {
+      toast.error('Transaction ID is required for bank transactions', { position: "top-center", autoClose: 4000 });
+      setError('Transaction ID is required for bank transactions');
+      return;
+    }
+    updateStatus(selectedBookingId, 'paid', { paymentMethod, transactionId: paymentMethod === 'bank' ? transactionId.trim() : null, amountPaid: Number(amountPaid) });
   };
 
   const generateBillPDF = async (booking) => {
@@ -338,13 +388,7 @@ export default function Tracking() {
   const currentOrders = filteredBookings.slice(indexOfFirstOrder, indexOfLastOrder);
   const totalPages = Math.ceil(filteredBookings.length / ordersPerPage);
 
-  const ModalWrapper = ({ children }) => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl">
-        {children}
-      </div>
-    </div>
-  );
+  const selectedBooking = bookings.find((b) => b.id === selectedBookingId);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -415,7 +459,7 @@ export default function Tracking() {
                     <StatusBadge status={booking.status} />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 mb-4">
+                  <div className="grid grid-cols-2 gap-2 mb-3">
                     {[
                       ["📍 District", booking.district || "N/A"],
                       ["🏛️ State", booking.state || "N/A"],
@@ -424,15 +468,21 @@ export default function Tracking() {
                     ].map(([label, value]) => (
                       <div key={label} className="bg-slate-50 rounded-lg px-2.5 py-2">
                         <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">{label}</div>
-                        <div className="text-xs font-semibold text-slate-700 mt-0.5">{value}</div>
+                        <div className="text-xs font-semibold text-slate-700 mt-0.5 truncate">{value}</div>
                       </div>
                     ))}
+                    <div className="col-span-2 bg-indigo-50/70 border border-indigo-100 rounded-lg px-3 py-2 flex items-center justify-between">
+                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">💰 Bill Amount</span>
+                      <span className="text-sm font-extrabold text-indigo-700">₹{formatBillAmount(booking)}</span>
+                    </div>
                   </div>
 
                   {(booking.amount_paid || booking.payment_method || booking.transaction_id) && (
                     <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 mb-4 space-y-1">
                       {booking.amount_paid && (
-                        <p className="text-xs text-slate-700"><span className="font-bold text-amber-600">Amount Paid:</span> ₹{booking.amount_paid}</p>
+                        <p className="text-xs text-slate-700">
+                          <span className="font-bold text-amber-600">Amount Paid:</span> ₹{parseFloat(booking.amount_paid).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
                       )}
                       {booking.payment_method && (
                         <p className="text-xs text-slate-700"><span className="font-bold text-amber-600">Method:</span> {booking.payment_method}</p>
@@ -498,12 +548,18 @@ export default function Tracking() {
       </div>
 
       {showPaidModal && (
-        <ModalWrapper>
+        <ModalWrapper onClose={closeModals}>
           <div className="text-5xl mb-4 text-center">💰</div>
           <h2 className="text-xl font-extrabold text-slate-800 mb-2 text-center">Update to Paid?</h2>
+          {selectedBooking && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 text-center">
+              <div className="text-xs text-slate-500 font-semibold">{selectedBooking.customer_name} ({selectedBooking.order_id})</div>
+              <div className="text-sm font-extrabold text-indigo-600 mt-1">Bill Amount: ₹{formatBillAmount(selectedBooking)}</div>
+            </div>
+          )}
           <p className="text-slate-500 text-sm mb-6 text-center">Please fill in the payment details to proceed.</p>
           <div className="flex gap-2.5 justify-center">
-            <button onClick={() => setShowPaidModal(false)} className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors">
+            <button onClick={closeModals} className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors">
               Cancel
             </button>
             <button onClick={handleFillDetails} className="px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-gradient-to-br from-emerald-500 to-emerald-400 shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-500 transition-all duration-200">
@@ -514,8 +570,22 @@ export default function Tracking() {
       )}
 
       {showDetailsModal && (
-        <ModalWrapper key="payment-details-modal">   {/* ← this is the most important fix */}
-          <h2 className="text-xl font-extrabold text-slate-800 mb-6 text-center">💳 Payment Details</h2>
+        <ModalWrapper onClose={closeModals}>
+          <h2 className="text-xl font-extrabold text-slate-800 mb-4 text-center">💳 Payment Details</h2>
+          
+          {selectedBooking && (
+            <div className="bg-indigo-50/70 border border-indigo-100 rounded-xl p-3 mb-4 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Order ID</div>
+                <div className="text-xs font-bold text-slate-700">{selectedBooking.order_id}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Bill Amount</div>
+                <div className="text-sm font-extrabold text-indigo-700">₹{formatBillAmount(selectedBooking)}</div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
@@ -532,16 +602,31 @@ export default function Tracking() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
-                Amount Paid <span className="text-red-500">*</span>
-              </label>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">
+                  Amount Paid <span className="text-red-500">*</span>
+                </label>
+                {selectedBooking && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const billAmt = selectedBooking.total != null && !isNaN(parseFloat(selectedBooking.total))
+                        ? String(parseFloat(selectedBooking.total))
+                        : '';
+                      if (billAmt) setAmountPaid(billAmt);
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline"
+                  >
+                    Use Full Bill Amount
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
+                inputMode="decimal"
                 value={amountPaid ?? ""}
                 onChange={(e) => {
-                  const val = e.target.value;
+                  const val = e.target.value.replace(/,/g, '');
                   if (/^\d*\.?\d{0,2}$/.test(val)) {
                     setAmountPaid(val);
                   }
@@ -553,7 +638,7 @@ export default function Tracking() {
             </div>
 
             {paymentMethod === 'bank' && (
-              <div key="bank-transaction-id-field">
+              <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
                   Transaction ID <span className="text-red-500">*</span>
                 </label>
@@ -563,7 +648,6 @@ export default function Tracking() {
                   onChange={(e) => setTransactionId(e.target.value)}
                   placeholder="Enter transaction ID"
                   className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:border-indigo-400 transition-colors box-border"
-                  autoFocus
                 />
               </div>
             )}
@@ -571,7 +655,7 @@ export default function Tracking() {
 
           <div className="flex gap-2.5 justify-end mt-6">
             <button
-              onClick={() => setShowDetailsModal(false)}
+              onClick={closeModals}
               className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 font-semibold text-sm hover:bg-slate-50 transition-colors"
             >
               Cancel
@@ -611,7 +695,7 @@ export default function Tracking() {
       )}
 
       {showDeleteModal && (
-        <ModalWrapper>
+        <ModalWrapper onClose={() => setShowDeleteModal(false)}>
           <div className="text-5xl mb-4 text-center">⚠️</div>
           <h2 className="text-lg font-extrabold text-slate-800 mb-2.5 text-center">Delete Booking?</h2>
           <p className="text-slate-500 text-sm mb-6 text-center">

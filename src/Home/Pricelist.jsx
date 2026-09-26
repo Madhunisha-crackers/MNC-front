@@ -317,6 +317,7 @@ const Pricelist = () => {
   const [totalDiscount, setTotalDiscount] = useState(0);
   const [showLoader, setShowLoader] = useState(false);
   const debounceTimeout = useRef(null);
+  const isSubmittingRef = useRef(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImages, setSelectedImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -864,7 +865,8 @@ const Pricelist = () => {
   };
 
   const handleFinalCheckout = async () => {
-    setIsBookingLoading(true);
+    if (isSubmittingRef.current || isBookingLoading) return;
+
     const selectedProducts = Object.entries(cart).map(([serial, qty]) => {
       const product = products.find(p => p.serial_number === serial);
       return {
@@ -894,23 +896,28 @@ const Pricelist = () => {
       });
     }
 
-    if (!selectedProducts.length) { showError("Your cart is empty."); setIsBookingLoading(false); return; }
+    if (!selectedProducts.length) { showError("Your cart is empty."); return; }
     if (!customerDetails.customer_name || !customerDetails.address || !customerDetails.district || !customerDetails.state || !customerDetails.mobile_number) {
-      showError("Please fill all required customer details."); setIsBookingLoading(false); return;
+      showError("Please fill all required customer details."); return;
     }
 
     const mobile = customerDetails.mobile_number.replace(/\D/g, "").slice(-10);
-    if (mobile.length !== 10) { showError("Mobile number must be 10 digits."); setIsBookingLoading(false); return; }
+    if (mobile.length !== 10) { showError("Mobile number must be 10 digits."); return; }
 
     const selectedState = customerDetails.state?.trim();
     const minOrder = states.find(s => s.name === selectedState)?.min_rate;
     if (minOrder && Number.parseFloat(originalTotal) < minOrder) {
       showError(`Minimum order for ${selectedState} is ₹${minOrder}. Your total is ₹${originalTotal}.`);
-      setIsBookingLoading(false); return;
+      return;
     }
 
+    // Lock submission immediately to prevent duplicate orders from rapid taps
+    isSubmittingRef.current = true;
+    setIsBookingLoading(true);
+
+    let bookingSuccessful = false;
+
     try {
-      setShowLoader(true);
       const response = await fetch(`${API_BASE_URL}/api/direct/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -933,19 +940,31 @@ const Pricelist = () => {
       });
 
       if (response.ok) {
+        bookingSuccessful = true;
         const data = await response.json();
 
-        const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: "blob" });
-        const blob = await pdfResponse.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        const safeName = (customerDetails.customer_name || "order").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-        link.download = `${safeName}-${data.order_id}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
+        // Close the details modal immediately so customer cannot re-tap
+        setShowModal(false);
+        // Trigger the celebration rocket animation
+        setShowLoader(true);
+
+        try {
+          const pdfResponse = await fetch(`${API_BASE_URL}/api/direct/invoice/${data.order_id}`, { responseType: "blob" });
+          if (pdfResponse.ok) {
+            const blob = await pdfResponse.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            const safeName = (customerDetails.customer_name || "order").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+            link.download = `${safeName}-${data.order_id}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+          }
+        } catch (pdfErr) {
+          console.error("PDF download error:", pdfErr);
+        }
       } else {
         const data = await response.json();
         showError(data.message || "Booking failed.");
@@ -953,12 +972,16 @@ const Pricelist = () => {
     } catch (err) {
       showError("Something went wrong during checkout.");
     } finally {
-      setShowLoader(false);
-      setIsBookingLoading(false);
+      if (!bookingSuccessful) {
+        isSubmittingRef.current = false;
+        setIsBookingLoading(false);
+        setShowLoader(false);
+      }
     }
   };
 
   const handleRocketComplete = () => {
+    isSubmittingRef.current = false;
     setShowLoader(false);
     setIsBookingLoading(false);
     setIsCartOpen(false);
@@ -1738,7 +1761,17 @@ const Pricelist = () => {
             className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center backdrop-blur-md px-4">
             <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-orange-100">
+              className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-orange-100 relative">
+              {isBookingLoading && (
+                <div className="absolute inset-0 bg-white/90 backdrop-blur-xs z-30 flex flex-col items-center justify-center p-6 text-center rounded-3xl">
+                  <div className="w-14 h-14 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4 shadow-lg shadow-orange-500/20"></div>
+                  <h3 className="font-extrabold text-gray-900 text-lg">Confirming Booking…</h3>
+                  <p className="text-xs text-gray-600 mt-1 max-w-[260px]">Please wait a moment while we create your invoice and secure your order.</p>
+                  <div className="mt-4 flex items-center gap-1.5 px-3 py-1 bg-orange-50 border border-orange-200 rounded-full text-[11px] font-semibold text-orange-600">
+                    <span>🔒</span> Please do not refresh or tap back
+                  </div>
+                </div>
+              )}
               <div className="p-6">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-10 h-10 bg-orange-50 border border-orange-200 rounded-xl flex items-center justify-center">
@@ -1812,23 +1845,24 @@ const Pricelist = () => {
                 </div>
 
                 <div className="mt-6 flex gap-3">
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  <motion.button whileHover={{ scale: isBookingLoading ? 1 : 1.02 }} whileTap={{ scale: isBookingLoading ? 1 : 0.98 }}
                     onClick={() => setShowModal(false)}
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl text-sm transition-colors border border-gray-200">
+                    disabled={isBookingLoading}
+                    className={`flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-2xl text-sm transition-colors border border-gray-200 ${isBookingLoading ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}>
                     Cancel
                   </motion.button>
                   <motion.button
                     whileHover={{ scale: isBookingLoading ? 1 : 1.02 }}
                     whileTap={{ scale: isBookingLoading ? 1 : 0.98 }}
                     onClick={handleFinalCheckout} disabled={isBookingLoading}
-                    className={`flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg shadow-orange-500/30 flex items-center justify-center gap-2 text-sm transition-all ${isBookingLoading ? "opacity-75 cursor-not-allowed" : ""}`}>
+                    className={`flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-3 rounded-2xl shadow-lg shadow-orange-500/30 flex items-center justify-center gap-2 text-sm transition-all ${isBookingLoading ? "opacity-75 cursor-not-allowed pointer-events-none" : ""}`}>
                     {isBookingLoading ? (
                       <>
                         <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        Booking…
+                        Placing Order…
                       </>
                     ) : "Confirm Booking →"}
                   </motion.button>
