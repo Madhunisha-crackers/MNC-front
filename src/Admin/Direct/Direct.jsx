@@ -220,7 +220,11 @@ const CustomOption = (props) => {
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (onAddToCart) onAddToCart(data.value, "plus");
+        if (props.selectOption) {
+          props.selectOption(data);
+        } else if (onAddToCart) {
+          onAddToCart(data.value, "plus");
+        }
       }}
       style={{
         display: "flex",
@@ -234,7 +238,7 @@ const CustomOption = (props) => {
         borderBottom: "1px solid #f1f5f9",
         transition: "background-color 0.15s ease",
       }}
-      title="Click anywhere on product to add to cart"
+      title="Click to select product and enter quantity"
     >
       <span style={{ flex: 1, fontSize: "0.88rem", fontWeight: isFocused || isSelected || qty > 0 ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {data.label}
@@ -271,7 +275,15 @@ const CustomOption = (props) => {
             />
             <button
               type="button"
-              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddToCart && onAddToCart(data.value, "plus"); }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (props.selectOption) {
+                  props.selectOption(data);
+                } else if (onAddToCart) {
+                  onAddToCart(data.value, "plus");
+                }
+              }}
               style={{
                 width: "22px", height: "22px", borderRadius: "50%", border: "1.5px solid #6366f1",
                 background: "#6366f1", color: "#fff",
@@ -284,8 +296,16 @@ const CustomOption = (props) => {
         {qty === 0 && (
           <button
             type="button"
-            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddToCart && onAddToCart(data.value, "plus"); }}
-            title="Add to cart"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (props.selectOption) {
+                props.selectOption(data);
+              } else if (onAddToCart) {
+                onAddToCart(data.value, "plus");
+              }
+            }}
+            title="Add to cart and enter quantity"
             style={{
               width: "26px", height: "26px", borderRadius: "50%", border: "1.5px solid #6366f1",
               background: "#6366f1", color: "#fff",
@@ -317,13 +337,58 @@ const QuotationTable = ({
   const quantityInputRefs = useRef({});
   const productSelectRef = useRef(null);
 
+  const focusQuantityInput = useCallback((id, product_type) => {
+    if (!id || !product_type) return;
+    const key = `${id}-${product_type}`;
+
+    let attempts = 0;
+    const maxAttempts = 15;
+
+    const tryFocus = () => {
+      const input = quantityInputRefs.current[key];
+      if (input) {
+        if (productSelectRef.current) {
+          try {
+            productSelectRef.current.blur();
+          } catch (err) {}
+        }
+        input.focus({ preventScroll: false });
+        try {
+          input.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } catch (err) {}
+        try {
+          input.select();
+        } catch (err) {}
+        return true;
+      }
+      return false;
+    };
+
+    if (tryFocus()) {
+      setTimeout(tryFocus, 40);
+      setTimeout(tryFocus, 120);
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      attempts += 1;
+      const success = tryFocus();
+      if (success || attempts >= maxAttempts) {
+        clearInterval(intervalId);
+        if (success) {
+          setTimeout(tryFocus, 40);
+          setTimeout(tryFocus, 120);
+        }
+      }
+    }, 25);
+  }, []);
+
   useEffect(() => {
     if (lastAddedProduct) {
-      const key = `${lastAddedProduct.id}-${lastAddedProduct.product_type}`;
-      const input = quantityInputRefs.current[key];
-      if (input) { input.focus(); input.select(); setLastAddedProduct(null); }
+      focusQuantityInput(lastAddedProduct.id, lastAddedProduct.product_type);
+      setLastAddedProduct(null);
     }
-  }, [lastAddedProduct, setLastAddedProduct]);
+  }, [lastAddedProduct, setLastAddedProduct, focusQuantityInput]);
 
   const handleQuantityKeyDown = (e) => {
     if (e.key === 'Enter') { e.preventDefault(); productSelectRef.current?.focus(); }
@@ -369,7 +434,14 @@ const QuotationTable = ({
       }
       return prev;
     });
-  }, [products, isModal, setCart, setModalCart, changeDiscount]);
+
+    if (action === "plus") {
+      if (setLastAddedProduct) {
+        setLastAddedProduct({ id: product.id, product_type: product.product_type });
+      }
+      focusQuantityInput(product.id, product.product_type);
+    }
+  }, [products, isModal, setCart, setModalCart, changeDiscount, setLastAddedProduct, focusQuantityInput]);
 
   const total = parseFloat(calculateTotal(cart, additionalDiscount));
   const cartInputCls = "w-20 px-2 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-800 text-center bg-slate-50 outline-none focus:border-indigo-400 transition-colors";
@@ -603,6 +675,9 @@ const QuotationTable = ({
                           type="number" value={item.quantity} min="0"
                           onChange={(e) => updateQuantity(item.id, item.product_type, parseInt(e.target.value) || 0, isModal)}
                           onKeyDown={handleQuantityKeyDown}
+                          onFocus={(e) => {
+                            try { e.target.select(); } catch (err) {}
+                          }}
                           ref={(el) => (quantityInputRefs.current[`${item.id}-${item.product_type}`] = el)}
                           className={`${cartInputCls} focus:border-indigo-400`}
                         />
@@ -646,14 +721,13 @@ const QuotationTable = ({
             <Select
               ref={productSelectRef}
               value={selectedProduct}
-              closeMenuOnSelect={false}
+              closeMenuOnSelect={true}
               onChange={(option) => {
                 if (!option) return setSelectedProduct(null);
                 const [id, type] = option.value.split("-");
                 const product = products.find(p => p.id.toString() === id && p.product_type === type);
                 if (!product) return;
                 const setTargetCart = isModal ? setModalCart : setCart;
-                const setTargetLastAddedProduct = isModal ? null : setLastAddedProduct;
                 const presetDiscount = parseFloat(product.discount) || 0;
                 const appliedDiscount = presetDiscount || changeDiscount || 0;
                 const newItem = {
@@ -672,11 +746,10 @@ const QuotationTable = ({
                       ? { ...item, quantity: item.quantity + 1 } : item)
                     : [...prev, newItem];
                 });
-                if (setTargetLastAddedProduct) {
-                  setTargetLastAddedProduct({ id: product.id, product_type: product.product_type });
-                } else if (setLastAddedProduct) {
+                if (setLastAddedProduct) {
                   setLastAddedProduct({ id: product.id, product_type: product.product_type });
                 }
+                focusQuantityInput(product.id, product.product_type);
                 setSelectedProduct(null);
               }}
               options={products.map((p) => ({
@@ -1681,6 +1754,7 @@ export default function Direct() {
           quantity: parseInt(item.quantity) || 0,
           per: item.per || 'Unit',
           serial_number: item.serial_number || undefined,
+          isCustom: Boolean(item.isCustom || String(item.id).startsWith('custom-') || item.product_type === 'custom'),
           exempt_additional_discount: isExemptFromAdditionalDiscount(item, noAdditionalDiscountTypes)
         })),
         net_rate: parseFloat(calculateNetRate(modalCart)),
